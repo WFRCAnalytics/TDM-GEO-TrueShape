@@ -36,9 +36,9 @@ from _src.arcgis_utils import fetch_feature_layer
 
 ```{python}
 config_filepath = {
-    "out_centerlines": "_data/raw/UtahRoads.gpkg",
-    "out_network_links": "_data/raw/WFv1000_MasterNet - Link.gpkg",
-    "out_network_nodes": "_data/raw/WFv1000_MasterNet - Node.gpkg",
+    "out_centerlines": Path("_data/raw/UtahRoads.gpkg"),
+    "out_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
+    "out_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
 }
 ```
 
@@ -70,7 +70,7 @@ print(f"Logged in as: {gis_auth.properties.user.username}")
 ### Roadway Centerlines
 
 ```{python}
-out_path = Path(config_filepath["out_centerlines"])
+out_path = config_filepath["out_centerlines"]
 
 if not out_path.exists():
     gdf_centerlines = fetch_feature_layer(
@@ -87,7 +87,7 @@ else:
 ### Network Links
 
 ```{python}
-out_path = Path(config_filepath["out_network_links"])
+out_path = config_filepath["out_network_links"]
 
 if not out_path.exists():
     gdf_links = fetch_feature_layer(
@@ -104,7 +104,7 @@ else:
 ### Network Nodes
 
 ```{python}
-out_path = Path(config_filepath["out_network_nodes"])
+out_path = config_filepath["out_network_nodes"]
 
 if not out_path.exists():
     gdf_nodes = fetch_feature_layer(

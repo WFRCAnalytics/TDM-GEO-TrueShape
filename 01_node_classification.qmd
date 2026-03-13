@@ -16,19 +16,26 @@ date: "2026-03-13"
 ### Import Libraries
 
 ```{python}
+import sys
 from pathlib import Path
 
 import pandas as pd
 import geopandas as gpd
+
+sys.path.insert(0, str(Path.cwd()))
+from _src.node_utils import classify_nodes
 ```
 
 ### Filepath Configuration
 
 ```{python}
 config_filepath = {
-    "in_centerlines": "_data/raw/UtahRoads.gpkg",
-    "in_network_links": "_data/raw/WFv1000_MasterNet - Link.gpkg",
-    "in_network_nodes": "_data/raw/WFv1000_MasterNet - Node.gpkg",
+    # Input files
+    "in_centerlines": Path("_data/raw/UtahRoads.gpkg"),
+    "in_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
+    "in_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
+    # Output files
+    "out_node_classified": Path("_data/processed/nodes_classified.gpkg"),
 }
 ```
 
@@ -74,4 +81,66 @@ print(f"Loaded {len(gdf_nodes):,} features | CRS: {gdf_nodes.crs}")
 #| eval: false
 
 gdf_nodes.head(1000).explore()
+```
+
+## Node Classification
+
+### Classify Nodes
+
+```{python}
+gdf_nodes_classified = classify_nodes(gdf_nodes, gdf_links, ft_year=2023)
+
+# Preview classification columns only
+classification_cols = [
+    "N",
+    "Freeway",
+    "Expressway",
+    "Arterial",
+    "Collector",
+    "Local",
+    "Ramp",
+    "CentroidConnector",
+    "FixedTransit_byFT",
+    "FixedTransit_byN",
+    "LinkCount",
+]
+gdf_nodes_classified[classification_cols].head(20)
+```
+
+### Review FixedTransit Methods
+
+Compare the two independent FixedTransit classification methods to decide which to keep.
+
+```{python}
+ft_comparison = gdf_nodes_classified[["N", "FixedTransit_byFT", "FixedTransit_byN"]].copy()
+ft_comparison["agree"] = ft_comparison["FixedTransit_byFT"] == ft_comparison["FixedTransit_byN"]
+
+print(f"Total nodes:          {len(ft_comparison):,}")
+print(f"FixedTransit_byFT:    {ft_comparison['FixedTransit_byFT'].sum():,}")
+print(f"FixedTransit_byN:     {ft_comparison['FixedTransit_byN'].sum():,}")
+print(f"Agree:                {ft_comparison['agree'].sum():,}")
+print(f"Disagree:             {(~ft_comparison['agree']).sum():,}")
+```
+
+```{python}
+# Inspect disagreeing rows if any exist
+ft_comparison[~ft_comparison["agree"]]
+```
+
+### Summary
+
+```{python}
+flag_cols = [
+    "Freeway", "Expressway", "Arterial", "Collector", "Local",
+    "Ramp", "CentroidConnector", "FixedTransit_byFT", "FixedTransit_byN",
+]
+gdf_nodes_classified[flag_cols].sum().rename("NodeCount").to_frame()
+```
+
+```{python}
+out_path = config_filepath["out_node_classified"]
+
+out_path.parent.mkdir(parents=True, exist_ok=True)
+gdf_nodes_classified.to_file(out_path, driver="GPKG")
+print(f"Classified Nodes saved to: {out_path}")
 ```
