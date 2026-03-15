@@ -11,7 +11,7 @@ author:
 date: "2026-03-13"
 ---
 
-Refer to Google Docs at: [https://docs.google.com/document/d/1ZHP1oQ9Gucw5fCv4U_dwvMSBbv5BmCBakXJjAcBijns/edit?usp=sharing](https://docs.google.com/document/d/1ZHP1oQ9Gucw5fCv4U_dwvMSBbv5BmCBakXJjAcBijns/edit?usp=sharing) for draft methodology.
+Refer to [Google Docs](https://docs.google.com/document/d/1ZHP1oQ9Gucw5fCv4U_dwvMSBbv5BmCBakXJjAcBijns/edit?usp=sharing) for draft methodology.
 
 ## Steps
 
