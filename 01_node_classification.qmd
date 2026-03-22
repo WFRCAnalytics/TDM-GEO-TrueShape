@@ -162,6 +162,7 @@ gdf_nodes["ExternalNode"] = gdf_nodes["N"].between(3_601, 9_999)  # External: 36
 gdf_nodes["ConnectorOnly"] = (
     gdf_nodes["CentroidConnector"] & ~gdf_nodes["CentroidNode"] & ~gdf_nodes["ExternalNode"]
 )
+gdf_nodes["HOV"]              = nodes_on(gdf_nodes, gdf_links, "FT_2023 in [37, 38]")  # HOV and Managed lanes
 gdf_nodes["FixedTransit"]     = (
     nodes_on(gdf_nodes, gdf_links, "FT_2023 in [70, 80]")
     | gdf_nodes["N"].between(10_000, 19_999)
@@ -172,7 +173,7 @@ gdf_nodes["FixedTransit"]     = (
 ```{python}
 flag_cols = [
     "N", "Freeway", "CD", "Expressway", "Arterial", "Collector", "Local",
-    "Ramp", "FixedTransit", "CentroidConnector", "CentroidNode", "ExternalNode", "ConnectorOnly",
+    "Ramp", "HOV", "FixedTransit", "CentroidConnector", "CentroidNode", "ExternalNode", "ConnectorOnly",
 ]
 gdf_nodes[flag_cols].head(20)
 ```
@@ -296,98 +297,461 @@ print(f"Classified nodes saved to: {out_path}")
 
 ## Node Snapping
 
+All data is in UTM (metres) so distance calculations are metric throughout.
+The approach is piecemeal — snap one road type, validate it looks correct,
+then move to the next. Do not proceed to the next section until the current
+one looks right on the map.
+
 ### Prepare Centerlines
 
 ```{python}
-# Exclude Retired and Planned — keep Active and Construction
+import folium
+from shapely.geometry import LineString, Point
+from shapely.strtree import STRtree
+
+# Exclude Retired and Planned rows
 active_cl = gdf_centerlines[~gdf_centerlines["STATUS"].isin(["Retired", "Planned"])]
 print(f"Active centerlines: {len(active_cl):,} of {len(gdf_centerlines):,}")
 ```
 
-### Snap Nodes
+---
 
-Each `snap_nodes()` call snaps unsnapped nodes matching `node_mask` to the
-nearest endpoint of the provided centerline subset. First call wins — later
-calls automatically skip already-snapped nodes.
+## Step 1 — Freeway Node Snapping
 
-To add a rule: add a call. To remove: delete or comment it out. To reorder:
-move the call. To split surface streets into separate types: replace the
-combined Surface call with three separate calls, one per type.
+Freeway nodes (FT 20–40 excl. CD 21/31) snapped to Interstate and Other
+Freeway centerline endpoints. HOV nodes (FT 37/38) and pseudonodes
+(LinkCount == 2) are excluded — they will be handled separately.
+
+### Step 1a — Build the Snap Mask
+
+```{python}
+# Nodes eligible for freeway snapping:
+#   - Classified as Freeway
+#   - NOT pseudonodes (LinkCount == 2 means just a shape point, not a true intersection)
+#   - NOT HOV/Managed lane nodes (no matching centerline geometry exists)
+fwy_snap_mask = (
+    gdf_nodes["Freeway"]
+    & (gdf_nodes["LinkCount"] != 2)   # exclude pseudonodes
+    & ~gdf_nodes["HOV"]               # exclude HOV/managed lane nodes
+)
+
+print(f"Total Freeway nodes:          {gdf_nodes['Freeway'].sum():,}")
+print(f"  minus pseudonodes:          {(gdf_nodes['Freeway'] & (gdf_nodes['LinkCount'] == 2)).sum():,}")
+print(f"  minus HOV nodes:            {(gdf_nodes['Freeway'] & gdf_nodes['HOV']).sum():,}")
+print(f"Eligible for snapping:        {fwy_snap_mask.sum():,}")
+```
+
+### Step 1b — Pre-Snap Validation
+
+Check distance distribution BEFORE snapping to confirm the centerline
+coverage is adequate and the threshold is sensible.
+
+```{python}
+fwy_cl = active_cl[active_cl["DOT_FCLASS"].isin(["Interstate", "Other Freeway"])]
+fwy_nodes_eligible = gdf_nodes[fwy_snap_mask].copy()
+
+# Extract deduplicated freeway centerline endpoints
+fwy_cl_exp = fwy_cl.explode(index_parts=False)
+pts = []
+for geom in fwy_cl_exp.geometry:
+    pts.append(Point(round(geom.coords[0][0], 7), round(geom.coords[0][1], 7)))
+    pts.append(Point(round(geom.coords[-1][0], 7), round(geom.coords[-1][1], 7)))
+fwy_endpoints = gpd.GeoSeries(pts, crs=fwy_cl.crs).drop_duplicates()
+
+print(f"Eligible freeway nodes:       {len(fwy_nodes_eligible):,}")
+print(f"Freeway centerline segments:  {len(fwy_cl):,}")
+print(f"Unique freeway endpoints:     {len(fwy_endpoints):,}")
+
+# Distance from each eligible node to its nearest endpoint
+tree = STRtree(fwy_endpoints.values)
+dists = np.array(
+    [g.distance(fwy_endpoints.iloc[tree.nearest(g)]) for g in fwy_nodes_eligible.geometry]
+)
+fwy_nodes_eligible["nearest_endpoint_m"] = np.round(dists, 1)
+
+print(f"\nDistance to nearest freeway endpoint (m):")
+print(f"  min:    {dists.min():.1f}")
+print(f"  median: {np.median(dists):.1f}")
+print(f"  p75:    {np.percentile(dists, 75):.1f}")
+print(f"  p95:    {np.percentile(dists, 95):.1f}")
+print(f"  max:    {dists.max():.1f}")
+print(f"\n  ≤  50m: {(dists <= 50).sum():,}  ({(dists <= 50).mean() * 100:.0f}%)")
+print(f"  ≤ 200m: {(dists <= 200).sum():,}  ({(dists <= 200).mean() * 100:.0f}%)")
+print(f"  ≤ 500m: {(dists <= 500).sum():,}  ({(dists <= 500).mean() * 100:.0f}%)")
+print(f"  > 500m: {(dists > 500).sum():,}  ({(dists > 500).mean() * 100:.0f}%)")
+
+print(f"\n10 CLOSEST nodes:")
+print(
+    fwy_nodes_eligible.nsmallest(10, "nearest_endpoint_m")[["N", "nearest_endpoint_m"]].to_string()
+)
+print(f"\n10 FURTHEST nodes:")
+print(
+    fwy_nodes_eligible.nlargest(10, "nearest_endpoint_m")[["N", "nearest_endpoint_m"]].to_string()
+)
+```
+
+### Step 1c — Pre-Snap Map
+
+Blue = within 200m (good), Amber = 200–500m (borderline), Red = beyond 500m (no nearby centerline).
+
+```{python}
+#| eval: false
+
+fwy_nodes_wgs = fwy_nodes_eligible.to_crs(CRS_WGS)
+fwy_endpoints_wgs = fwy_endpoints.to_crs(CRS_WGS)
+fwy_cl_wgs = fwy_cl.to_crs(CRS_WGS)
+
+center = [fwy_nodes_wgs.geometry.y.mean(), fwy_nodes_wgs.geometry.x.mean()]
+m_pre_fwy = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
+
+cl_layer = folium.FeatureGroup(name="Freeway centerlines", show=True)
+for _, row in fwy_cl_wgs.iterrows():
+    folium.GeoJson(
+        row.geometry.__geo_interface__,
+        style_function=lambda _: {"color": "#1D9E75", "weight": 2, "opacity": 0.6},
+    ).add_to(cl_layer)
+cl_layer.add_to(m_pre_fwy)
+
+ep_layer = folium.FeatureGroup(name="Centerline endpoints", show=True)
+for pt in fwy_endpoints_wgs:
+    folium.CircleMarker(
+        location=[pt.y, pt.x], radius=3,
+        color="#1D9E75", fill=True, fill_opacity=1.0,
+        tooltip="Endpoint",
+    ).add_to(ep_layer)
+ep_layer.add_to(m_pre_fwy)
+
+node_layer = folium.FeatureGroup(name="Freeway nodes (eligible)", show=True)
+for idx, row in fwy_nodes_wgs.iterrows():
+    dist = fwy_nodes_eligible.loc[idx, "nearest_endpoint_m"]
+    color = "#E24B4A" if dist > 500 else "#EF9F27" if dist > 200 else "#378ADD"
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x], radius=4,
+        color=color, fill=True, fill_opacity=0.85,
+        tooltip=f"N: {fwy_nodes_eligible.loc[idx, 'N']} | {dist}m",
+    ).add_to(node_layer)
+node_layer.add_to(m_pre_fwy)
+
+folium.LayerControl(collapsed=False).add_to(m_pre_fwy)
+m_pre_fwy
+```
+
+### Step 1d — Snap Freeway Nodes
+
+Only run this once you are satisfied with Step 1b/1c.
 
 ```{python}
 gdf_nodes_snapped = gdf_nodes.copy()
 
-# Freeway — DOT_FCLASS is populated for Interstate/Other Freeway
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
-    active_cl[active_cl["DOT_FCLASS"].isin(["Interstate", "Other Freeway"])],
-    node_mask=gdf_nodes_snapped["Freeway"],
+    fwy_cl,
+    node_mask=fwy_snap_mask,
     max_distance_m=500,
     label="Freeway",
 )
+```
 
-# CD (Collector-Distributor) — identified by DOT_RTNAME position 6 == 'C'
+### Step 1e — Post-Snap Validation Map
+
+Compare original (red) vs snapped (green) positions.
+Connector lines show how far each node moved.
+
+```{python}
+#| eval: false
+
+fwy_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Freeway"]
+fwy_original = gdf_nodes.loc[fwy_snapped.index]
+
+fwy_snapped_wgs  = fwy_snapped.to_crs(CRS_WGS)
+fwy_original_wgs = fwy_original.to_crs(CRS_WGS)
+
+connectors = []
+for idx in fwy_snapped.index:
+    orig = fwy_original_wgs.geometry.loc[idx]
+    snap = fwy_snapped_wgs.geometry.loc[idx]
+    if orig.distance(snap) > 0:
+        connectors.append({"geometry": LineString([orig, snap]),
+                           "N": int(fwy_snapped.loc[idx, "N"]),
+                           "dist_m": float(fwy_snapped.loc[idx, "snap_distance_m"])})
+gdf_fwy_connectors = gpd.GeoDataFrame(connectors, crs=CRS_WGS)
+
+center = [fwy_original_wgs.geometry.y.mean(), fwy_original_wgs.geometry.x.mean()]
+m_post_fwy = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
+
+conn_layer = folium.FeatureGroup(name="Displacement lines", show=True)
+for _, row in gdf_fwy_connectors.iterrows():
+    folium.PolyLine(
+        [(c[1], c[0]) for c in row.geometry.coords],
+        color="#888780", weight=1, opacity=0.7,
+        tooltip=f"N: {row['N']} | moved {row['dist_m']}m",
+    ).add_to(conn_layer)
+conn_layer.add_to(m_post_fwy)
+
+orig_layer = folium.FeatureGroup(name="Original positions", show=True)
+for idx, row in fwy_original_wgs.iterrows():
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x], radius=4,
+        color="#E24B4A", fill=True, fill_opacity=0.8,
+        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)",
+    ).add_to(orig_layer)
+orig_layer.add_to(m_post_fwy)
+
+snap_layer = folium.FeatureGroup(name="Snapped positions", show=True)
+for idx, row in fwy_snapped_wgs.iterrows():
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x], radius=4,
+        color="#1D9E75", fill=True, fill_opacity=0.8,
+        tooltip=f"N: {int(fwy_snapped.loc[idx, 'N'])} | {fwy_snapped.loc[idx, 'snap_distance_m']}m",
+    ).add_to(snap_layer)
+snap_layer.add_to(m_post_fwy)
+
+folium.LayerControl(collapsed=False).add_to(m_post_fwy)
+m_post_fwy
+```
+
+### Step 1f — Post-Snap Distance Summary
+
+```{python}
+fwy_snapped_dists = gdf_nodes_snapped.loc[
+    gdf_nodes_snapped["snap_rule"] == "Freeway", "snap_distance_m"
+]
+print(f"Freeway nodes snapped:   {len(fwy_snapped_dists):,}")
+print(f"  median move:           {fwy_snapped_dists.median():.1f}m")
+print(f"  max move:              {fwy_snapped_dists.max():.1f}m")
+print(f"  moved < 50m:           {(fwy_snapped_dists < 50).sum():,}  ({(fwy_snapped_dists < 50).mean()*100:.0f}%)")
+print(f"  moved 50–200m:         {((fwy_snapped_dists >= 50) & (fwy_snapped_dists < 200)).sum():,}")
+print(f"  moved 200–500m:        {((fwy_snapped_dists >= 200) & (fwy_snapped_dists <= 500)).sum():,}")
+
+exceeded = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "exceeded_threshold"]
+fwy_exceeded = exceeded[exceeded["Freeway"] & ~exceeded["HOV"] & (exceeded["LinkCount"] != 2)]
+print(f"\nFreeway nodes NOT snapped (exceeded 500m threshold): {len(fwy_exceeded):,}")
+print(f"  These nodes have no nearby freeway centerline — likely HOV, gaps, or out-of-scope areas.")
+```
+
+---
+
+## Step 2 — CD and Ramp Node Snapping
+
+CD roads (FT 21, 31) and Ramps (FT 28, 29, 41, 42) snapped separately to
+their respective centerlines via DOT_RTNAME position 6 (C = C-D, R = Ramp).
+
+Note: 343 CD nodes and 778 Ramp nodes were already snapped in Step 1 because
+they sit at junctions with freeway mainlines. Those are skipped automatically.
+
+### Step 2a — Snap CD Nodes
+
+```{python}
+# CD: DOT_RTNAME position 6 (index 5) == 'C'
+# Exclude pseudonodes (LinkCount == 2). Nodes already snapped by Freeway
+# (snap_rule != 'none') are skipped automatically inside snap_nodes().
+cd_snap_mask = (
+    gdf_nodes_snapped["CD"]
+    & (gdf_nodes_snapped["LinkCount"] != 2)
+)
+
+print(f"CD nodes total:                  {gdf_nodes_snapped['CD'].sum():,}")
+print(f"  already snapped by Freeway:    {(gdf_nodes_snapped['CD'] & (gdf_nodes_snapped['snap_rule'] != 'none')).sum():,}")
+print(f"  pseudonodes excluded:          {(gdf_nodes_snapped['CD'] & (gdf_nodes_snapped['LinkCount'] == 2)).sum():,}")
+print(f"  eligible for CD snap:          {cd_snap_mask.sum():,}")
+
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
     active_cl[active_cl["DOT_RTNAME"].str[5] == "C"],
-    node_mask=gdf_nodes_snapped["CD"],
+    node_mask=cd_snap_mask,
     max_distance_m=300,
     label="CD",
 )
+```
 
-# Ramp — identified by DOT_RTNAME position 6 == 'R'
+### Step 2b — Snap Ramp Nodes
+
+```{python}
+# Ramp: DOT_RTNAME position 6 (index 5) == 'R'
+# Exclude pseudonodes. Nodes already snapped by Freeway are skipped automatically.
+ramp_snap_mask = (
+    gdf_nodes_snapped["Ramp"]
+    & (gdf_nodes_snapped["LinkCount"] != 2)
+)
+
+print(f"Ramp nodes total:                {gdf_nodes_snapped['Ramp'].sum():,}")
+print(f"  already snapped by Freeway:    {(gdf_nodes_snapped['Ramp'] & (gdf_nodes_snapped['snap_rule'] != 'none')).sum():,}")
+print(f"  pseudonodes excluded:          {(gdf_nodes_snapped['Ramp'] & (gdf_nodes_snapped['LinkCount'] == 2)).sum():,}")
+print(f"  eligible for Ramp snap:        {ramp_snap_mask.sum():,}")
+
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
     active_cl[active_cl["DOT_RTNAME"].str[5] == "R"],
-    node_mask=gdf_nodes_snapped["Ramp"],
+    node_mask=ramp_snap_mask,
     max_distance_m=300,
     label="Ramp",
 )
+```
 
-# Expressway — US Highways (CARTOCODE 2 = separated, 3 = unseparated)
-gdf_nodes_snapped = snap_nodes(
-    gdf_nodes_snapped,
-    active_cl[active_cl["CARTOCODE"].isin(["2", "3"])],
-    node_mask=gdf_nodes_snapped["Expressway"],
-    max_distance_m=400,
-    label="Expressway",
+### Step 2c — Post-Snap Summary (CD + Ramp)
+
+```{python}
+for rule in ["CD", "Ramp"]:
+    snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == rule]["snap_distance_m"]
+    print(f"{rule}:")
+    print(f"  snapped:      {len(snapped):,}")
+    print(f"  median move:  {snapped.median():.1f}m")
+    print(f"  max move:     {snapped.max():.1f}m")
+    print(f"  moved < 50m:  {(snapped < 50).sum():,}  ({(snapped < 50).mean()*100:.0f}%)")
+    print(f"  moved 50–300m:{((snapped >= 50) & (snapped <= 300)).sum():,}")
+    print()
+```
+
+### Step 2d — Ramp + CD Post-Snap Map
+
+```{python}
+#| eval: false
+
+ramp_cd_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(["Ramp", "CD"])]
+ramp_cd_original = gdf_nodes.loc[ramp_cd_snapped.index]
+
+ramp_cd_snapped_wgs  = ramp_cd_snapped.to_crs(CRS_WGS)
+ramp_cd_original_wgs = ramp_cd_original.to_crs(CRS_WGS)
+
+connectors_rc = []
+for idx in ramp_cd_snapped.index:
+    orig = ramp_cd_original_wgs.geometry.loc[idx]
+    snap = ramp_cd_snapped_wgs.geometry.loc[idx]
+    if orig.distance(snap) > 0:
+        connectors_rc.append({
+            "geometry": LineString([orig, snap]),
+            "N": int(ramp_cd_snapped.loc[idx, "N"]),
+            "rule": ramp_cd_snapped.loc[idx, "snap_rule"],
+            "dist_m": float(ramp_cd_snapped.loc[idx, "snap_distance_m"]),
+        })
+gdf_rc_connectors = gpd.GeoDataFrame(connectors_rc, crs=CRS_WGS)
+
+center = [ramp_cd_original_wgs.geometry.y.mean(), ramp_cd_original_wgs.geometry.x.mean()]
+m_post_rc = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
+
+for _, row in gdf_rc_connectors.iterrows():
+    folium.PolyLine(
+        [(c[1], c[0]) for c in row.geometry.coords],
+        color="#888780", weight=1, opacity=0.7,
+        tooltip=f"N: {row['N']} | {row['rule']} | {row['dist_m']}m",
+    ).add_to(m_post_rc)
+
+for idx, row in ramp_cd_original_wgs.iterrows():
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x], radius=3,
+        color="#E24B4A", fill=True, fill_opacity=0.8,
+        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)",
+    ).add_to(m_post_rc)
+
+rule_colors = {"Ramp": "#1D9E75", "CD": "#534AB7"}
+for idx, row in ramp_cd_snapped_wgs.iterrows():
+    rule = ramp_cd_snapped.loc[idx, "snap_rule"]
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x], radius=3,
+        color=rule_colors.get(rule, "#888780"), fill=True, fill_opacity=0.8,
+        tooltip=f"N: {int(ramp_cd_snapped.loc[idx, 'N'])} | {rule} | {ramp_cd_snapped.loc[idx, 'snap_distance_m']}m",
+    ).add_to(m_post_rc)
+
+folium.LayerControl(collapsed=False).add_to(m_post_rc)
+m_post_rc
+```
+
+---
+
+## Step 3 — Surface Street Node Snapping
+
+Arterial, Collector, and Local nodes snapped as a group to State Highway
+and local road centerlines (CARTOCODE 4, 5, 8, 10, 11). Split into
+separate calls if per-type control is needed.
+
+### Step 3a — Snap Surface Nodes
+
+```{python}
+surface_snap_mask = (
+    (gdf_nodes_snapped["Arterial"] | gdf_nodes_snapped["Collector"] | gdf_nodes_snapped["Local"])
+    & (gdf_nodes_snapped["LinkCount"] != 2)  # exclude pseudonodes
 )
+print(f"Surface nodes eligible for snapping: {surface_snap_mask.sum():,}")
 
-# Surface streets — snapped as a group against State Hwy + Major/Minor Local.
-# To snap Arterial, Collector, and Local separately, replace this block with:
-#
-#   gdf_nodes_snapped = snap_nodes(
-#       gdf_nodes_snapped,
-#       active_cl[active_cl["CARTOCODE"].isin(["4", "5"])],
-#       node_mask=gdf_nodes_snapped["Arterial"],
-#       max_distance_m=200, label="Arterial",
-#   )
-#   gdf_nodes_snapped = snap_nodes(
-#       gdf_nodes_snapped,
-#       active_cl[active_cl["CARTOCODE"].isin(["8", "10"])],
-#       node_mask=gdf_nodes_snapped["Collector"],
-#       max_distance_m=200, label="Collector",
-#   )
-#   gdf_nodes_snapped = snap_nodes(
-#       gdf_nodes_snapped,
-#       active_cl[active_cl["CARTOCODE"] == "11"],
-#       node_mask=gdf_nodes_snapped["Local"],
-#       max_distance_m=100, label="Local",
-#   )
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
     active_cl[active_cl["CARTOCODE"].isin(["4", "5", "8", "10", "11"])],
-    node_mask=(
-        gdf_nodes_snapped["Arterial"]
-        | gdf_nodes_snapped["Collector"]
-        | gdf_nodes_snapped["Local"]
-    ),
+    node_mask=surface_snap_mask,
     max_distance_m=200,
     label="Surface",
 )
 ```
 
-### Snap FixedTransit to Rail Stops
+### Step 3b — Post-Snap Summary (Surface)
+
+```{python}
+surf_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Surface"]["snap_distance_m"]
+print(f"Surface nodes snapped:   {len(surf_snapped):,}")
+print(f"  median move:           {surf_snapped.median():.1f}m")
+print(f"  max move:              {surf_snapped.max():.1f}m")
+print(f"  moved < 50m:           {(surf_snapped < 50).sum():,}  ({(surf_snapped < 50).mean()*100:.0f}%)")
+print(f"  moved 50–200m:         {((surf_snapped >= 50) & (surf_snapped <= 200)).sum():,}")
+```
+
+### Step 3c — Surface Post-Snap Map
+
+```{python}
+#| eval: false
+
+surf_snapped_gdf  = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Surface"]
+surf_original_gdf = gdf_nodes.loc[surf_snapped_gdf.index]
+
+surf_snapped_wgs  = surf_snapped_gdf.to_crs(CRS_WGS)
+surf_original_wgs = surf_original_gdf.to_crs(CRS_WGS)
+
+connectors_surf = []
+for idx in surf_snapped_gdf.index:
+    orig = surf_original_wgs.geometry.loc[idx]
+    snap = surf_snapped_wgs.geometry.loc[idx]
+    if orig.distance(snap) > 0:
+        connectors_surf.append({
+            "geometry": LineString([orig, snap]),
+            "N": int(surf_snapped_gdf.loc[idx, "N"]),
+            "dist_m": float(surf_snapped_gdf.loc[idx, "snap_distance_m"]),
+        })
+gdf_surf_connectors = gpd.GeoDataFrame(connectors_surf, crs=CRS_WGS)
+
+center = [surf_original_wgs.geometry.y.mean(), surf_original_wgs.geometry.x.mean()]
+m_post_surf = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
+
+for _, row in gdf_surf_connectors.iterrows():
+    folium.PolyLine(
+        [(c[1], c[0]) for c in row.geometry.coords],
+        color="#888780", weight=1, opacity=0.5,
+        tooltip=f"N: {row['N']} | {row['dist_m']}m",
+    ).add_to(m_post_surf)
+
+for idx, row in surf_original_wgs.iterrows():
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x], radius=3,
+        color="#E24B4A", fill=True, fill_opacity=0.7,
+        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)",
+    ).add_to(m_post_surf)
+
+for idx, row in surf_snapped_wgs.iterrows():
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x], radius=3,
+        color="#1D9E75", fill=True, fill_opacity=0.7,
+        tooltip=f"N: {int(surf_snapped_gdf.loc[idx, 'N'])} | {surf_snapped_gdf.loc[idx, 'snap_distance_m']}m",
+    ).add_to(m_post_surf)
+
+folium.LayerControl(collapsed=False).add_to(m_post_surf)
+m_post_surf
+```
+
+---
+
+## Step 4 — Transit Node Snapping
+
+FixedTransit nodes snapped to Light Rail (TRAX) and Commuter Rail
+(FrontRunner) stops only — bus stops are excluded.
+
+### Step 4a — Snap Transit Nodes
 
 ```{python}
 gdf_nodes_snapped = snap_to_gtfs_stops(
@@ -399,89 +763,37 @@ gdf_nodes_snapped = snap_to_gtfs_stops(
 )
 ```
 
-### Snap Audit
+### Step 4b — Post-Snap Summary (Transit)
 
 ```{python}
-gdf_nodes_snapped.value_counts("snap_rule").rename("NodeCount").to_frame()
+transit_snapped = gdf_nodes_snapped[
+    gdf_nodes_snapped["snap_rule"] == "FixedTransit_Rail"
+]["snap_distance_m"]
+print(f"Transit nodes snapped:   {len(transit_snapped):,}")
+print(f"  median move:           {transit_snapped.median():.1f}m")
+print(f"  max move:              {transit_snapped.max():.1f}m")
+```
+
+---
+
+## Overall Snap Summary
+
+```{python}
+print("Snap results by rule:")
+print(gdf_nodes_snapped.value_counts("snap_rule").rename("NodeCount").to_frame().to_string())
+
+print(f"\nTotal nodes:       {len(gdf_nodes_snapped):,}")
+print(f"Snapped:           {gdf_nodes_snapped['snapped'].sum():,}  ({gdf_nodes_snapped['snapped'].mean()*100:.1f}%)")
+print(f"Exceeded threshold:{( gdf_nodes_snapped['snap_rule'] == 'exceeded_threshold').sum():,}")
+print(f"Not attempted:     {(gdf_nodes_snapped['snap_rule'] == 'none').sum():,}")
 ```
 
 ```{python}
-# Nodes that exceeded threshold — worth inspecting manually
+# Nodes that exceeded threshold — inspect to understand why
 bool_cols = [c for c in gdf_nodes_snapped.columns if gdf_nodes_snapped[c].dtype == bool]
 gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "exceeded_threshold"][
     ["N", "snap_distance_m"] + bool_cols
-]
-```
-
-### Comparison Map
-
-Original vs snapped positions connected by lines. Toggle layers in the map
-controls to compare. Tooltip shows N, snap rule, and distance moved.
-
-```{python}
-# | eval: false
-
-import folium
-from shapely.geometry import LineString
-
-# Reproject to WGS84 — folium requires lat/lon
-nodes_wgs84 = gdf_nodes.to_crs(CRS_WGS)
-nodes_snapped_wgs84 = gdf_nodes_snapped.to_crs(CRS_WGS)
-
-# Build connector lines between original and snapped positions (WGS84)
-connectors = []
-for idx in nodes_snapped_wgs84.index:
-    orig = nodes_wgs84.geometry.loc[idx]
-    snap = nodes_snapped_wgs84.geometry.loc[idx]
-    if orig.distance(snap) > 0:
-        connectors.append(
-            {"geometry": LineString([orig, snap]), "N": gdf_nodes_snapped.loc[idx, "N"]}
-        )
-gdf_connectors = gpd.GeoDataFrame(connectors, crs=CRS_WGS)
-
-center = [nodes_wgs84.geometry.y.mean(), nodes_wgs84.geometry.x.mean()]
-m = folium.Map(location=center, zoom_start=10, tiles="CartoDB positron")
-
-connector_layer = folium.FeatureGroup(name="Snap displacement", show=True)
-for _, row in gdf_connectors.iterrows():
-    coords = [(c[1], c[0]) for c in row.geometry.coords]
-    folium.PolyLine(
-        coords, color="#888780", weight=1, opacity=0.6, tooltip=f"N: {row['N']}"
-    ).add_to(connector_layer)
-connector_layer.add_to(m)
-
-original_layer = folium.FeatureGroup(name="Original positions", show=True)
-for idx in gdf_connectors.index:
-    row = nodes_wgs84.loc[idx]
-    folium.CircleMarker(
-        location=[row.geometry.y, row.geometry.x],
-        radius=4,
-        color="#E24B4A",
-        fill=True,
-        fill_opacity=0.8,
-        tooltip=f"N: {row['N']} (original)",
-    ).add_to(original_layer)
-original_layer.add_to(m)
-
-snapped_layer = folium.FeatureGroup(name="Snapped positions", show=True)
-for idx, row in nodes_snapped_wgs84[gdf_nodes_snapped["snapped"]].iterrows():
-    snap_info = gdf_nodes_snapped.loc[idx]
-    folium.CircleMarker(
-        location=[row.geometry.y, row.geometry.x],
-        radius=4,
-        color="#1D9E75",
-        fill=True,
-        fill_opacity=0.8,
-        tooltip=(
-            f"N: {snap_info['N']} | "
-            f"rule: {snap_info['snap_rule']} | "
-            f"dist: {snap_info['snap_distance_m']}m"
-        ),
-    ).add_to(snapped_layer)
-snapped_layer.add_to(m)
-
-folium.LayerControl(collapsed=False).add_to(m)
-m
+].sort_values("snap_distance_m", ascending=False)
 ```
 
 ### Export
