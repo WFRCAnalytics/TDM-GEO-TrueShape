@@ -543,15 +543,54 @@ print(f"  These nodes have no nearby freeway centerline — likely HOV, gaps, or
 ### Step 1g — Export Snapped Freeway Nodes for QGIS
 
 ```{python}
-# Filter for nodes that successfully snapped to the Freeway rule
-fwy_snapped_export = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Freeway"]
+from shapely.geometry import LineString
+import geopandas as gpd
 
-# Define an intermediate output path
-fwy_out_path = Path("_data/processed/debug_freeway_snapped.gpkg")
-fwy_out_path.parent.mkdir(parents=True, exist_ok=True)
+# 1. Filter for nodes that successfully snapped to the Freeway rule
+fwy_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Freeway"].copy()
 
-# Export to GeoPackage
-fwy_snapped_export.to_file(fwy_out_path, driver="GPKG")
+# 2. Get their corresponding original positions
+fwy_original = gdf_nodes.loc[fwy_snapped.index].copy()
+
+# 3. Create displacement lines
+lines = []
+for idx in fwy_snapped.index:
+    orig_geom = fwy_original.loc[idx, "geometry"]
+    snap_geom = fwy_snapped.loc[idx, "geometry"]
+
+    if orig_geom.distance(snap_geom) > 0:
+        lines.append(
+            {
+                "N": fwy_snapped.loc[idx, "N"],
+                "snap_distance_m": fwy_snapped.loc[idx, "snap_distance_m"],
+                "geometry": LineString([orig_geom, snap_geom]),
+            }
+        )
+
+gdf_fwy_lines = (
+    gpd.GeoDataFrame(lines, crs=CRS_UTM)
+    if lines
+    else gpd.GeoDataFrame(columns=["N", "snap_distance_m", "geometry"], crs=CRS_UTM)
+)
+
+# 4. Filter for Freeway nodes that exceeded the threshold (unsnapped)
+# We use fwy_snap_mask to ensure we only get nodes that were *eligible* for freeway snapping
+fwy_unsnapped = gdf_nodes_snapped[
+    fwy_snap_mask & (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold")
+].copy()
+
+# 5. Export all to a single GeoPackage
+fwy_debug_out_path = Path("_data/processed/debug_freeway_snapping.gpkg")
+fwy_debug_out_path.parent.mkdir(parents=True, exist_ok=True)
+
+fwy_snapped.to_file(fwy_debug_out_path, layer="fwy_snapped_positions", driver="GPKG")
+fwy_original.to_file(fwy_debug_out_path, layer="fwy_original_positions", driver="GPKG")
+if not gdf_fwy_lines.empty:
+    gdf_fwy_lines.to_file(fwy_debug_out_path, layer="fwy_displacement_lines", driver="GPKG")
+if not fwy_unsnapped.empty:
+    fwy_unsnapped.to_file(fwy_debug_out_path, layer="fwy_unsnapped_nodes", driver="GPKG")
+
+print(f"Freeway QGIS debug package saved to: {fwy_debug_out_path}")
 ```
 
 ---
