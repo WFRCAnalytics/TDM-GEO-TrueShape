@@ -107,9 +107,9 @@ Contains `fetch_feature_layer()`, a utility that queries an ArcGIS FeatureServer
 Contains the main reusable node-processing helpers:
 
 - `nodes_on()` to flag nodes connected to links matching a pandas query
-- `count_node_links()` to count how many links touch each node
+- `count_links()` to count how many links touch each node
 - `snap_nodes()` to snap nodes to centerline endpoints
-- `snap_to_gtfs_stops()` to snap nodes directly to GTFS stop points
+- `snap_transit()` to snap nodes directly to GTFS stop points
 
 The snapping helpers also maintain audit fields:
 

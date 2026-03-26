@@ -28,7 +28,7 @@ import matplotlib.ticker as mticker
 import gtfs_kit as gk
 
 sys.path.insert(0, str(Path.cwd()))
-from _src.node_utils import nodes_on, count_node_links, snap_nodes, snap_to_gtfs_stops
+from _src.node_utils import nodes_on, count_links, assign_directions, snap_nodes, snap_transit
 ```
 
 ### Filepath Configuration
@@ -197,12 +197,17 @@ gdf_nodes[flag_cols[1:]].sum().rename("NodeCount").to_frame()
 
 ### Link Count
 
-#### Count Links per Node
+#### Count Links and Assign Directions per Node
 
 ```{python}
-gdf_nodes = count_node_links(gdf_nodes, gdf_links)
+# Existing function
+gdf_nodes = count_links(gdf_nodes, gdf_links)
 
-gdf_nodes[["N", "LinkCount"]].head(20)
+# NEW function for Phase 1
+gdf_nodes = assign_directions(gdf_nodes, gdf_links)
+
+# View the results
+gdf_nodes[["N", "LinkCount", "link_directions"]].head(20)
 ```
 
 #### Distribution of Link Counts
@@ -818,7 +823,7 @@ FixedTransit nodes snapped to Light Rail (TRAX) and Commuter Rail
 ### Step 4a — Snap Transit Nodes
 
 ```{python}
-gdf_nodes_snapped = snap_to_gtfs_stops(
+gdf_nodes_snapped = snap_transit(
     gdf_nodes_snapped,
     gdf_rail_stops,
     node_mask=gdf_nodes_snapped["FixedTransit"],
