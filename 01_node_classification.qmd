@@ -460,7 +460,7 @@ Only run this once you are satisfied with Step 1b/1c.
 gdf_nodes_snapped = gdf_nodes.copy()
 
 gdf_nodes_snapped = snap_nodes(
-    gdf_nodes_snapped, fwy_cl, node_mask=fwy_snap_mask, max_distance_m=200, label="Freeway"
+    gdf_nodes_snapped, fwy_cl, node_mask=fwy_snap_mask, max_distance_m=500, label="Freeway"
 )
 ```
 
@@ -743,7 +743,7 @@ gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
     active_cl[active_cl["CARTOCODE"].isin(["4", "5", "8", "10", "11"])],
     node_mask=surface_snap_mask,
-    max_distance_m=200,
+    max_distance_m=250,
     label="Surface",
 )
 ```

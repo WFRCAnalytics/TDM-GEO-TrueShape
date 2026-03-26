@@ -19,6 +19,7 @@ All filtering logic lives entirely in the calling notebook — not here.
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import shapely
 from shapely.geometry import Point
 from shapely.strtree import STRtree
 
@@ -215,6 +216,7 @@ def _spatial_snap(
 ) -> tuple[list, list, list]:
     """
     Snap nodes to the nearest directionally-compatible point in snap_targets.
+    Uses a Global Greedy Assignment to resolve endpoint collisions.
     """
     nodes_proj = gdf_nodes.to_crs(crs_projected)
     targets_proj = snap_targets.to_crs(crs_projected)
@@ -230,62 +232,98 @@ def _spatial_snap(
         has_dirs = False
 
     tree = STRtree(target_geoms_proj)
-
-    snapped_geoms = []
-    snap_distances_m = []
-    snapped_flags = []
-
-    # Mapping dictionary to group directions into Positive (P) and Negative (N)
-    # This solves the "highway bends" issue where NB links meet EB centerlines.
     DIR_GROUP = {"NB": "P", "EB": "P", "P": "P", "SB": "N", "WB": "N", "N": "N"}
 
+    # ==========================================
+    # PHASE 1: Bulk Spatial Query (Vectorized)
+    # ==========================================
+    # 1. Query the tree with ALL nodes at once.
+    query_pairs = tree.query(
+        nodes_proj.geometry.values, predicate="dwithin", distance=max_distance_m
+    )
+    node_indices = query_pairs[0]
+    target_indices = query_pairs[1]
+
+    # 2. Calculate distances for ALL pairs at once (Massive speedup)
+    distances = shapely.distance(
+        nodes_proj.geometry.values[node_indices], target_geoms_proj[target_indices]
+    )
+
+    # 3. Pre-compute direction sets to avoid slow pandas .iloc lookups in the loop
+    node_dir_sets = [
+        set(DIR_GROUP.get(d, d) for d in str(d_str).split(",") if d)
+        for d_str in gdf_nodes.get("link_directions", pd.Series([""] * len(gdf_nodes)))
+    ]
+
+    if has_dirs:
+        target_dir_sets = [
+            set(DIR_GROUP.get(d, d) for d in str(d_str).split(",") if d)
+            for d_str in snap_targets.get("allowed_dirs", pd.Series([""] * len(snap_targets)))
+        ]
+
+    # 4. Filter by direction and build the candidates list
+    all_candidates = []
+    for i in range(len(node_indices)):
+        n_idx = node_indices[i]
+        t_idx = target_indices[i]
+        dist = distances[i]
+
+        is_compatible = True
+
+        # Enforce directional rules via the pre-computed P/N sets
+        if has_dirs:
+            n_dirs = node_dir_sets[n_idx]
+            t_dirs = target_dir_sets[t_idx]
+
+            # If target has specific directions, node must share at least one (P or N)
+            if t_dirs and n_dirs and not n_dirs.intersection(t_dirs):
+                is_compatible = False
+
+        if is_compatible:
+            all_candidates.append((dist, n_idx, t_idx))
+
+    # ==========================================
+    # PHASE 2: Global Sort
+    # ==========================================
+    # Sort all valid candidate pairs by distance, from shortest to longest
+    all_candidates.sort(key=lambda x: x[0])
+
+    # ==========================================
+    # PHASE 3: The Claiming Process
+    # ==========================================
+    claimed_nodes = set()
+    claimed_endpoints = set()
+
+    # Pre-allocate our result lists so they align perfectly with the input nodes
+    num_nodes = len(gdf_nodes)
+    snapped_geoms = [None] * num_nodes
+    snap_distances_m = [None] * num_nodes
+    snapped_flags = [False] * num_nodes
+
+    # Iterate through the sorted bids. The shortest distances naturally win.
+    for dist, node_idx, endpoint_idx in all_candidates:
+        if node_idx not in claimed_nodes and endpoint_idx not in claimed_endpoints:
+            # Both the node and the endpoint are free! Lock in the snap.
+            claimed_nodes.add(node_idx)
+            claimed_endpoints.add(endpoint_idx)
+
+            snapped_geoms[node_idx] = target_geoms_orig[endpoint_idx]
+            snap_distances_m[node_idx] = round(dist, 2)
+            snapped_flags[node_idx] = True
+
+    # ==========================================
+    # PHASE 4: Handle the Leftovers
+    # ==========================================
     for i, (orig_geom, proj_geom) in enumerate(zip(gdf_nodes.geometry, nodes_proj.geometry)):
-        # Get allowed directions and map them to their P/N alias
-        node_dir_str = gdf_nodes.iloc[i].get("link_directions", "")
-        node_dirs = set(DIR_GROUP.get(d, d) for d in node_dir_str.split(",") if d)
-
-        # Query the tree for ALL endpoints within the maximum threshold
-        nearby_idx = tree.query(proj_geom, predicate="dwithin", distance=max_distance_m)
-
-        best_dist = float("inf")
-        best_geom = orig_geom
-
-        # Check nearby points for directional compatibility
-        if len(nearby_idx) > 0:
-            for idx in nearby_idx:
-                is_compatible = True
-
-                # If we have directions, enforce the logic via the P/N groups
-                if has_dirs and node_dirs:
-                    target_dir_str = snap_targets.iloc[idx].get("allowed_dirs", "")
-                    target_dirs = set(DIR_GROUP.get(d, d) for d in target_dir_str.split(",") if d)
-
-                    # If target has specific directions, node must share the P or N group
-                    if target_dirs and not node_dirs.intersection(target_dirs):
-                        is_compatible = False
-
-                # If compatible, see if it is the closest one we've found so far
-                if is_compatible:
-                    dist = proj_geom.distance(target_geoms_proj[idx])
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_geom = target_geoms_orig[idx]
-
-        # If we successfully found a valid endpoint within the threshold
-        if best_dist <= max_distance_m:
-            snapped_geoms.append(best_geom)
-            snap_distances_m.append(round(best_dist, 2))
-            snapped_flags.append(True)
-        else:
-            # Fallback for audit purposes: find the absolute nearest point
-            # (even if direction is wrong or distance is too far) just to
-            # populate the 'snap_distance_m' column so you know how far away it was.
+        if i not in claimed_nodes:
+            # This node either had no valid nearby points, or all its valid points
+            # were stolen by closer nodes. We do a raw nearest search just for the audit log.
             nearest_idx = tree.nearest(proj_geom)
             abs_distance_m = proj_geom.distance(target_geoms_proj[nearest_idx])
 
-            snapped_geoms.append(orig_geom)  # original CRS, no reprojection needed
-            snap_distances_m.append(round(abs_distance_m, 2))
-            snapped_flags.append(False)
+            snapped_geoms[i] = orig_geom  # Keep original geometry
+            snap_distances_m[i] = round(abs_distance_m, 2)
+            snapped_flags[i] = False
 
     return snapped_geoms, snap_distances_m, snapped_flags
 
