@@ -142,33 +142,15 @@ def assign_directions(gdf_nodes: gpd.GeoDataFrame, gdf_links: gpd.GeoDataFrame) 
 # ---------------------------------------------------------------------------
 
 
-def _extract_endpoints(gdf_lines: gpd.GeoDataFrame, precision: int = 7) -> gpd.GeoDataFrame:
-    """
-    Extract deduplicated start and end points from a LineString GeoDataFrame.
-    Attaches allowed directions extracted from FULLNAME or DOT_RTNAME.
-
-    Parameters
-    ----------
-    gdf_lines : GeoDataFrame
-        LineString or MultiLineString layer.
-    precision : int, optional
-        Decimal places to round coordinates before deduplication.
-
-    Returns
-    -------
-    GeoDataFrame
-        Deduplicated endpoint Points with an 'allowed_dirs' column.
-
-    """
-    lines = gdf_lines.explode(index_parts=False).copy()
+def _assign_line_directions(gdf_lines: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Extract allowed directions from FULLNAME or DOT_RTNAME for LineStrings."""
+    lines = gdf_lines.copy()
     lines["allowed_dirs"] = ""
 
-    # 1. Try extracting explicit direction from FULLNAME (NB, SB, EB, WB)
     if "FULLNAME" in lines.columns:
         extracted = lines["FULLNAME"].astype(str).str.extract(r"\b(NB|SB|EB|WB)\b", expand=False)
         lines["allowed_dirs"] = extracted.fillna("")
 
-    # 2. Fallback to DOT_RTNAME for missing directions
     if "DOT_RTNAME" in lines.columns:
         mask_empty = lines["allowed_dirs"] == ""
         # The 5th character (index 4) is the direction (P or N)
@@ -179,33 +161,7 @@ def _extract_endpoints(gdf_lines: gpd.GeoDataFrame, precision: int = 7) -> gpd.G
         # N = Negative (Southbound or Westbound)
         lines.loc[mask_empty & (lrs_dir == "N"), "allowed_dirs"] = "SB,WB"
 
-    # 3. Extract endpoints
-    records = []
-    for geom, allowed in zip(lines.geometry, lines["allowed_dirs"]):
-        start = geom.coords[0]
-        end = geom.coords[-1]
-
-        records.append(
-            {
-                "geometry": Point(round(start[0], precision), round(start[1], precision)),
-                "allowed_dirs": allowed,
-            }
-        )
-        records.append(
-            {
-                "geometry": Point(round(end[0], precision), round(end[1], precision)),
-                "allowed_dirs": allowed,
-            }
-        )
-
-    # 4. Create GeoDataFrame and deduplicate based on location AND direction
-    endpoints_gdf = gpd.GeoDataFrame(records, crs=gdf_lines.crs)
-    endpoints_gdf["geom_wkt"] = endpoints_gdf.geometry.to_wkt()
-    endpoints_gdf = endpoints_gdf.drop_duplicates(subset=["geom_wkt", "allowed_dirs"]).drop(
-        columns=["geom_wkt"]
-    )
-
-    return endpoints_gdf
+    return lines
 
 
 def _spatial_snap(
@@ -215,21 +171,29 @@ def _spatial_snap(
     crs_projected: str,
 ) -> tuple[list, list, list]:
     """
-    Snap nodes to the nearest directionally-compatible point in snap_targets.
-    Uses a Global Greedy Assignment to resolve endpoint collisions.
+    Snap nodes using Segment-First (Point-to-Line-to-Point) logic.
+    Uses a Global Greedy Assignment to resolve collisions.
     """
     nodes_proj = gdf_nodes.to_crs(crs_projected)
-    targets_proj = snap_targets.to_crs(crs_projected)
 
-    # Handle both GeoDataFrame (Centerlines with directions) and GeoSeries (GTFS stops)
-    if isinstance(targets_proj, gpd.GeoDataFrame):
-        target_geoms_proj = targets_proj.geometry.values
-        target_geoms_orig = snap_targets.geometry.values
-        has_dirs = "allowed_dirs" in snap_targets.columns
+    # 1. Adapt to LineStrings (Roads) vs Points (GTFS)
+    is_lines = False
+    if isinstance(snap_targets, gpd.GeoDataFrame):
+        geom_types = snap_targets.geometry.type.unique()
+        if any("LineString" in t for t in geom_types):
+            is_lines = True
+            snap_targets = _assign_line_directions(snap_targets)
+            targets_proj = snap_targets.to_crs(crs_projected)
+            has_dirs = True
+        else:
+            targets_proj = snap_targets.to_crs(crs_projected)
+            has_dirs = "allowed_dirs" in snap_targets.columns
     else:
-        target_geoms_proj = targets_proj.values
-        target_geoms_orig = snap_targets.values
+        targets_proj = snap_targets.to_crs(crs_projected)
         has_dirs = False
+
+    target_geoms_proj = targets_proj.geometry.values
+    target_geoms_orig = snap_targets.geometry.values
 
     tree = STRtree(target_geoms_proj)
     DIR_GROUP = {"NB": "P", "EB": "P", "P": "P", "SB": "N", "WB": "N", "N": "N"}
@@ -237,19 +201,17 @@ def _spatial_snap(
     # ==========================================
     # PHASE 1: Bulk Spatial Query (Vectorized)
     # ==========================================
-    # 1. Query the tree with ALL nodes at once.
     query_pairs = tree.query(
         nodes_proj.geometry.values, predicate="dwithin", distance=max_distance_m
     )
     node_indices = query_pairs[0]
     target_indices = query_pairs[1]
 
-    # 2. Calculate distances for ALL pairs at once (Massive speedup)
-    distances = shapely.distance(
+    # Calculate distance to the physical TARGET (Line or Point)
+    distances_to_target = shapely.distance(
         nodes_proj.geometry.values[node_indices], target_geoms_proj[target_indices]
     )
 
-    # 3. Pre-compute direction sets to avoid slow pandas .iloc lookups in the loop
     node_dir_sets = [
         set(DIR_GROUP.get(d, d) for d in str(d_str).split(",") if d)
         for d_str in gdf_nodes.get("link_directions", pd.Series([""] * len(gdf_nodes)))
@@ -258,71 +220,103 @@ def _spatial_snap(
     if has_dirs:
         target_dir_sets = [
             set(DIR_GROUP.get(d, d) for d in str(d_str).split(",") if d)
-            for d_str in snap_targets.get("allowed_dirs", pd.Series([""] * len(snap_targets)))
+            for d_str in targets_proj.get("allowed_dirs", pd.Series([""] * len(targets_proj)))
         ]
 
-    # 4. Filter by direction and build the candidates list
+    # ==========================================
+    # PHASE 2: Generate Segment-First Bids
+    # ==========================================
     all_candidates = []
     for i in range(len(node_indices)):
         n_idx = node_indices[i]
         t_idx = target_indices[i]
-        dist = distances[i]
+        dist_target = distances_to_target[i]
+        proj_node = nodes_proj.geometry.values[n_idx]
 
         is_compatible = True
-
-        # Enforce directional rules via the pre-computed P/N sets
         if has_dirs:
             n_dirs = node_dir_sets[n_idx]
             t_dirs = target_dir_sets[t_idx]
-
-            # If target has specific directions, node must share at least one (P or N)
             if t_dirs and n_dirs and not n_dirs.intersection(t_dirs):
                 is_compatible = False
 
         if is_compatible:
-            all_candidates.append((dist, n_idx, t_idx))
+            if is_lines:
+                # Extract specific endpoints of this valid physical line
+                proj_line = target_geoms_proj[t_idx]
+                orig_line = target_geoms_orig[t_idx]
+
+                if proj_line.geom_type == "MultiLineString":
+                    p_start, p_end = (
+                        Point(proj_line.geoms[0].coords[0]),
+                        Point(proj_line.geoms[-1].coords[-1]),
+                    )
+                    o_start, o_end = (
+                        Point(orig_line.geoms[0].coords[0]),
+                        Point(orig_line.geoms[-1].coords[-1]),
+                    )
+                else:
+                    p_start, p_end = Point(proj_line.coords[0]), Point(proj_line.coords[-1])
+                    o_start, o_end = Point(orig_line.coords[0]), Point(orig_line.coords[-1])
+
+                dist_start = proj_node.distance(p_start)
+                dist_end = proj_node.distance(p_end)
+
+                # Global Endpoint IDs (rounded to 1mm to prevent floating point misses)
+                id_start = (round(p_start.x, 3), round(p_start.y, 3))
+                id_end = (round(p_end.x, 3), round(p_end.y, 3))
+
+                if dist_start <= max_distance_m:
+                    all_candidates.append((dist_target, dist_start, n_idx, id_start, o_start))
+                if dist_end <= max_distance_m:
+                    all_candidates.append((dist_target, dist_end, n_idx, id_end, o_end))
+            else:
+                # GTFS Point logic remains the same
+                orig_pt = target_geoms_orig[t_idx]
+                dist_pt = proj_node.distance(target_geoms_proj[t_idx])
+                id_pt = (round(target_geoms_proj[t_idx].x, 3), round(target_geoms_proj[t_idx].y, 3))
+                if dist_pt <= max_distance_m:
+                    all_candidates.append((dist_target, dist_pt, n_idx, id_pt, orig_pt))
 
     # ==========================================
-    # PHASE 2: Global Sort
+    # PHASE 3: Global Sort (Topology > Topography)
     # ==========================================
-    # Sort all valid candidate pairs by distance, from shortest to longest
-    all_candidates.sort(key=lambda x: x[0])
+    # Sort primarily by distance to the LineString, secondarily by distance to Endpoint
+    all_candidates.sort(key=lambda x: (x[0], x[1]))
 
     # ==========================================
-    # PHASE 3: The Claiming Process
+    # PHASE 4: The Claiming Process
     # ==========================================
     claimed_nodes = set()
     claimed_endpoints = set()
 
-    # Pre-allocate our result lists so they align perfectly with the input nodes
     num_nodes = len(gdf_nodes)
     snapped_geoms = [None] * num_nodes
     snap_distances_m = [None] * num_nodes
     snapped_flags = [False] * num_nodes
 
-    # Iterate through the sorted bids. The shortest distances naturally win.
-    for dist, node_idx, endpoint_idx in all_candidates:
-        if node_idx not in claimed_nodes and endpoint_idx not in claimed_endpoints:
-            # Both the node and the endpoint are free! Lock in the snap.
+    # Unpack bid: (dist_target, dist_endpoint, node_idx, endpoint_id, endpoint_geom_orig)
+    for _, dist_endpoint, node_idx, endpoint_id, endpoint_geom_orig in all_candidates:
+        if node_idx not in claimed_nodes and endpoint_id not in claimed_endpoints:
             claimed_nodes.add(node_idx)
-            claimed_endpoints.add(endpoint_idx)
+            claimed_endpoints.add(endpoint_id)
 
-            snapped_geoms[node_idx] = target_geoms_orig[endpoint_idx]
-            snap_distances_m[node_idx] = round(dist, 2)
+            snapped_geoms[node_idx] = endpoint_geom_orig
+            snap_distances_m[node_idx] = round(dist_endpoint, 2)
             snapped_flags[node_idx] = True
 
-    # ==========================================
-    # PHASE 4: Handle the Leftovers
-    # ==========================================
+    # Handle Leftovers
     for i, (orig_geom, proj_geom) in enumerate(zip(gdf_nodes.geometry, nodes_proj.geometry)):
         if i not in claimed_nodes:
-            # This node either had no valid nearby points, or all its valid points
-            # were stolen by closer nodes. We do a raw nearest search just for the audit log.
             nearest_idx = tree.nearest(proj_geom)
-            abs_distance_m = proj_geom.distance(target_geoms_proj[nearest_idx])
+            abs_distance_m = (
+                proj_geom.distance(target_geoms_proj[nearest_idx])
+                if nearest_idx is not None
+                else np.nan
+            )
 
-            snapped_geoms[i] = orig_geom  # Keep original geometry
-            snap_distances_m[i] = round(abs_distance_m, 2)
+            snapped_geoms[i] = orig_geom
+            snap_distances_m[i] = round(abs_distance_m, 2) if pd.notna(abs_distance_m) else np.nan
             snapped_flags[i] = False
 
     return snapped_geoms, snap_distances_m, snapped_flags
@@ -339,83 +333,32 @@ def snap_nodes(
     node_mask: pd.Series,
     max_distance_m: float,
     label: str,
-    precision: int = 7,
     crs_projected: str = "EPSG:26912",
 ) -> gpd.GeoDataFrame:
-    """
-    Snap a subset of nodes to the nearest endpoint of a pre-filtered
-    centerline GeoDataFrame. Nodes already snapped by a previous call
-    are automatically skipped (first-call-wins).
-
-    Adds three audit columns on the first call; updates them on subsequent calls:
-        snap_rule        : str   — label applied, 'none' if unmatched,
-                           'exceeded_threshold' if beyond max_distance_m
-        snap_distance_m  : float — distance moved in metres
-        snapped          : bool  — True if geometry was actually moved
-
-    Parameters
-    ----------
-    gdf_nodes : GeoDataFrame
-        Nodes layer. Pass the result of the previous snap_nodes() call to
-        chain multiple rules.
-    gdf_centerlines_filtered : GeoDataFrame
-        Centerlines already filtered to the relevant subset (e.g. only
-        Interstate rows, only DOT_RTNAME ramps, etc.). Filtering is the
-        caller's responsibility — this function receives the result.
-    node_mask : pd.Series
-        Boolean Series aligned to gdf_nodes.index selecting candidate nodes.
-        e.g. gdf_nodes["Freeway"] or gdf_nodes["Arterial"] | gdf_nodes["Local"]
-    max_distance_m : float
-        Nodes further than this threshold are not moved.
-    label : str
-        Written to the snap_rule audit column for snapped nodes.
-    precision : int, optional
-        Coordinate rounding for endpoint deduplication. Default 7 (~1cm UTM).
-    crs_projected : str, optional
-        Projected CRS for metric distance calculations.
-        Default EPSG:26912 (UTM Zone 12N — Utah).
-
-    Returns
-    -------
-    GeoDataFrame
-        Copy of gdf_nodes with updated geometry and audit columns.
-
-    Example
-    -------
-    # Chain multiple rules — first call wins per node
-    gdf = snap_nodes(gdf, active_cl[active_cl["DOT_FCLASS"] == "Interstate"],
-                     node_mask=gdf["Freeway"], max_distance_m=500, label="Freeway")
-
-    gdf = snap_nodes(gdf, active_cl[active_cl["DOT_RTNAME"].str[5] == "R"],
-                     node_mask=gdf["Ramp"], max_distance_m=300, label="Ramp")
-
-    """
+    """Snap nodes to the endpoints of pre-filtered centerlines."""
     result = gdf_nodes.copy()
 
-    # Initialise audit columns on first call
     if "snap_rule" not in result.columns:
         result["snap_rule"] = "none"
         result["snap_distance_m"] = np.nan
         result["snapped"] = False
 
     if len(gdf_centerlines_filtered) == 0:
-        print(f"  [{label}] No centerlines provided — skipping.")
         return result
 
-    # Only consider nodes that match the mask AND haven't been snapped yet
     candidate_idx = node_mask[node_mask].index
     candidate_idx = candidate_idx[result.loc[candidate_idx, "snap_rule"] == "none"]
 
     if len(candidate_idx) == 0:
-        print(f"  [{label}] No unsnapped candidate nodes — skipping.")
         return result
 
-    endpoints = _extract_endpoints(gdf_centerlines_filtered, precision=precision)
-    print(f"  [{label}] {len(candidate_idx):,} nodes → {len(endpoints):,} endpoints")
+    print(
+        f"  [{label}] {len(candidate_idx):,} nodes → {len(gdf_centerlines_filtered):,} centerlines"
+    )
 
     candidate_nodes = result.loc[candidate_idx]
     snapped_geoms, distances, flags = _spatial_snap(
-        candidate_nodes, endpoints, max_distance_m, crs_projected
+        candidate_nodes, gdf_centerlines_filtered, max_distance_m, crs_projected
     )
 
     for idx, geom, dist, snapped_flag in zip(candidate_idx, snapped_geoms, distances, flags):

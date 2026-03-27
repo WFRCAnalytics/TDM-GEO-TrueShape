@@ -379,26 +379,17 @@ coverage is adequate and the threshold is sensible.
 fwy_cl = active_cl[active_cl["POSTTYPE"].isin(["FWY", "RAMP"])]
 fwy_nodes_eligible = gdf_nodes[fwy_snap_mask].copy()
 
-# Extract deduplicated freeway centerline endpoints
-fwy_cl_exp = fwy_cl.explode(index_parts=False)
-pts = []
-for geom in fwy_cl_exp.geometry:
-    pts.append(Point(round(geom.coords[0][0], 7), round(geom.coords[0][1], 7)))
-    pts.append(Point(round(geom.coords[-1][0], 7), round(geom.coords[-1][1], 7)))
-fwy_endpoints = gpd.GeoSeries(pts, crs=fwy_cl.crs).drop_duplicates()
-
 print(f"Eligible freeway nodes:       {len(fwy_nodes_eligible):,}")
 print(f"Freeway centerline segments:  {len(fwy_cl):,}")
-print(f"Unique freeway endpoints:     {len(fwy_endpoints):,}")
 
-# Distance from each eligible node to its nearest endpoint
-tree = STRtree(fwy_endpoints.values)
+# Distance from each eligible node to its nearest physical centerline segment
+tree = STRtree(fwy_cl.geometry.values)
 dists = np.array(
-    [g.distance(fwy_endpoints.iloc[tree.nearest(g)]) for g in fwy_nodes_eligible.geometry]
+    [g.distance(fwy_cl.geometry.iloc[tree.nearest(g)]) for g in fwy_nodes_eligible.geometry]
 )
-fwy_nodes_eligible["nearest_endpoint_m"] = np.round(dists, 1)
+fwy_nodes_eligible["nearest_line_m"] = np.round(dists, 1)
 
-print(f"\nDistance to nearest freeway endpoint (m):")
+print(f"\nDistance to nearest physical pavement (m):")
 print(f"  min:    {dists.min():.1f}")
 print(f"  median: {np.median(dists):.1f}")
 print(f"  p75:    {np.percentile(dists, 75):.1f}")
@@ -410,13 +401,7 @@ print(f"  ≤ 500m: {(dists <= 500).sum():,}  ({(dists <= 500).mean() * 100:.0f}
 print(f"  > 500m: {(dists > 500).sum():,}  ({(dists > 500).mean() * 100:.0f}%)")
 
 print(f"\n10 CLOSEST nodes:")
-print(
-    fwy_nodes_eligible.nsmallest(10, "nearest_endpoint_m")[["N", "nearest_endpoint_m"]].to_string()
-)
-print(f"\n10 FURTHEST nodes:")
-print(
-    fwy_nodes_eligible.nlargest(10, "nearest_endpoint_m")[["N", "nearest_endpoint_m"]].to_string()
-)
+print(fwy_nodes_eligible.nsmallest(10, "nearest_line_m")[["N", "nearest_line_m"]].to_string())
 ```
 
 ### Step 1c — Pre-Snap Map
@@ -424,10 +409,9 @@ print(
 Blue = within 200m (good), Amber = 200–500m (borderline), Red = beyond 500m (no nearby centerline).
 
 ```{python}
-#| eval: false
+# | eval: false
 
 fwy_nodes_wgs = fwy_nodes_eligible.to_crs(CRS_WGS)
-fwy_endpoints_wgs = fwy_endpoints.to_crs(CRS_WGS)
 fwy_cl_wgs = fwy_cl.to_crs(CRS_WGS)
 
 center = [fwy_nodes_wgs.geometry.y.mean(), fwy_nodes_wgs.geometry.x.mean()]
@@ -441,23 +425,17 @@ for _, row in fwy_cl_wgs.iterrows():
     ).add_to(cl_layer)
 cl_layer.add_to(m_pre_fwy)
 
-ep_layer = folium.FeatureGroup(name="Centerline endpoints", show=True)
-for pt in fwy_endpoints_wgs:
-    folium.CircleMarker(
-        location=[pt.y, pt.x], radius=3,
-        color="#1D9E75", fill=True, fill_opacity=1.0,
-        tooltip="Endpoint",
-    ).add_to(ep_layer)
-ep_layer.add_to(m_pre_fwy)
-
 node_layer = folium.FeatureGroup(name="Freeway nodes (eligible)", show=True)
 for idx, row in fwy_nodes_wgs.iterrows():
-    dist = fwy_nodes_eligible.loc[idx, "nearest_endpoint_m"]
+    dist = fwy_nodes_eligible.loc[idx, "nearest_line_m"]
     color = "#E24B4A" if dist > 500 else "#EF9F27" if dist > 200 else "#378ADD"
     folium.CircleMarker(
-        location=[row.geometry.y, row.geometry.x], radius=4,
-        color=color, fill=True, fill_opacity=0.85,
-        tooltip=f"N: {fwy_nodes_eligible.loc[idx, 'N']} | {dist}m",
+        location=[row.geometry.y, row.geometry.x],
+        radius=4,
+        color=color,
+        fill=True,
+        fill_opacity=0.85,
+        tooltip=f"N: {fwy_nodes_eligible.loc[idx, 'N']} | Line: {dist}m",
     ).add_to(node_layer)
 node_layer.add_to(m_pre_fwy)
 
