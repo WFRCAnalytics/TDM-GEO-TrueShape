@@ -172,7 +172,8 @@ def _spatial_snap(
 ) -> tuple[list, list, list]:
     """
     Snap nodes using Segment-First (Point-to-Line-to-Point) logic.
-    Uses a Global Greedy Assignment to resolve collisions.
+    Uses Tiered Global Greedy Assignment (Strict Dir > Relaxed Dir > Distance)
+    to resolve collisions and handle micro-geometry curves.
     """
     nodes_proj = gdf_nodes.to_crs(crs_projected)
 
@@ -199,7 +200,7 @@ def _spatial_snap(
     DIR_GROUP = {"NB": "P", "EB": "P", "P": "P", "SB": "N", "WB": "N", "N": "N"}
 
     # ==========================================
-    # PHASE 1: Bulk Spatial Query (Vectorized)
+    # PHASE 1: Bulk Spatial Query & Pre-Compute Sets
     # ==========================================
     query_pairs = tree.query(
         nodes_proj.geometry.values, predicate="dwithin", distance=max_distance_m
@@ -207,24 +208,32 @@ def _spatial_snap(
     node_indices = query_pairs[0]
     target_indices = query_pairs[1]
 
-    # Calculate distance to the physical TARGET (Line or Point)
     distances_to_target = shapely.distance(
         nodes_proj.geometry.values[node_indices], target_geoms_proj[target_indices]
     )
 
-    node_dir_sets = [
+    # Pre-compute TWO sets: Exact and Grouped (P/N)
+    node_dirs_exact = [
+        set(d for d in str(d_str).split(",") if d)
+        for d_str in gdf_nodes.get("link_directions", pd.Series([""] * len(gdf_nodes)))
+    ]
+    node_dirs_grp = [
         set(DIR_GROUP.get(d, d) for d in str(d_str).split(",") if d)
         for d_str in gdf_nodes.get("link_directions", pd.Series([""] * len(gdf_nodes)))
     ]
 
     if has_dirs:
-        target_dir_sets = [
+        target_dirs_exact = [
+            set(d for d in str(d_str).split(",") if d)
+            for d_str in targets_proj.get("allowed_dirs", pd.Series([""] * len(targets_proj)))
+        ]
+        target_dirs_grp = [
             set(DIR_GROUP.get(d, d) for d in str(d_str).split(",") if d)
             for d_str in targets_proj.get("allowed_dirs", pd.Series([""] * len(targets_proj)))
         ]
 
     # ==========================================
-    # PHASE 2: Generate Segment-First Bids
+    # PHASE 2: Generate Segment-First Bids with Tiers
     # ==========================================
     all_candidates = []
     for i in range(len(node_indices)):
@@ -233,16 +242,23 @@ def _spatial_snap(
         dist_target = distances_to_target[i]
         proj_node = nodes_proj.geometry.values[n_idx]
 
+        match_tier = 0  # Default to 0 (Strict Match)
         is_compatible = True
+
         if has_dirs:
-            n_dirs = node_dir_sets[n_idx]
-            t_dirs = target_dir_sets[t_idx]
-            if t_dirs and n_dirs and not n_dirs.intersection(t_dirs):
-                is_compatible = False
+            n_exact, n_grp = node_dirs_exact[n_idx], node_dirs_grp[n_idx]
+            t_exact, t_grp = target_dirs_exact[t_idx], target_dirs_grp[t_idx]
+
+            if t_exact and n_exact:
+                if n_exact.intersection(t_exact):
+                    match_tier = 0  # Strict Match (e.g., EB to EB)
+                elif n_grp.intersection(t_grp):
+                    match_tier = 1  # Relaxed Match (e.g., EB to NB curve)
+                else:
+                    is_compatible = False  # Complete mismatch (e.g., EB to WB)
 
         if is_compatible:
             if is_lines:
-                # Extract specific endpoints of this valid physical line
                 proj_line = target_geoms_proj[t_idx]
                 orig_line = target_geoms_orig[t_idx]
 
@@ -262,27 +278,29 @@ def _spatial_snap(
                 dist_start = proj_node.distance(p_start)
                 dist_end = proj_node.distance(p_end)
 
-                # Global Endpoint IDs (rounded to 1mm to prevent floating point misses)
                 id_start = (round(p_start.x, 3), round(p_start.y, 3))
                 id_end = (round(p_end.x, 3), round(p_end.y, 3))
 
                 if dist_start <= max_distance_m:
-                    all_candidates.append((dist_target, dist_start, n_idx, id_start, o_start))
+                    all_candidates.append(
+                        (match_tier, dist_target, dist_start, n_idx, id_start, o_start)
+                    )
                 if dist_end <= max_distance_m:
-                    all_candidates.append((dist_target, dist_end, n_idx, id_end, o_end))
+                    all_candidates.append((match_tier, dist_target, dist_end, n_idx, id_end, o_end))
             else:
-                # GTFS Point logic remains the same
                 orig_pt = target_geoms_orig[t_idx]
                 dist_pt = proj_node.distance(target_geoms_proj[t_idx])
                 id_pt = (round(target_geoms_proj[t_idx].x, 3), round(target_geoms_proj[t_idx].y, 3))
                 if dist_pt <= max_distance_m:
-                    all_candidates.append((dist_target, dist_pt, n_idx, id_pt, orig_pt))
+                    all_candidates.append((match_tier, dist_target, dist_pt, n_idx, id_pt, orig_pt))
 
     # ==========================================
-    # PHASE 3: Global Sort (Topology > Topography)
+    # PHASE 3: Global Sort (Tier > Topology > Topography)
     # ==========================================
-    # Sort primarily by distance to the LineString, secondarily by distance to Endpoint
-    all_candidates.sort(key=lambda x: (x[0], x[1]))
+    # 1. match_tier (0 is better than 1)
+    # 2. dist_target (closer to the physical line is better)
+    # 3. dist_endpoint (closer to the endpoint is better)
+    all_candidates.sort(key=lambda x: (x[0], x[1], x[2]))
 
     # ==========================================
     # PHASE 4: The Claiming Process
@@ -295,8 +313,8 @@ def _spatial_snap(
     snap_distances_m = [None] * num_nodes
     snapped_flags = [False] * num_nodes
 
-    # Unpack bid: (dist_target, dist_endpoint, node_idx, endpoint_id, endpoint_geom_orig)
-    for _, dist_endpoint, node_idx, endpoint_id, endpoint_geom_orig in all_candidates:
+    # Unpack bid: (match_tier, dist_target, dist_endpoint, node_idx, endpoint_id, endpoint_geom_orig)
+    for _, _, dist_endpoint, node_idx, endpoint_id, endpoint_geom_orig in all_candidates:
         if node_idx not in claimed_nodes and endpoint_id not in claimed_endpoints:
             claimed_nodes.add(node_idx)
             claimed_endpoints.add(endpoint_id)
