@@ -16,6 +16,9 @@ Exports:
 All filtering logic lives entirely in the calling notebook — not here.
 """
 
+# FIX 4: defaultdict and deque imported at module level (were inside _spatial_snap)
+from collections import defaultdict, deque
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -24,7 +27,7 @@ from shapely.geometry import Point
 from shapely.strtree import STRtree
 
 # ---------------------------------------------------------------------------
-# Classification helpers — monkey-patched onto GeoDataFrame
+# Classification helpers
 # ---------------------------------------------------------------------------
 
 
@@ -172,8 +175,36 @@ def _spatial_snap(
     target_id_cols: list[str] = None,
 ) -> tuple[list, list, list, dict]:
     """
-    Snap nodes using Segment-First (Point-to-Line-to-Point) logic.
-    Extracts GERS lineage attributes and calculates precise ALRS mileposts.
+    Snap nodes to centerline endpoints using Gale-Shapley Stable Matching.
+
+    Algorithm overview
+    ------------------
+    Phase 1 — Bulk spatial query via STRtree to find all (node, line) pairs
+              within max_distance_m.
+    Phase 2 — For each compatible (node, line) pair, generate endpoint bids.
+              Each bid records the node's tier (strict vs grouped direction
+              match), distance to the endpoint, and distance to the line
+              (used only as a tie-breaker in node preferences).
+    Phase 3 — Gale-Shapley node-proposing stable match:
+              * Nodes rank endpoints by (tier, dist_ep, dist_line).
+              * Endpoints rank competing nodes by (tier, dist_ep) — tier
+                is included so a wrong-direction node can never displace a
+                correct-direction node even if it is physically closer.
+              * The algorithm iterates until every free node has either
+                been accepted or exhausted its candidate list.
+    Phase 4 — Write stable assignments back to output arrays and extract
+              GERS lineage attributes / ALRS mileposts.
+
+    Guarantees
+    ----------
+    - Node-optimal: every node receives its best possible stable endpoint.
+    - No sacrificial nodes: a well-positioned node is never displaced to
+      rescue a poorly-positioned one.
+    - No chain reactions: greedy ordering cannot cascade.
+    - Direction integrity: tier-0 (strict) matches always beat tier-1
+      (grouped) matches, from both the node's and the endpoint's perspective.
+    - Graceful failure: nodes that exhaust their candidate list fall through
+      to the leftover handler and are flagged snapped=False for manual review.
     """
     nodes_proj = gdf_nodes.to_crs(crs_projected)
     num_nodes = len(gdf_nodes)
@@ -209,7 +240,7 @@ def _spatial_snap(
     DIR_GROUP = {"NB": "P", "EB": "P", "P": "P", "SB": "N", "WB": "N", "N": "N"}
 
     # ==========================================
-    # PHASE 1: Bulk Spatial Query & Pre-Compute Sets
+    # PHASE 1: Bulk Spatial Query & Pre-Compute Direction Sets
     # ==========================================
     query_pairs = tree.query(
         nodes_proj.geometry.values, predicate="dwithin", distance=max_distance_m
@@ -288,7 +319,6 @@ def _spatial_snap(
                 id_start = (round(p_start.x, 3), round(p_start.y, 3))
                 id_end = (round(p_end.x, 3), round(p_end.y, 3))
 
-                # Tuple expanded to track target_index (t_idx) and whether it is the start (True/False)
                 if dist_start <= max_distance_m:
                     all_candidates.append(
                         (match_tier, dist_target, dist_start, n_idx, id_start, o_start, t_idx, True)
@@ -307,55 +337,137 @@ def _spatial_snap(
                     )
 
     # ==========================================
-    # PHASE 3: Global Sort
+    # PHASE 3: Gale-Shapley Stable Matching
     # ==========================================
-    all_candidates.sort(key=lambda x: (x[0], x[1], x[2]))
+
+    # --- 3a. Build preference structures ---
+
+    # node_prefs[n_idx] = list of endpoint proposal dicts, ordered by
+    #   (tier, dist_ep, dist_target). Each node proposes in this order.
+    node_prefs = defaultdict(list)
+
+    # ep_node_dist[ep_id][n_idx] = (tier, dist_ep)
+    # Endpoints use this to compare competing nodes. Tuple comparison
+    # means tier is always checked before distance — a correct-direction
+    # node (tier 0) at 50 m beats a wrong-direction node (tier 1) at 1 m.
+    #
+    # FIX 1: store (tier, dist_ep) not just dist_ep so endpoints respect
+    #         direction when choosing between competing nodes.
+    # FIX 2: keep only the best (lowest) (tier, dist_ep) per (ep_id, n_idx)
+    #         pair, handling the case where two segments share an endpoint
+    #         and a node is within range of both.
+    ep_node_dist: dict[tuple, dict[int, tuple]] = defaultdict(dict)
+
+    for bid in all_candidates:
+        match_tier, dist_target, dist_ep, n_idx, ep_id, geom_orig, t_idx, is_start = bid
+
+        node_prefs[n_idx].append(
+            {
+                "tier": match_tier,
+                "dist_ep": dist_ep,
+                "dist_target": dist_target,  # tie-breaker only
+                "ep_id": ep_id,
+                "geom_orig": geom_orig,
+                "t_idx": t_idx,
+                "is_start": is_start,
+            }
+        )
+
+        # FIX 1 + FIX 2: store (tier, dist_ep) and keep the best per pair
+        new_score = (match_tier, dist_ep)
+        existing_score = ep_node_dist[ep_id].get(n_idx, (999, float("inf")))
+        if new_score < existing_score:
+            ep_node_dist[ep_id][n_idx] = new_score
+
+    # Sort each node's preference list: tier → dist_ep → dist_target (tie-breaker)
+    for n_idx in node_prefs:
+        node_prefs[n_idx].sort(key=lambda x: (x["tier"], x["dist_ep"], x["dist_target"]))
+
+    # --- 3b. Node-proposing Gale-Shapley loop ---
+
+    # next_proposal[n_idx] = index into node_prefs[n_idx] of the next
+    # endpoint this node will propose to (advances on each rejection).
+    next_proposal = dict.fromkeys(node_prefs, 0)
+
+    # ep_holder[ep_id] = {"n_idx": ..., "bid": ...}
+    # Tentative assignments. An endpoint upgrades if a better node proposes.
+    ep_holder: dict = {}
+
+    # FIX 3: use deque for O(1) popleft instead of O(n) list.pop(0)
+    free_nodes: deque = deque(node_prefs.keys())
+
+    while free_nodes:
+        n_idx = free_nodes.popleft()
+        prefs = node_prefs[n_idx]
+
+        # Node has exhausted every reachable endpoint — fails to snap.
+        # Falls through to the leftover handler below (snapped=False).
+        if next_proposal[n_idx] >= len(prefs):
+            continue
+
+        proposal = prefs[next_proposal[n_idx]]
+        next_proposal[n_idx] += 1
+        ep_id = proposal["ep_id"]
+
+        if ep_id not in ep_holder:
+            # Endpoint is free — tentative accept
+            ep_holder[ep_id] = {"n_idx": n_idx, "bid": proposal}
+        else:
+            current_holder_idx = ep_holder[ep_id]["n_idx"]
+
+            # FIX 1: compare (tier, dist_ep) tuples so a tier-0 node at
+            # 50 m always beats a tier-1 node at 1 m.
+            current_score = ep_node_dist[ep_id][current_holder_idx]
+            new_score = ep_node_dist[ep_id][n_idx]
+
+            if new_score < current_score:
+                # New node is preferred — endpoint upgrades.
+                # Displaced node re-enters the pool to try its next preference.
+                ep_holder[ep_id] = {"n_idx": n_idx, "bid": proposal}
+                free_nodes.append(current_holder_idx)
+            else:
+                # Endpoint prefers its current holder — reject new node.
+                # Rejected node re-enters the pool to try its next preference.
+                free_nodes.append(n_idx)
 
     # ==========================================
-    # PHASE 4: The Claiming Process & GERS Extraction
+    # PHASE 4: Apply Stable Assignments & GERS Extraction
     # ==========================================
-    claimed_nodes = set()
-    claimed_endpoints = set()
-
+    claimed_nodes: set = set()
     snapped_geoms = [None] * num_nodes
     snap_distances_m = [None] * num_nodes
     snapped_flags = [False] * num_nodes
 
-    # Unpack bid with target index and start/end flag
-    for (
-        _,
-        _,
-        dist_endpoint,
-        node_idx,
-        endpoint_id,
-        endpoint_geom_orig,
-        t_idx,
-        is_start,
-    ) in all_candidates:
-        if node_idx not in claimed_nodes and endpoint_id not in claimed_endpoints:
-            claimed_nodes.add(node_idx)
-            claimed_endpoints.add(endpoint_id)
+    for accepted_proposal in ep_holder.values():
+        n_idx = accepted_proposal["n_idx"]
+        bid = accepted_proposal["bid"]
 
-            snapped_geoms[node_idx] = endpoint_geom_orig
-            snap_distances_m[node_idx] = round(dist_endpoint, 2)
-            snapped_flags[node_idx] = True
+        claimed_nodes.add(n_idx)
+        snapped_geoms[n_idx] = bid["geom_orig"]
+        snap_distances_m[n_idx] = round(bid["dist_ep"], 2)
+        snapped_flags[n_idx] = True
 
-            # Extract requested GERS attributes
-            if target_id_cols and isinstance(snap_targets, gpd.GeoDataFrame):
-                for col in target_id_cols:
-                    if col in snap_targets.columns:
-                        snapped_attrs[col][node_idx] = snap_targets.iloc[t_idx][col]
+        t_idx = bid["t_idx"]
 
-            # Dynamically extract correct ALRS Milepost
-            if is_lines and "milepost" in snapped_attrs:
-                mp = (
-                    snap_targets.iloc[t_idx]["DOT_F_MILE"]
-                    if is_start
-                    else snap_targets.iloc[t_idx]["DOT_T_MILE"]
-                )
-                snapped_attrs["milepost"][node_idx] = mp
+        # Extract requested GERS lineage attributes
+        if target_id_cols and isinstance(snap_targets, gpd.GeoDataFrame):
+            for col in target_id_cols:
+                if col in snap_targets.columns:
+                    snapped_attrs[col][n_idx] = snap_targets.iloc[t_idx][col]
 
-    # Handle Leftovers
+        # Dynamically extract correct ALRS milepost (from-mile for start
+        # endpoint, to-mile for end endpoint)
+        if is_lines and "milepost" in snapped_attrs:
+            mp = (
+                snap_targets.iloc[t_idx]["DOT_F_MILE"]
+                if bid["is_start"]
+                else snap_targets.iloc[t_idx]["DOT_T_MILE"]
+            )
+            snapped_attrs["milepost"][n_idx] = mp
+
+    # Leftover handler — nodes that exhausted their candidate list or had
+    # no candidates at all. Geometry is left at its original position and
+    # snapped=False flags the node for manual review in QGIS.
     for i, (orig_geom, proj_geom) in enumerate(zip(gdf_nodes.geometry, nodes_proj.geometry)):
         if i not in claimed_nodes:
             nearest_idx = tree.nearest(proj_geom)

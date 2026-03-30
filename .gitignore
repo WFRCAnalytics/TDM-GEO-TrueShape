@@ -206,8 +206,23 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Data files
-_data
+# --- Data Folder Rules ---
+
+# 1. Ignore everything inside processed/ and raw/
+_data/processed/*
+_data/raw/*
+
+# 2. But DO NOT ignore the .gitkeep files
+# This ensures the folders 'processed' and 'raw' exist on GitHub
+!_data/processed/.gitkeep
+!_data/raw/.gitkeep
+
+# 3. Explicitly ensure the .qgz file is tracked
+# (Since we didn't ignore _data/*, this is technically tracked anyway,
+# but keeping it here is good practice/insurance)
+!_data/TrueShape Diagnosis.qgz
+
+# -----------------
 
 /.quarto/
 **/*.quarto_ipynb
