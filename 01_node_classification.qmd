@@ -159,7 +159,7 @@ To add a column: add a line. To remove: delete it. To change logic: edit in plac
 
 ```{python}
 # Freeway FT codes excl. CD (21, 31) and excl. HOV/Managed (37, 38, 39)
-FW = list(set(range(20, 28)) | set(range(30, 37)) - {21, 31})
+FW = list((set(range(20, 28)) | set(range(30, 37))) - {21, 31})
 
 gdf_nodes["Freeway"] = nodes_on(gdf_nodes, gdf_links, f"FT_2023 in {FW}")
 gdf_nodes["CD"] = nodes_on(gdf_nodes, gdf_links, "FT_2023 in [21, 31]")
@@ -376,15 +376,31 @@ Check distance distribution BEFORE snapping to confirm the centerline
 coverage is adequate and the threshold is sensible.
 
 ```{python}
-# 1. Mainline: Must be officially classified as a Freeway/Expressway, OR locally tagged as FWY.
+# ---------------------------------------------------------------------------
+# Centerline type filters — defined once, reused across ALL snap steps.
+# ---------------------------------------------------------------------------
+# 1. Mainline: officially classified Freeway/Expressway, or locally tagged FWY.
+#    This rescues SR-201 which has a garbage "()" POSTTYPE but correct DOT_FCLASS.
 is_mainline = active_cl["DOT_FCLASS"].isin(["Interstate", "Other Freeways and Expressways"]) | (
     active_cl["POSTTYPE"] == "FWY"
 )
-# 2. Ramps: Must be an official UDOT Ramp (LRS 6th char 'R') OR locally tagged as RAMP.
+# 2. Ramp: official UDOT Ramp (LRS 6th char 'R') OR locally tagged as RAMP.
 is_ramp = (active_cl["DOT_RTNAME"].str[5] == "R") | (active_cl["POSTTYPE"] == "RAMP")
+# 3. CD (Collector-Distributor): LRS 6th char 'C'.
+is_cd = active_cl["DOT_RTNAME"].str[5] == "C"
 
-# For pre-validation, we want to look at the combined pool
-fwy_cl = active_cl[is_mainline | is_ramp]
+# Ramp and CD are treated as a single "interchange" class throughout snapping.
+# A model node with FT 31 (CD) regularly sits at a physical Ramp endpoint and
+# vice versa — they are topologically interchangeable at gore points. Using a
+# unified pool prevents false mismatches in both directions.
+# Note: _assign_line_directions in node_utils.py clears allowed_dirs for all
+# R and C segments so they are direction-agnostic during matching.
+is_interchange = is_ramp | is_cd
+```
+
+```{python}
+# For pre-validation, look at the full freeway corridor (mainline + interchange)
+fwy_cl = active_cl[is_mainline | is_interchange]
 fwy_nodes_eligible = gdf_nodes[fwy_snap_mask].copy()
 
 print(f"Eligible freeway nodes:       {len(fwy_nodes_eligible):,}")
@@ -458,35 +474,29 @@ Only run this once you are satisfied with Step 1b/1c.
 ```{python}
 gdf_nodes_snapped = gdf_nodes.copy()
 
-# ==========================================
-# CENTERLINE POOLS (The Bulletproof Hybrid)
-# ==========================================
-# 1. Mainline: Must be officially classified as a Freeway/Expressway, OR locally tagged as FWY.
-# This rescues SR-201 which has a garbage "()" POSTTYPE but a correct DOT_FCLASS.
-is_mainline = active_cl["DOT_FCLASS"].isin(["Interstate", "Other Freeways and Expressways"]) | (
-    active_cl["POSTTYPE"] == "FWY"
-)
+# is_mainline, is_ramp, is_cd, is_interchange defined in Step 1b.
 
-# 2. Ramps: Must be an official UDOT Ramp (LRS 6th char 'R') OR locally tagged as RAMP.
-is_ramp = (active_cl["DOT_RTNAME"].str[5] == "R") | (active_cl["POSTTYPE"] == "RAMP")
-
-pure_fwy_cl = active_cl[is_mainline]
-combo_fwy_cl = active_cl[is_mainline | is_ramp]
-
-# Pass 1: Snap Pure Mainline nodes ONLY to Mainline centerlines
+# Pass 1: Pure Mainline nodes → Mainline centerlines only.
+# These nodes touch ONLY freeway links (no ramps, no CDs). Keeping the pool
+# narrow prevents them from drifting onto nearby interchange segments.
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
-    pure_fwy_cl,
+    active_cl[is_mainline],
     node_mask=pure_fwy_mask,
     max_distance_m=500,
     label="Freeway_Mainline",
     target_id_cols=["DOT_RTNAME", "DOT_RTPART", "DOT_HWYNAM"],
 )
 
-# Pass 2: Snap Junction nodes to Mainline OR Ramp centerlines
+# Pass 2: Junction/Gore nodes → Mainline + full interchange pool (Ramp + CD).
+# These nodes sit where freeway meets ramp/CD. The EP they need to snap to is
+# the shared endpoint between a mainline and a ramp or CD segment. Including
+# both Ramp and CD centerlines here is essential — a model node coded FT 31
+# (CD) at a physical Ramp endpoint will not find its target unless the ramp
+# centerlines are in this pool, and vice versa.
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
-    combo_fwy_cl,
+    active_cl[is_mainline | is_interchange],
     node_mask=fwy_junction_mask,
     max_distance_m=500,
     label="Freeway_Junction",
@@ -573,14 +583,18 @@ m_post_fwy
 
 ```{python}
 fwy_snapped_dists = gdf_nodes_snapped.loc[
-    gdf_nodes_snapped["snap_rule"] == "Freeway", "snap_distance_m"
+    gdf_nodes_snapped["snap_rule"].isin(["Freeway_Mainline", "Freeway_Junction"]), "snap_distance_m"
 ]
 print(f"Freeway nodes snapped:   {len(fwy_snapped_dists):,}")
 print(f"  median move:           {fwy_snapped_dists.median():.1f}m")
 print(f"  max move:              {fwy_snapped_dists.max():.1f}m")
-print(f"  moved < 50m:           {(fwy_snapped_dists < 50).sum():,}  ({(fwy_snapped_dists < 50).mean()*100:.0f}%)")
+print(
+    f"  moved < 50m:           {(fwy_snapped_dists < 50).sum():,}  ({(fwy_snapped_dists < 50).mean() * 100:.0f}%)"
+)
 print(f"  moved 50–200m:         {((fwy_snapped_dists >= 50) & (fwy_snapped_dists < 200)).sum():,}")
-print(f"  moved 200–500m:        {((fwy_snapped_dists >= 200) & (fwy_snapped_dists <= 500)).sum():,}")
+print(
+    f"  moved 200–500m:        {((fwy_snapped_dists >= 200) & (fwy_snapped_dists <= 500)).sum():,}"
+)
 
 exceeded = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "exceeded_threshold"]
 fwy_exceeded = exceeded[exceeded["Freeway"] & ~exceeded["HOV"] & (exceeded["LinkCount"] != 2)]
@@ -591,8 +605,6 @@ print(f"  These nodes have no nearby freeway centerline — likely HOV, gaps, or
 ### Step 1g — Export Snapped Freeway Nodes for QGIS
 
 ```{python}
-from shapely.geometry import LineString
-import geopandas as gpd
 
 # 1. Filter for nodes that successfully snapped to either Freeway rule
 fwy_snapped = gdf_nodes_snapped[
@@ -647,131 +659,112 @@ print(f"Freeway QGIS debug package saved to: {fwy_debug_out_path}")
 
 ## Step 2 — CD and Ramp Node Snapping
 
-CD roads (FT 21, 31) and Ramps (FT 28, 29, 41, 42) snapped separately to
-their respective centerlines via DOT_RTNAME position 6 (C = C-D, R = Ramp).
+CD (FT 21, 31) and Ramp (FT 28, 29, 41, 42) nodes are snapped together to the
+unified interchange centerline pool (`is_interchange = is_ramp | is_cd`).
 
-Note: 343 CD nodes and 778 Ramp nodes were already snapped in Step 1 because
-they sit at junctions with freeway mainlines. Those are skipped automatically.
+They are snapped together because the two model road types are topologically
+interchangeable at gore points: a model node coded as CD (FT 31) regularly
+sits at a physical Ramp endpoint and vice versa. Snapping them to separate
+pools would cause each to miss the other's endpoints. Pseudonodes
+(LinkCount == 2) and nodes already claimed by Step 1 are skipped automatically.
 
-### Step 2a — Snap CD Nodes
+### Step 2a — Snap CD and Ramp Nodes
 
 ```{python}
-# CD: DOT_RTNAME position 6 (index 5) == 'C'
-# Exclude pseudonodes (LinkCount == 2). Nodes already snapped by Freeway
-# (snap_rule != 'none') are skipped automatically inside snap_nodes().
-cd_snap_mask = gdf_nodes_snapped["CD"] & (gdf_nodes_snapped["LinkCount"] != 2)
+# Unified interchange mask: CD or Ramp nodes, excluding pseudonodes.
+# Nodes already snapped in Step 1 (snap_rule != 'none') are skipped
+# automatically inside snap_nodes().
+cd_ramp_snap_mask = (
+    (gdf_nodes_snapped["CD"] | gdf_nodes_snapped["Ramp"])
+    & (gdf_nodes_snapped["LinkCount"] != 2)
+)
 
 print(f"CD nodes total:                  {gdf_nodes_snapped['CD'].sum():,}")
-print(
-    f"  already snapped by Freeway:    {(gdf_nodes_snapped['CD'] & (gdf_nodes_snapped['snap_rule'] != 'none')).sum():,}"
-)
-print(
-    f"  pseudonodes excluded:          {(gdf_nodes_snapped['CD'] & (gdf_nodes_snapped['LinkCount'] == 2)).sum():,}"
-)
-print(f"  eligible for CD snap:          {cd_snap_mask.sum():,}")
-
-gdf_nodes_snapped = snap_nodes(
-    gdf_nodes_snapped,
-    active_cl[(active_cl["DOT_RTNAME"].str[5] == "C") | (active_cl["POSTTYPE"] == "RAMP")],
-    node_mask=cd_snap_mask,
-    max_distance_m=300,
-    label="CD",
-    target_id_cols=["DOT_RTNAME", "DOT_RTPART", "DOT_HWYNAM"],
-)
-```
-
-### Step 2b — Snap Ramp Nodes
-
-```{python}
-# Ramp: DOT_RTNAME position 6 (index 5) == 'R'
-# Exclude pseudonodes. Nodes already snapped by Freeway are skipped automatically.
-ramp_snap_mask = gdf_nodes_snapped["Ramp"] & (gdf_nodes_snapped["LinkCount"] != 2)
-
 print(f"Ramp nodes total:                {gdf_nodes_snapped['Ramp'].sum():,}")
 print(
-    f"  already snapped by Freeway:    {(gdf_nodes_snapped['Ramp'] & (gdf_nodes_snapped['snap_rule'] != 'none')).sum():,}"
+    f"  already snapped by Freeway:    "
+    f"{((gdf_nodes_snapped['CD'] | gdf_nodes_snapped['Ramp']) & (gdf_nodes_snapped['snap_rule'] != 'none')).sum():,}"
 )
 print(
-    f"  pseudonodes excluded:          {(gdf_nodes_snapped['Ramp'] & (gdf_nodes_snapped['LinkCount'] == 2)).sum():,}"
+    f"  pseudonodes excluded:          "
+    f"{((gdf_nodes_snapped['CD'] | gdf_nodes_snapped['Ramp']) & (gdf_nodes_snapped['LinkCount'] == 2)).sum():,}"
 )
-print(f"  eligible for Ramp snap:        {ramp_snap_mask.sum():,}")
+print(f"  eligible for interchange snap: {cd_ramp_snap_mask.sum():,}")
 
+# Snap to the full interchange pool: both physical Ramp AND CD centerlines.
+# This is essential because a CD model node may sit at a Ramp physical endpoint
+# and a Ramp model node may sit at a CD physical endpoint — the two physical
+# types share endpoints at gore points and must be available together.
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
-    active_cl[(active_cl["DOT_RTNAME"].str[5] == "R") | (active_cl["POSTTYPE"] == "RAMP")],
-    node_mask=ramp_snap_mask,
+    active_cl[is_interchange],
+    node_mask=cd_ramp_snap_mask,
     max_distance_m=300,
-    label="Ramp",
+    label="Interchange",
     target_id_cols=["DOT_RTNAME", "DOT_RTPART", "DOT_HWYNAM"],
 )
 ```
 
-### Step 2c — Post-Snap Summary (CD + Ramp)
+### Step 2b — Post-Snap Summary (Interchange)
 
 ```{python}
-for rule in ["CD", "Ramp"]:
-    snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == rule]["snap_distance_m"]
-    print(f"{rule}:")
-    print(f"  snapped:      {len(snapped):,}")
-    print(f"  median move:  {snapped.median():.1f}m")
-    print(f"  max move:     {snapped.max():.1f}m")
-    print(f"  moved < 50m:  {(snapped < 50).sum():,}  ({(snapped < 50).mean()*100:.0f}%)")
-    print(f"  moved 50–300m:{((snapped >= 50) & (snapped <= 300)).sum():,}")
-    print()
+snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Interchange"]["snap_distance_m"]
+print(f"Interchange (CD + Ramp) nodes snapped: {len(snapped):,}")
+print(f"  median move:  {snapped.median():.1f}m")
+print(f"  max move:     {snapped.max():.1f}m")
+print(f"  moved < 50m:  {(snapped < 50).sum():,}  ({(snapped < 50).mean()*100:.0f}%)")
+print(f"  moved 50–300m:{((snapped >= 50) & (snapped <= 300)).sum():,}")
 ```
 
-### Step 2d — Ramp + CD Post-Snap Map
+### Step 2c — Interchange Post-Snap Map
 
 ```{python}
 #| eval: false
 
-ramp_cd_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(["Ramp", "CD"])]
-ramp_cd_original = gdf_nodes.loc[ramp_cd_snapped.index]
+ic_snapped  = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Interchange"]
+ic_original = gdf_nodes.loc[ic_snapped.index]
 
-ramp_cd_snapped_wgs  = ramp_cd_snapped.to_crs(CRS_WGS)
-ramp_cd_original_wgs = ramp_cd_original.to_crs(CRS_WGS)
+ic_snapped_wgs  = ic_snapped.to_crs(CRS_WGS)
+ic_original_wgs = ic_original.to_crs(CRS_WGS)
 
-connectors_rc = []
-for idx in ramp_cd_snapped.index:
-    orig = ramp_cd_original_wgs.geometry.loc[idx]
-    snap = ramp_cd_snapped_wgs.geometry.loc[idx]
+connectors_ic = []
+for idx in ic_snapped.index:
+    orig = ic_original_wgs.geometry.loc[idx]
+    snap = ic_snapped_wgs.geometry.loc[idx]
     if orig.distance(snap) > 0:
-        connectors_rc.append({
+        connectors_ic.append({
             "geometry": LineString([orig, snap]),
-            "N": int(ramp_cd_snapped.loc[idx, "N"]),
-            "rule": ramp_cd_snapped.loc[idx, "snap_rule"],
-            "dist_m": float(ramp_cd_snapped.loc[idx, "snap_distance_m"]),
+            "N": int(ic_snapped.loc[idx, "N"]),
+            "dist_m": float(ic_snapped.loc[idx, "snap_distance_m"]),
         })
-gdf_rc_connectors = gpd.GeoDataFrame(connectors_rc, crs=CRS_WGS)
+gdf_ic_connectors = gpd.GeoDataFrame(connectors_ic, crs=CRS_WGS)
 
-center = [ramp_cd_original_wgs.geometry.y.mean(), ramp_cd_original_wgs.geometry.x.mean()]
-m_post_rc = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
+center = [ic_original_wgs.geometry.y.mean(), ic_original_wgs.geometry.x.mean()]
+m_post_ic = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
 
-for _, row in gdf_rc_connectors.iterrows():
+for _, row in gdf_ic_connectors.iterrows():
     folium.PolyLine(
         [(c[1], c[0]) for c in row.geometry.coords],
         color="#888780", weight=1, opacity=0.7,
-        tooltip=f"N: {row['N']} | {row['rule']} | {row['dist_m']}m",
-    ).add_to(m_post_rc)
+        tooltip=f"N: {row['N']} | {row['dist_m']}m",
+    ).add_to(m_post_ic)
 
-for idx, row in ramp_cd_original_wgs.iterrows():
+for idx, row in ic_original_wgs.iterrows():
     folium.CircleMarker(
         location=[row.geometry.y, row.geometry.x], radius=3,
         color="#E24B4A", fill=True, fill_opacity=0.8,
         tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)",
-    ).add_to(m_post_rc)
+    ).add_to(m_post_ic)
 
-rule_colors = {"Ramp": "#1D9E75", "CD": "#534AB7"}
-for idx, row in ramp_cd_snapped_wgs.iterrows():
-    rule = ramp_cd_snapped.loc[idx, "snap_rule"]
+for idx, row in ic_snapped_wgs.iterrows():
     folium.CircleMarker(
         location=[row.geometry.y, row.geometry.x], radius=3,
-        color=rule_colors.get(rule, "#888780"), fill=True, fill_opacity=0.8,
-        tooltip=f"N: {int(ramp_cd_snapped.loc[idx, 'N'])} | {rule} | {ramp_cd_snapped.loc[idx, 'snap_distance_m']}m",
-    ).add_to(m_post_rc)
+        color="#EF9F27", fill=True, fill_opacity=0.8,
+        tooltip=f"N: {int(ic_snapped.loc[idx, 'N'])} | {ic_snapped.loc[idx, 'snap_distance_m']}m",
+    ).add_to(m_post_ic)
 
-folium.LayerControl(collapsed=False).add_to(m_post_rc)
-m_post_rc
+folium.LayerControl(collapsed=False).add_to(m_post_ic)
+m_post_ic
 ```
 
 ---
@@ -964,10 +957,9 @@ ax.set_facecolor("white")
 color_map = {
     "Freeway_Mainline": "#1D9E75",
     "Freeway_Junction": "#534AB7",
-    "CD": "#EF9F27",
-    "Ramp": "#E24B4A",
-    "Surface": "#378ADD",
-    "FixedTransit_Rail": "#888780",
+    "Interchange":      "#EF9F27",
+    "Surface":          "#378ADD",
+    "FixedTransit_Rail":"#888780",
 }
 
 # Plot a cumulative step curve for each rule

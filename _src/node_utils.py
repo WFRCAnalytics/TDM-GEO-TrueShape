@@ -16,7 +16,6 @@ Exports:
 All filtering logic lives entirely in the calling notebook — not here.
 """
 
-# FIX 4: defaultdict and deque imported at module level (were inside _spatial_snap)
 from collections import defaultdict, deque
 
 import geopandas as gpd
@@ -146,7 +145,33 @@ def assign_directions(gdf_nodes: gpd.GeoDataFrame, gdf_links: gpd.GeoDataFrame) 
 
 
 def _assign_line_directions(gdf_lines: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Extract allowed directions from FULLNAME or DOT_RTNAME for LineStrings."""
+    """
+    Extract allowed directions from FULLNAME or DOT_RTNAME for LineStrings.
+
+    Directional enforcement is intentionally disabled for Ramp (DOT_RTNAME[5]
+    == 'R') and CD (DOT_RTNAME[5] == 'C') segments. There are two independent
+    reasons, one per direction source:
+
+    FULLNAME source (e.g. "I-215W SB X20 TO SR-201 WB RAMP"):
+        The regex extracts the FIRST directional token, which is the ORIGIN
+        corridor direction ("SB"), not the destination. The physical endpoint
+        being matched is at the WB terminus of the ramp. A WB junction node
+        at that endpoint would receive only a tier-1 grouped match (SB and WB
+        both group to "N") instead of tier-0, causing it to lose in competition
+        to any tier-0 bidder even when it is the physically closest node.
+
+    DOT_RTNAME source (LRS P/N character at index 4):
+        The P/N flag encodes the road-database digitising direction, not traffic
+        flow direction. A ramp departing a WB freeway may have LRS direction P
+        (→ allowed_dirs = "NB,EB"), which falsely rejects a WB junction node as
+        incompatible entirely (is_compatible = False).
+
+    In both cases the correct fix is the same: clear allowed_dirs to "" for all
+    Ramp and CD segments, making them direction-agnostic. This means any node
+    can match them at tier 0. The overpass-protection that directional filtering
+    provides is only meaningful on through-running mainline segments, where the
+    direction encoding is reliable and consistently describes traffic flow.
+    """
     lines = gdf_lines.copy()
     lines["allowed_dirs"] = ""
 
@@ -156,13 +181,20 @@ def _assign_line_directions(gdf_lines: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
     if "DOT_RTNAME" in lines.columns:
         mask_empty = lines["allowed_dirs"] == ""
-        # The 5th character (index 4) is the direction (P or N)
+        # The 5th character (index 4) is the LRS direction indicator (P or N)
         lrs_dir = lines.loc[mask_empty, "DOT_RTNAME"].astype(str).str[4:5]
 
-        # P = Positive (Northbound or Eastbound)
+        # P = Positive reference direction (Northbound or Eastbound)
         lines.loc[mask_empty & (lrs_dir == "P"), "allowed_dirs"] = "NB,EB"
-        # N = Negative (Southbound or Westbound)
+        # N = Negative reference direction (Southbound or Westbound)
         lines.loc[mask_empty & (lrs_dir == "N"), "allowed_dirs"] = "SB,WB"
+
+        # Clear directions for all Ramp (R) and CD (C) segments.
+        # This runs unconditionally — it overrides whatever was set by either
+        # the FULLNAME regex or the LRS P/N logic above.
+        # The 6th character (index 5) of DOT_RTNAME identifies the road type.
+        is_interchange = lines["DOT_RTNAME"].astype(str).str[5].isin(["R", "C"])
+        lines.loc[is_interchange, "allowed_dirs"] = ""
 
     return lines
 
@@ -396,7 +428,7 @@ def _spatial_snap(
     # Tentative assignments. An endpoint upgrades if a better node proposes.
     ep_holder: dict = {}
 
-    # FIX 3: use deque for O(1) popleft instead of O(n) list.pop(0)
+    # Use deque for O(1) popleft instead of O(n) list.pop(0)
     free_nodes: deque = deque(node_prefs.keys())
 
     while free_nodes:
@@ -418,7 +450,7 @@ def _spatial_snap(
         else:
             current_holder_idx = ep_holder[ep_id]["n_idx"]
 
-            # FIX 1: compare (tier, dist_ep) tuples so a tier-0 node at
+            # Compare (tier, dist_ep) tuples so a tier-0 node at
             # 50 m always beats a tier-1 node at 1 m.
             current_score = ep_node_dist[ep_id][current_holder_idx]
             new_score = ep_node_dist[ep_id][n_idx]
