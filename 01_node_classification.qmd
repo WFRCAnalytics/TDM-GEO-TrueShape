@@ -381,7 +381,7 @@ coverage is adequate and the threshold is sensible.
 # ---------------------------------------------------------------------------
 # 1. Mainline: officially classified Freeway/Expressway, or locally tagged FWY.
 #    This rescues SR-201 which has a garbage "()" POSTTYPE but correct DOT_FCLASS.
-is_mainline = active_cl["DOT_FCLASS"].isin(["Interstate", "Other Freeways and Expressways"]) | (
+is_mainline = active_cl["DOT_FCLASS"].isin(["Interstate", "Other Freeway"]) | (
     active_cl["POSTTYPE"] == "FWY"
 )
 # 2. Ramp: official UDOT Ramp (LRS 6th char 'R') OR locally tagged as RAMP.
