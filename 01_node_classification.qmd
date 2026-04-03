@@ -28,7 +28,14 @@ import matplotlib.ticker as mticker
 import gtfs_kit as gk
 
 sys.path.insert(0, str(Path.cwd()))
-from _src.node_utils import nodes_on, count_links, assign_directions, snap_nodes, snap_transit
+from _src.node_utils import (
+    nodes_on,
+    count_links,
+    assign_directions,
+    build_endpoint_registry,
+    snap_nodes,
+    snap_transit,
+)
 ```
 
 ### Filepath Configuration
@@ -205,11 +212,16 @@ gdf_nodes[flag_cols[1:]].sum().rename("NodeCount").to_frame()
 # Existing function
 gdf_nodes = count_links(gdf_nodes, gdf_links)
 
-# NEW function for Phase 1
-gdf_nodes = assign_directions(gdf_nodes, gdf_links)
+# 1. Standard direction payload (all links)
+gdf_nodes = assign_directions(gdf_nodes, gdf_links, out_col="link_directions")
+
+# 2. Isolated freeway direction payload (freeway links only)
+# Reusing the 'FW' list (FT 20-40 family excl. CDs) defined in the classification block
+fwy_query = f"FT_2023 in {FW}"
+gdf_nodes = assign_directions(gdf_nodes, gdf_links, query=fwy_query, out_col="fwy_link_directions")
 
 # View the results
-gdf_nodes[["N", "LinkCount", "link_directions"]].head(20)
+gdf_nodes[["N", "LinkCount", "link_directions", "fwy_link_directions"]].head(20)
 ```
 
 #### Distribution of Link Counts
@@ -495,12 +507,14 @@ gdf_nodes_snapped = gdf_nodes.copy()
 
 # is_mainline, is_interchange defined in Step 1b.
 # is_fwy_node, is_ic_node defined in Step 1a.
-# Passes are ordered so that the narrowest pools claim their endpoints first.
+
+# NEW: Build the Endpoint Registry to classify physical coordinates
+ep_registry = build_endpoint_registry(active_cl, is_mainline, is_interchange)
 
 # ---------------------------------------------------------------------------
-# Pass 1 — is_fwy_node=1, is_ic_node=0 → mainline endpoints only.
+# Pass 1 — is_fwy_node=1, is_ic_node=0 → pure mainline nodes.
 # ---------------------------------------------------------------------------
-# Pure freeway nodes. Pool is kept narrow to prevent drift onto adjacent ramps.
+# Target: Pure Mainline & Mixed Endpoints.
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
     active_cl[is_mainline],
@@ -508,13 +522,16 @@ gdf_nodes_snapped = snap_nodes(
     max_distance_m=250,
     label="Freeway_Mainline",
     target_id_cols=["DOT_RTNAME", "DOT_RTPART", "DOT_HWYNAM"],
+    endpoint_registry=ep_registry,
+    allowed_ep_types={"pure_mainline", "mixed"},
+    use_fwy_dirs=False,
 )
 
 # ---------------------------------------------------------------------------
-# Pass 2 — is_fwy_node=0, is_ic_node=1 → interchange endpoints only.
+# Pass 2 — is_fwy_node=0, is_ic_node=1 → pure interchange nodes.
 # ---------------------------------------------------------------------------
-# Pure ramp/CD nodes. Must run before Pass 3 so gore-point interchange
-# endpoints are not consumed by the wider mixed-node pool first.
+# Target: Pure Interchange Endpoints ONLY.
+# Explicitly blocked from bidding on "mixed" gore points to prevent stealing.
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
     active_cl[is_interchange],
@@ -522,13 +539,17 @@ gdf_nodes_snapped = snap_nodes(
     max_distance_m=100,
     label="Interchange",
     target_id_cols=["DOT_RTNAME", "DOT_RTPART", "DOT_HWYNAM"],
+    endpoint_registry=ep_registry,
+    allowed_ep_types={"pure_interchange"},
+    use_fwy_dirs=False,
 )
 
 # ---------------------------------------------------------------------------
-# Pass 3 — is_fwy_node=1, is_ic_node=1 → mainline + interchange endpoints.
+# Pass 3 — is_fwy_node=1, is_ic_node=1 → mixed / gore nodes.
 # ---------------------------------------------------------------------------
-# Gore / mixed nodes. Widest pool, runs last. These nodes sit at the shared
-# endpoint between a mainline and a ramp or CD segment and need access to both.
+# Target: Mixed Endpoints ONLY.
+# Uses isolated fwy_link_directions to evaluate compatibility against the
+# strict mainline directions inherited by the mixed gore endpoint.
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
     active_cl[is_mainline | is_interchange],
@@ -536,6 +557,9 @@ gdf_nodes_snapped = snap_nodes(
     max_distance_m=250,
     label="Freeway_Junction",
     target_id_cols=["DOT_RTNAME", "DOT_RTPART", "DOT_HWYNAM"],
+    endpoint_registry=ep_registry,
+    allowed_ep_types={"mixed"},
+    use_fwy_dirs=True,
 )
 ```
 

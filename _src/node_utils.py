@@ -90,11 +90,15 @@ def count_links(gdf_nodes: gpd.GeoDataFrame, gdf_links: gpd.GeoDataFrame) -> gpd
     return result
 
 
-def assign_directions(gdf_nodes: gpd.GeoDataFrame, gdf_links: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def assign_directions(
+    gdf_nodes: gpd.GeoDataFrame,
+    gdf_links: gpd.GeoDataFrame,
+    query: str = None,
+    out_col: str = "link_directions",
+) -> gpd.GeoDataFrame:
     """
-    Add a 'link_directions' column to the nodes GeoDataFrame, containing a
-    comma-separated string of all unique directions (from link 'DIRECTION' col)
-    connected to that node.
+    Add a direction column to the nodes GeoDataFrame, containing a
+    comma-separated string of all unique directions connected to that node.
 
     Parameters
     ----------
@@ -102,31 +106,37 @@ def assign_directions(gdf_nodes: gpd.GeoDataFrame, gdf_links: gpd.GeoDataFrame) 
         Nodes layer. Must contain column N.
     gdf_links : GeoDataFrame
         Links layer. Must contain columns A, B, and DIRECTION.
+    query : str, optional
+        pandas .query() string to filter links before extracting directions.
+    out_col : str, default "link_directions"
+        Name of the output column to create.
 
     Returns
     -------
     GeoDataFrame
-        Copy of gdf_nodes with 'link_directions' column appended.
+        Copy of gdf_nodes with the new direction column appended.
 
     """
     result = gdf_nodes.copy()
 
     # Ensure DIRECTION column exists to avoid KeyError
     if "DIRECTION" not in gdf_links.columns:
-        print("Warning: 'DIRECTION' column not found in links. Skipping direction assignment.")
-        result["link_directions"] = ""
+        print(f"Warning: 'DIRECTION' column not found in links. Skipping {out_col} assignment.")
+        result[out_col] = ""
         return result
 
+    # Apply link filter if a query string is provided
+    links_to_process = gdf_links.query(query) if query else gdf_links
+
     # Stack A and B nodes so we have a flat list of (Node, Direction)
-    links_a = gdf_links[["A", "DIRECTION"]].rename(columns={"A": "N"})
-    links_b = gdf_links[["B", "DIRECTION"]].rename(columns={"B": "N"})
+    links_a = links_to_process[["A", "DIRECTION"]].rename(columns={"A": "N"})
+    links_b = links_to_process[["B", "DIRECTION"]].rename(columns={"B": "N"})
 
     # Combine, drop null directions, and strip whitespace just in case
     node_dirs = pd.concat([links_a, links_b]).dropna(subset=["DIRECTION"])
     node_dirs["DIRECTION"] = node_dirs["DIRECTION"].astype(str).str.strip()
 
     # Group by Node 'N', get unique directions, and join as a comma-separated string
-    # e.g., {'NB', 'WB'} becomes "NB,WB"
     dir_strings = (
         node_dirs.groupby("N")["DIRECTION"]
         .unique()
@@ -134,7 +144,7 @@ def assign_directions(gdf_nodes: gpd.GeoDataFrame, gdf_links: gpd.GeoDataFrame) 
     )
 
     # Map back to the nodes dataframe; fill missing with empty string
-    result["link_directions"] = result["N"].map(dir_strings).fillna("")
+    result[out_col] = result["N"].map(dir_strings).fillna("")
 
     return result
 
@@ -234,12 +244,88 @@ def _assign_line_directions(gdf_lines: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return lines
 
 
+def build_endpoint_registry(
+    gdf_lines: gpd.GeoDataFrame, mask_mainline: pd.Series, mask_interchange: pd.Series
+) -> dict:
+    """
+    Scans network centerlines to classify physical endpoints and resolve directions.
+
+    Returns a dictionary keyed by (X, Y) coordinate tuples (rounded to 3 decimals):
+    {
+        (x, y): {
+            "type": "pure_mainline" | "pure_interchange" | "mixed",
+            "inherited_dirs": {'NB', 'EB'}  # Only populated from mainline segments
+        }
+    }
+    """
+    # Ensure allowed_dirs are assigned so we can harvest mainline directions
+    lines = _assign_line_directions(gdf_lines.copy())
+
+    # Accumulator dictionary to track what connects to each physical coordinate
+    # ep_accum[ep_id] = {'has_mainline': bool, 'has_interchange': bool, 'mainline_dirs': set()}
+    ep_accum = defaultdict(
+        lambda: {"has_mainline": False, "has_interchange": False, "mainline_dirs": set()}
+    )
+
+    # 1. Scan all eligible lines and populate the accumulator
+    for idx, row in lines.iterrows():
+        is_ml = mask_mainline.loc[idx] if idx in mask_mainline.index else False
+        is_ic = mask_interchange.loc[idx] if idx in mask_interchange.index else False
+
+        if not (is_ml or is_ic):
+            continue
+
+        geom = row.geometry
+        dirs = set(d for d in str(row.get("allowed_dirs", "")).split(",") if d)
+
+        # Handle LineString vs MultiLineString safely
+        if geom.geom_type == "MultiLineString":
+            p_start, p_end = geom.geoms[0].coords[0], geom.geoms[-1].coords[-1]
+        else:
+            p_start, p_end = geom.coords[0], geom.coords[-1]
+
+        # Process both endpoints of the segment
+        for p in [p_start, p_end]:
+            # Rounding to 3 decimal places matches the precise ep_id generation
+            # used in Phase 2 of the _spatial_snap algorithm.
+            ep_id = (round(p[0], 3), round(p[1], 3))
+
+            if is_ml:
+                ep_accum[ep_id]["has_mainline"] = True
+                ep_accum[ep_id]["mainline_dirs"].update(dirs)
+            if is_ic:
+                ep_accum[ep_id]["has_interchange"] = True
+
+    # 2. Finalize classifications into the resulting registry
+    registry = {}
+    for ep_id, data in ep_accum.items():
+        if data["has_mainline"] and data["has_interchange"]:
+            ep_type = "mixed"
+        elif data["has_mainline"]:
+            ep_type = "pure_mainline"
+        elif data["has_interchange"]:
+            ep_type = "pure_interchange"
+        else:
+            continue
+
+        registry[ep_id] = {
+            "type": ep_type,
+            # Mixed endpoints inherit the mainline directions to close the 'back door'
+            "inherited_dirs": data["mainline_dirs"] if ep_type == "mixed" else set(),
+        }
+
+    return registry
+
+
 def _spatial_snap(
     gdf_nodes: gpd.GeoDataFrame,
     snap_targets: gpd.GeoDataFrame | gpd.GeoSeries,
     max_distance_m: float,
     crs_projected: str,
     target_id_cols: list[str] = None,
+    endpoint_registry: dict = None,  # NEW
+    allowed_ep_types: set = None,  # NEW
+    use_fwy_dirs: bool = False,  # NEW
 ) -> tuple[list, list, list, dict]:
     """
     Snap nodes to centerline endpoints using Gale-Shapley Stable Matching.
@@ -327,13 +413,20 @@ def _spatial_snap(
         nodes_proj.geometry.values[node_indices], target_geoms_proj[target_indices]
     )
 
+    # NEW: Isolate node directions if requested
+    dir_col = (
+        "fwy_link_directions"
+        if use_fwy_dirs and "fwy_link_directions" in gdf_nodes.columns
+        else "link_directions"
+    )
+
     node_dirs_exact = [
         set(d for d in str(d_str).split(",") if d)
-        for d_str in gdf_nodes.get("link_directions", pd.Series([""] * len(gdf_nodes)))
+        for d_str in gdf_nodes.get(dir_col, pd.Series([""] * len(gdf_nodes)))
     ]
     node_dirs_grp = [
         set(DIR_GROUP.get(d, d) for d in str(d_str).split(",") if d)
-        for d_str in gdf_nodes.get("link_directions", pd.Series([""] * len(gdf_nodes)))
+        for d_str in gdf_nodes.get(dir_col, pd.Series([""] * len(gdf_nodes)))
     ]
 
     if has_dirs:
@@ -341,13 +434,9 @@ def _spatial_snap(
             set(d for d in str(d_str).split(",") if d)
             for d_str in targets_proj.get("allowed_dirs", pd.Series([""] * len(targets_proj)))
         ]
-        target_dirs_grp = [
-            set(DIR_GROUP.get(d, d) for d in str(d_str).split(",") if d)
-            for d_str in targets_proj.get("allowed_dirs", pd.Series([""] * len(targets_proj)))
-        ]
 
     # ==========================================
-    # PHASE 2: Generate Segment-First Bids
+    # PHASE 2: Generate Endpoint-Specific Bids
     # ==========================================
     all_candidates = []
     for i in range(len(node_indices)):
@@ -356,71 +445,82 @@ def _spatial_snap(
         dist_target = distances_to_target[i]
         proj_node = nodes_proj.geometry.values[n_idx]
 
-        match_tier = 0
-        is_compatible = True
+        if is_lines:
+            proj_line = target_geoms_proj[t_idx]
+            orig_line = target_geoms_orig[t_idx]
 
-        if has_dirs:
-            n_exact, n_grp = node_dirs_exact[n_idx], node_dirs_grp[n_idx]
-            t_exact, t_grp = target_dirs_exact[t_idx], target_dirs_grp[t_idx]
-            t_is_ramp = bool(is_ramp_target[t_idx])
-            if t_exact and n_exact:
-                if n_exact.intersection(t_exact):
-                    # Exact direction match — tier-0 for all segment types.
-                    match_tier = 0
-                elif n_grp.intersection(t_grp):
-                    # Grouped direction match (same P/N family, different cardinal).
-                    # For RAMPS: promote to tier-0. The ramp's FULLNAME direction
-                    # identifies its freeway corridor (which side of the median).
-                    # Nodes in the same group (e.g. WB node at SB-origin ramp,
-                    # both N-group) are a valid match — they're on the same side.
-                    # For MAINLINES/CDs: keep tier-1 (overpass protection — a WB
-                    # mainline node should prefer WB segments over SB segments).
-                    match_tier = 0 if t_is_ramp else 1
-                else:
-                    # Groups don't intersect — completely opposite side of freeway.
-                    # Reject entirely: WB node cannot snap to EB ramp endpoint.
-                    is_compatible = False
-
-        if is_compatible:
-            if is_lines:
-                proj_line = target_geoms_proj[t_idx]
-                orig_line = target_geoms_orig[t_idx]
-
-                if proj_line.geom_type == "MultiLineString":
-                    p_start, p_end = (
-                        Point(proj_line.geoms[0].coords[0]),
-                        Point(proj_line.geoms[-1].coords[-1]),
-                    )
-                    o_start, o_end = (
-                        Point(orig_line.geoms[0].coords[0]),
-                        Point(orig_line.geoms[-1].coords[-1]),
-                    )
-                else:
-                    p_start, p_end = Point(proj_line.coords[0]), Point(proj_line.coords[-1])
-                    o_start, o_end = Point(orig_line.coords[0]), Point(orig_line.coords[-1])
-
-                dist_start = proj_node.distance(p_start)
-                dist_end = proj_node.distance(p_end)
-
-                id_start = (round(p_start.x, 3), round(p_start.y, 3))
-                id_end = (round(p_end.x, 3), round(p_end.y, 3))
-
-                if dist_start <= max_distance_m:
-                    all_candidates.append(
-                        (match_tier, dist_target, dist_start, n_idx, id_start, o_start, t_idx, True)
-                    )
-                if dist_end <= max_distance_m:
-                    all_candidates.append(
-                        (match_tier, dist_target, dist_end, n_idx, id_end, o_end, t_idx, False)
-                    )
+            if proj_line.geom_type == "MultiLineString":
+                p_start, p_end = (
+                    Point(proj_line.geoms[0].coords[0]),
+                    Point(proj_line.geoms[-1].coords[-1]),
+                )
+                o_start, o_end = (
+                    Point(orig_line.geoms[0].coords[0]),
+                    Point(orig_line.geoms[-1].coords[-1]),
+                )
             else:
-                orig_pt = target_geoms_orig[t_idx]
-                dist_pt = proj_node.distance(target_geoms_proj[t_idx])
-                id_pt = (round(target_geoms_proj[t_idx].x, 3), round(target_geoms_proj[t_idx].y, 3))
-                if dist_pt <= max_distance_m:
-                    all_candidates.append(
-                        (match_tier, dist_target, dist_pt, n_idx, id_pt, orig_pt, t_idx, None)
-                    )
+                p_start, p_end = Point(proj_line.coords[0]), Point(proj_line.coords[-1])
+                o_start, o_end = Point(orig_line.coords[0]), Point(orig_line.coords[-1])
+
+            dist_start = proj_node.distance(p_start)
+            dist_end = proj_node.distance(p_end)
+            id_start = (round(p_start.x, 3), round(p_start.y, 3))
+            id_end = (round(p_end.x, 3), round(p_end.y, 3))
+
+            # NEW: Evaluate each endpoint independently
+            for is_start, dist_ep, id_ep, p_ep, o_ep in [
+                (True, dist_start, id_start, p_start, o_start),
+                (False, dist_end, id_end, p_end, o_end),
+            ]:
+                if dist_ep <= max_distance_m:
+                    # 1. Check Registry & Pass Segregation
+                    ep_info = endpoint_registry.get(id_ep, {}) if endpoint_registry else {}
+                    ep_type = ep_info.get("type", "unknown")
+
+                    if allowed_ep_types and ep_type not in allowed_ep_types:
+                        continue  # Block this bid; node is not allowed on this endpoint type
+
+                    # 2. Directional Inheritance & Evaluation
+                    match_tier = 0
+                    is_compatible = True
+
+                    if has_dirs:
+                        n_exact = node_dirs_exact[n_idx]
+                        n_grp = node_dirs_grp[n_idx]
+
+                        # Apply inheritance if it's a mixed gore point
+                        if ep_type == "mixed":
+                            t_exact_raw = ep_info.get("inherited_dirs", set())
+                            t_is_ramp_context = (
+                                False  # Gore points act like mainlines, no ramp promotion
+                            )
+                        else:
+                            t_exact_raw = target_dirs_exact[t_idx]
+                            t_is_ramp_context = bool(is_ramp_target[t_idx])
+
+                        t_exact = set(t_exact_raw)
+                        t_grp = set(DIR_GROUP.get(d, d) for d in t_exact_raw)
+
+                        if t_exact and n_exact:
+                            if n_exact.intersection(t_exact):
+                                match_tier = 0
+                            elif n_grp.intersection(t_grp):
+                                match_tier = 0 if t_is_ramp_context else 1
+                            else:
+                                is_compatible = False
+
+                    if is_compatible:
+                        all_candidates.append(
+                            (match_tier, dist_target, dist_ep, n_idx, id_ep, o_ep, t_idx, is_start)
+                        )
+        else:
+            orig_pt = target_geoms_orig[t_idx]
+            dist_pt = proj_node.distance(target_geoms_proj[t_idx])
+            id_pt = (round(target_geoms_proj[t_idx].x, 3), round(target_geoms_proj[t_idx].y, 3))
+            if dist_pt <= max_distance_m:
+                all_candidates.append(
+                    (match_tier, dist_target, dist_pt, n_idx, id_pt, orig_pt, t_idx, None)
+                )
 
     # ==========================================
     # PHASE 3: Gale-Shapley Stable Matching
@@ -585,6 +685,9 @@ def snap_nodes(
     label: str,
     target_id_cols: list[str] = None,
     crs_projected: str = "EPSG:26912",
+    endpoint_registry: dict = None,  # NEW
+    allowed_ep_types: set = None,  # NEW: e.g., {"pure_interchange"}
+    use_fwy_dirs: bool = False,  # NEW: Trigger isolated node directions
 ) -> gpd.GeoDataFrame:
     """Snap nodes to the endpoints of pre-filtered centerlines."""
     result = gdf_nodes.copy()
@@ -608,8 +711,17 @@ def snap_nodes(
     )
 
     candidate_nodes = result.loc[candidate_idx]
+
+    # NEW: Pass the new arguments down to _spatial_snap
     snapped_geoms, distances, flags, attrs = _spatial_snap(
-        candidate_nodes, gdf_centerlines_filtered, max_distance_m, crs_projected, target_id_cols
+        candidate_nodes,
+        gdf_centerlines_filtered,
+        max_distance_m,
+        crs_projected,
+        target_id_cols,
+        endpoint_registry,
+        allowed_ep_types,
+        use_fwy_dirs,
     )
 
     # Pre-create attribute columns to avoid SettingWithCopy warnings
