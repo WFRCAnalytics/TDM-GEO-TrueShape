@@ -32,8 +32,10 @@ from _src.node_utils import (
     nodes_on,
     count_links,
     assign_node_directions,
+    assign_node_type,
     extract_endpoints,
     assign_endpoint_directions,
+    assign_endpoint_type,
     snap_nodes,
     snap_transit,
 )
@@ -44,14 +46,14 @@ from _src.node_utils import (
 ```{python}
 config_filepath = {
     # Input files
-    "in_centerlines":      Path("_data/raw/BangerterEdits.gdb.zip"),
-    "in_network_links":    Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
-    "in_network_nodes":    Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
-    "in_gtfs":             Path("_data/raw/uta_gtfs.zip"),
+    "in_centerlines": Path("_data/raw/BangerterEdits.gdb.zip"),
+    "in_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
+    "in_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
+    "in_gtfs": Path("_data/raw/uta_gtfs.zip"),
     # Output files
     "out_node_classified": Path("_data/processed/nodes_classified.gpkg"),
-    "out_node_snapped":    Path("_data/processed/nodes_snapped.gpkg"),
-    "out_debug":           Path("_data/processed/debug_snapping.gpkg"),
+    "out_node_snapped": Path("_data/processed/nodes_snapped.gpkg"),
+    "out_debug": Path("_data/processed/debug_snapping.gpkg"),  # DO NOT CHANGE THE DEBUG FILE NAME
 }
 ```
 
@@ -93,13 +95,6 @@ gdf_centerlines.head(1000).explore()
 ### Network Links
 
 Only links present in the 2027 network (LN_2027 > 0) are loaded.
-
-> **Note — network year benchmark:** Using `LN_2027 > 0` loads the future network
-> state, which contains more built freeway and interchange links than the 2023 network.
-> This is intentional for 2027-scenario classification. To benchmark snapping precision
-> against the stable `main` branch results, temporarily revert to `LN_2023 > 0` and
-> compare node counts — the ~150 node increase is expected from the denser 2027 network,
-> not a logic flaw.
 
 ```{python}
 gdf_links = gpd.read_file(config_filepath["in_network_links"], where="LN_2027 > 0").to_crs(CRS_UTM)
@@ -238,7 +233,22 @@ endpoint and are excluded from all snapping passes.
 gdf_nodes = count_links(gdf_nodes, gdf_links)
 gdf_nodes = assign_node_directions(gdf_nodes, gdf_links, freeway_ft_codes=FW)
 
-gdf_nodes[["N", "LinkCount", "link_directions", "fw_directions"]].head(20)
+# Assign topology type label — used by snap_nodes for type-tier matching.
+# Three non-exclusive boolean masks compose into five mutually-exclusive labels:
+#   fwy     : freeway mainline only
+#   gore    : freeway + ramp/CD (physical junction between mainline and ramp)
+#   ramp    : ramp/CD only (no freeway, no surface)
+#   ramp_sf : ramp/CD + surface street (ramp-to-arterial terminal)
+#   surface : surface street only (default for all others)
+no_pseudo   = gdf_nodes["LinkCount"] != 2
+is_fwy_node = gdf_nodes["Freeway"] & ~gdf_nodes["ManagedAccess"] & no_pseudo
+is_ramp_node = (gdf_nodes["Ramp"] | gdf_nodes["CD"]) & no_pseudo
+is_surface_node = (gdf_nodes["Arterial"] | gdf_nodes["Collector"] | gdf_nodes["Local"])
+gdf_nodes = assign_node_type(gdf_nodes, is_fwy_node, is_ramp_node, is_surface_node)
+
+print("Node type distribution:")
+print(gdf_nodes["node_type"].value_counts().rename("count").to_frame())
+gdf_nodes[["N", "LinkCount", "link_directions", "fw_directions", "node_type"]].head(20)
 ```
 
 #### Distribution of Link Counts
@@ -466,9 +476,15 @@ aggregating direction from all contributing raw segments with freeway-first prio
 ```{python}
 gdf_ep_unique = assign_endpoint_directions(gdf_ep_unique, gdf_ep_raw)
 
+# Assign endpoint topology type label — used by snap_nodes for type-tier matching.
+# Derived from the three boolean flags via priority cascade (see assign_endpoint_type).
+gdf_ep_unique = assign_endpoint_type(gdf_ep_unique)
+
 print(f"Endpoints with direction assigned: {(gdf_ep_unique['ep_allowed_dirs'] != '').sum():,}")
 print(f"Endpoints direction-agnostic:      {(gdf_ep_unique['ep_allowed_dirs'] == '').sum():,}")
-gdf_ep_unique[["x_round", "y_round", "is_freeway", "is_interchange", "is_surface", "ep_allowed_dirs"]].head(20)
+print("\nEndpoint type distribution:")
+print(gdf_ep_unique["ep_type"].value_counts().rename("count").to_frame())
+gdf_ep_unique[["x_round", "y_round", "is_freeway", "is_interchange", "is_surface", "ep_allowed_dirs", "ep_type"]].head(20)
 ```
 
 ### Step E5 — Export Endpoint Layer for QGIS Inspection
@@ -493,34 +509,24 @@ print(f"Endpoint layer exported to: {debug_path} → layer='endpoint_layer'")
 
 ### Step 1a — Build Node Snap Masks
 
-Two binary flags describe every node's topological role. Their combination
-determines which endpoint pool and distance threshold apply.
+The `node_type` column assigned above drives type-tier matching inside
+`snap_nodes`. The boolean masks below select which nodes enter each pass —
+they alias the same logic used in `assign_node_type`.
 
 ```{python}
-# ---------------------------------------------------------------------------
-# no_pseudo: exclude shape vertices — LinkCount == 2 nodes are abstract
-#            geometry handles with no physical endpoint counterpart.
-#
-# is_fwy_node: touches at least one freeway mainline link (FT in FW family).
-#              ManagedAccess-only nodes excluded — they sit on HOT lanes
-#              with no corresponding mainline endpoint.
-#
-# is_ic_node:  touches at least one ramp or CD link.
-#
-# Pass assignment:
-#   is_fwy_node=T, is_ic_node=F  →  Pass (a): freeway-only endpoints
-#   is_fwy_node=T, is_ic_node=T  →  Pass (b): gore endpoints
-#   is_fwy_node=F, is_ic_node=T  →  Pass (c): interchange-only endpoints
-# ---------------------------------------------------------------------------
-no_pseudo   = gdf_nodes["LinkCount"] != 2
-is_fwy_node = gdf_nodes["Freeway"] & ~gdf_nodes["ManagedAccess"] & no_pseudo
-is_ic_node  = (gdf_nodes["Ramp"] | gdf_nodes["CD"]) & no_pseudo
+# no_pseudo, is_fwy_node, is_ramp_node, is_surface_node were computed above
+# alongside assign_node_type. Aliased here for pass-mask readability.
+# is_ramp_node replaces the old is_ic_node — same mask, consistent naming.
+is_ic_node = is_ramp_node   # alias kept for backward compat with Step 1b/1c code
 
-print(f"Pass (a) — freeway-only:    {(is_fwy_node & ~is_ic_node).sum():,}")
-print(f"Pass (b) — gore (mixed):    {(is_fwy_node &  is_ic_node).sum():,}")
-print(f"Pass (c) — interchange-only:{(~is_fwy_node & is_ic_node).sum():,}")
-print(f"ManagedAccess-only (skipped):"
-      f"{(gdf_nodes['Freeway'] & gdf_nodes['ManagedAccess'] & ~is_ic_node & no_pseudo).sum():,}")
+print(f"Pass (a) — freeway-only nodes:     {(is_fwy_node & ~is_ramp_node).sum():,}")
+print(f"Pass (b) — gore nodes:             {(is_fwy_node &  is_ramp_node).sum():,}")
+print(f"Pass (c) — ramp-only nodes:        {(~is_fwy_node & is_ramp_node).sum():,}")
+print(f"  of which ramp+surface:           {(~is_fwy_node & is_ramp_node & is_surface_node).sum():,}")
+print(f"ManagedAccess-only (skipped):      "
+      f"{(gdf_nodes['Freeway'] & gdf_nodes['ManagedAccess'] & ~is_ramp_node & no_pseudo).sum():,}")
+print(f"\nnode_type distribution (confirmation):")
+print(gdf_nodes["node_type"].value_counts().rename("count").to_frame())
 ```
 
 ### Step 1b — Freeway Neighbor Direction Lookup (for Pass c)
@@ -576,31 +582,27 @@ print(f"  (remaining {total_ic - resolved:,} have no adjacent freeway link — d
 Check nearest-endpoint distances before snapping to confirm coverage and thresholds.
 
 ```{python}
-# Build endpoint pools used in each pass
-ep_fwy_only = gdf_ep_unique[
-     gdf_ep_unique["is_freeway"] & ~gdf_ep_unique["is_interchange"]
-].copy()
+# ---------------------------------------------------------------------------
+# Endpoint pools for each pass — derived from ep_type for clarity.
+#
+# Pass (a): fwy endpoints only  (ep_type == "fwy")
+#           Type-tier also admits gore and fwy_sf as Tier-1 adjacents.
+# Pass (b): gore endpoints      (ep_type == "gore")
+#           Type-tier also admits fwy, fwy_sf, ramp as Tier-1 adjacents.
+# Pass (c): ramp + ramp_sf endpoints (ep_type in {"ramp", "ramp_sf"})
+#           Includes ramp+surface endpoints so ramp_sf nodes have a Tier-0
+#           target available. ramp_sf nodes exceeding 100m are recycled into
+#           Step 2 (Surface) where surface ep is Tier-0 for ramp_sf.
+# ---------------------------------------------------------------------------
+ep_fwy_only = gdf_ep_unique[gdf_ep_unique["ep_type"] == "fwy"].copy()
+ep_gore     = gdf_ep_unique[gdf_ep_unique["ep_type"] == "gore"].copy()
+ep_ic_only  = gdf_ep_unique[gdf_ep_unique["ep_type"].isin(["ramp", "ramp_sf"])].copy()
 
-ep_gore = gdf_ep_unique[
-     gdf_ep_unique["is_freeway"] &  gdf_ep_unique["is_interchange"]
-].copy()
-
-ep_ic_only = gdf_ep_unique[
-    ~gdf_ep_unique["is_freeway"] &  gdf_ep_unique["is_interchange"] & ~gdf_ep_unique["is_surface"]
-].copy()
-# NOTE on ep_ic_only: The `& ~is_surface` filter intentionally excludes endpoints
-# where a ramp terminates onto a surface arterial (Ramp-to-Arterial nodes).
-# Those endpoints also carry is_surface=True because the arterial segment
-# contributes to the same coordinate via OR aggregation in Step E3.
-# Result: Ramp-to-Arterial nodes fail Pass (c) with "exceeded_threshold" and
-# are recycled into Step 2 (Surface snapping) — which is the correct physical
-# target anyway.
-# This is now safe because snap_nodes() allows "exceeded_threshold" nodes to
-# retry in subsequent passes (the state-lockout bug is fixed in node_utils.py).
-
-print(f"Pass (a) endpoint pool — freeway-only:    {len(ep_fwy_only):,}")
-print(f"Pass (b) endpoint pool — gore:            {len(ep_gore):,}")
-print(f"Pass (c) endpoint pool — interchange-only:{len(ep_ic_only):,}")
+print(f"Pass (a) endpoint pool — fwy only:        {len(ep_fwy_only):,}  (ep_type='fwy')")
+print(f"Pass (b) endpoint pool — gore:            {len(ep_gore):,}  (ep_type='gore')")
+print(f"Pass (c) endpoint pool — ramp + ramp_sf:  {len(ep_ic_only):,}  (ep_type in ramp/ramp_sf)")
+print(f"  of which ramp-only:                     {(gdf_ep_unique['ep_type']=='ramp').sum():,}")
+print(f"  of which ramp+surface:                  {(gdf_ep_unique['ep_type']=='ramp_sf').sum():,}")
 ```
 
 ```{python}
@@ -630,16 +632,24 @@ print(f"  > 300m: {(dists >  300).sum():,}  ({(dists >  300).mean()*100:.0f}%)")
 ### Step 1d — Snap Freeway and Interchange Nodes
 
 Three passes in topology-priority order. Each pass only attempts nodes with
-`snap_rule == "none"` so earlier passes are never overwritten.
+`snap_rule == "none"` or `"exceeded_threshold"` — nodes that fail an earlier
+pass (e.g. `ramp_sf` nodes finding no target in Pass (c)) are recycled into
+subsequent passes rather than permanently locked out.
+
+Type-tier matching is active in all three passes via `node_type_col="node_type"`
+(the default). Within each pass the endpoint pool still constrains the search
+space, but the type tier ensures that when adjacent-type endpoints are the only
+ones within range (due to dataset classification mismatches), they are preferred
+over same-pass endpoints of a more distant type.
 
 ```{python}
 gdf_nodes_snapped = gdf_nodes.copy()
 
 # ---------------------------------------------------------------------------
-# Pass (a) — Freeway-only nodes → freeway-only endpoints
-# Direction: link_directions (all freeway links, since is_fwy_node & ~is_ic_node
-#            guarantees no interchange links on these nodes)
-# Threshold: 500m
+# Pass (a) — Freeway-only nodes (node_type="fwy") → freeway-only endpoint pool
+# Type tier: fwy ep = Tier 0, gore/fwy_sf ep = Tier 1 (adjacent).
+# Direction: link_directions.
+# Threshold: 500m (freeway geometry can sit well off the model centroid).
 # ---------------------------------------------------------------------------
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
@@ -652,10 +662,11 @@ gdf_nodes_snapped = snap_nodes(
 )
 
 # ---------------------------------------------------------------------------
-# Pass (b) — Gore nodes → gore endpoints
-# Direction: fw_directions (freeway links only — isolates the freeway-side
-#            direction of a mixed node, ignoring ramp/CD link directions)
-# Threshold: 250m
+# Pass (b) — Gore nodes (node_type="gore") → gore endpoint pool
+# Type tier: gore ep = Tier 0, fwy/fwy_sf/ramp ep = Tier 1 (adjacent).
+# Direction: fw_directions (freeway side of the mixed node only — isolates
+#            mainline direction, ignoring ramp/CD link directions).
+# Threshold: 250m.
 # ---------------------------------------------------------------------------
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
@@ -668,10 +679,18 @@ gdf_nodes_snapped = snap_nodes(
 )
 
 # ---------------------------------------------------------------------------
-# Pass (c) — Interchange-only nodes → interchange-only endpoints
-# Direction: ic_fw_directions (direction inherited from adjacent freeway
-#            mainline link, one hop in the network graph — Step 1b above)
-# Threshold: 100m (tight — ramp merge/split points are physically close)
+# Pass (c) — Ramp/interchange nodes (node_type="ramp" or "ramp_sf") →
+#            interchange-only endpoint pool (ramp + ramp_sf endpoints).
+# Type tier:
+#   ramp nodes    : ramp ep = Tier 0, gore/ramp_sf ep = Tier 1.
+#   ramp_sf nodes : ramp_sf ep = Tier 0, ramp ep = Tier 1.
+#                   ramp_sf nodes that find no target here are recycled into
+#                   Step 2 (Surface) where surface ep = Tier 0 for ramp_sf.
+# Direction: ic_fw_directions (direction inherited one hop from adjacent
+#            freeway mainline link — Step 1b above).
+# Threshold: 100m (tight — ramp terminals are physically close).
+# NOTE: ep_ic_only includes both ramp-only and ramp+surface endpoints so that
+#       ramp_sf nodes have same-type targets available in this pass.
 # ---------------------------------------------------------------------------
 gdf_nodes_snapped = snap_nodes(
     gdf_nodes_snapped,
@@ -687,22 +706,6 @@ gdf_nodes_snapped = snap_nodes(
 ### Step 1e — Post-Snap Distance Summary
 
 ```{python}
-# ---------------------------------------------------------------------------
-# Diagnostic: how many interchange-only nodes failed Pass (c) and will be
-# recycled into Step 2 (Surface snapping)?
-# These are Ramp-to-Arterial nodes whose physical endpoint touches a surface
-# street — the ep_ic_only pool correctly excludes those coordinates, so the
-# node fails here and picks up its true surface counterpart in Step 2.
-# ---------------------------------------------------------------------------
-ic_exceeded = gdf_nodes_snapped[
-    (~is_fwy_node & is_ic_node)
-    & (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold")
-]
-print(f"Interchange-only nodes recycling to Step 2 (Surface): {len(ic_exceeded):,}")
-print(f"  (These are Ramp-to-Arterial nodes — expected, not a failure)")
-```
-
-```{python}
 ALL_SNAP_RULES = ["Freeway_Only", "Freeway_Gore", "Interchange_Only"]
 
 for rule in ALL_SNAP_RULES:
@@ -715,9 +718,17 @@ for rule in ALL_SNAP_RULES:
     print(f"  < 50m:  {(dists < 50).sum():,}  ({(dists < 50).mean()*100:.0f}%)")
     print()
 
-all_eligible = is_fwy_node | is_ic_node
+all_eligible = is_fwy_node | is_ramp_node
 exceeded = gdf_nodes_snapped[all_eligible & (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold")]
 print(f"Nodes exceeded threshold (all passes): {len(exceeded):,}")
+
+# Breakdown by node_type — shows which topology category is recycling into Step 2
+print("\nExceeded threshold breakdown by node_type:")
+if len(exceeded) > 0:
+    print(exceeded["node_type"].value_counts().rename("count").to_frame().to_string())
+    ramp_sf_recycling = exceeded[exceeded["node_type"] == "ramp_sf"]
+    print(f"\nramp_sf nodes recycling to Step 2 (Surface): {len(ramp_sf_recycling):,}")
+    print("  (Expected — these are ramp-to-arterial terminals; surface ep is Tier-0 for them)")
 ```
 
 ### Step 1f — Post-Snap Validation Map
@@ -787,7 +798,7 @@ m_post_fwy
 ### Step 1g — Export Debug GeoPackage
 
 ```{python}
-all_eligible = is_fwy_node | is_ic_node
+all_eligible = is_fwy_node | is_ramp_node
 
 # Snapped nodes across all three passes
 fwy_snapped  = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(ALL_SNAP_RULES)].copy()
@@ -842,8 +853,19 @@ No direction filtering — snap to nearest within threshold.
 ### Step 2a — Build Surface Endpoint Pool
 
 ```{python}
-ep_surface = gdf_ep_unique[gdf_ep_unique["is_surface"] & ~gdf_ep_unique["is_freeway"]].copy()
+# Surface pool: surface-only and ramp_sf endpoints.
+# For surface-only nodes  : surface ep = Tier 0, fwy_sf ep = Tier 0.
+# For ramp_sf nodes       : ramp_sf ep = Tier 0, surface ep = Tier 1
+#   (ramp_sf nodes recycled from Pass (c) find their ramp+arterial target here).
+# fwy_sf endpoints (728 total) are included because they sit at at-grade
+# surface intersections and are Tier-0 for surface-only nodes.
+ep_surface = gdf_ep_unique[
+    gdf_ep_unique["ep_type"].isin(["surface", "ramp_sf", "fwy_sf"])
+].copy()
 print(f"Surface endpoint pool: {len(ep_surface):,}")
+print(f"  surface-only: {(gdf_ep_unique['ep_type']=='surface').sum():,}")
+print(f"  ramp+surface: {(gdf_ep_unique['ep_type']=='ramp_sf').sum():,}")
+print(f"  fwy+surface:  {(gdf_ep_unique['ep_type']=='fwy_sf').sum():,}")
 ```
 
 ### Step 2b — Snap Surface Nodes

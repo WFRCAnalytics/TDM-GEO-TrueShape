@@ -11,8 +11,12 @@ Exports:
 
     count_links(gdf_nodes, gdf_links)
     assign_node_directions(gdf_nodes, gdf_links, freeway_ft_codes)
+    assign_node_type(gdf_nodes, is_fwy_mask, is_ramp_mask, is_surface_mask)
+        Add node_type column — one of: "fwy", "gore", "ramp", "ramp_sf", "surface".
     extract_endpoints(gdf_centerlines)
-    assign_endpoint_directions(gdf_ep_unique, gdf_ep_raw, freeway_routes)
+    assign_endpoint_directions(gdf_ep_unique, gdf_ep_raw)
+    assign_endpoint_type(gdf_ep_unique)
+        Add ep_type column — one of: "fwy", "gore", "fwy_sf", "ramp", "ramp_sf", "surface".
     snap_nodes(gdf_nodes, gdf_endpoints, node_mask, max_distance_m, label, ...)
     snap_transit(gdf_nodes, gdf_stops, node_mask, max_distance_m, ...)
 
@@ -443,6 +447,191 @@ def assign_endpoint_directions(
 
 
 # ---------------------------------------------------------------------------
+# Public type-label assignment functions
+# ---------------------------------------------------------------------------
+
+
+def assign_node_type(
+    gdf_nodes: gpd.GeoDataFrame,
+    is_fwy_mask: pd.Series,
+    is_ramp_mask: pd.Series,
+    is_surface_mask: pd.Series,
+) -> gpd.GeoDataFrame:
+    """
+    Add a node_type column to gdf_nodes using three non-exclusive boolean masks.
+
+    The three masks map to five mutually-exclusive topology labels via priority
+    cascade (freeway > ramp > surface). A node touching both freeway and ramp
+    links is labelled "gore"; a node touching both ramp and surface links is
+    labelled "ramp_sf".
+
+    Parameters
+    ----------
+    gdf_nodes : GeoDataFrame
+        Nodes layer. Modified copy is returned.
+    is_fwy_mask : pd.Series[bool]
+        True if node touches at least one freeway mainline link.
+        Typically: gdf_nodes["Freeway"] & ~gdf_nodes["ManagedAccess"] & no_pseudo
+    is_ramp_mask : pd.Series[bool]
+        True if node touches at least one ramp or CD link.
+        Typically: (gdf_nodes["Ramp"] | gdf_nodes["CD"]) & no_pseudo
+    is_surface_mask : pd.Series[bool]
+        True if node touches at least one surface street link.
+        Typically: gdf_nodes["Arterial"] | gdf_nodes["Collector"] | gdf_nodes["Local"]
+
+    Returns
+    -------
+    GeoDataFrame
+        Copy of gdf_nodes with node_type column appended.
+        Values: "fwy" | "gore" | "ramp" | "ramp_sf" | "surface"
+    """
+    result = gdf_nodes.copy()
+    fwy  = is_fwy_mask.values.astype(bool)
+    ramp = is_ramp_mask.values.astype(bool)
+    surf = is_surface_mask.values.astype(bool)
+
+    labels = np.where(
+        fwy & ~ramp,        "fwy",
+        np.where(
+        fwy &  ramp,        "gore",
+        np.where(
+        ramp & ~surf,       "ramp",
+        np.where(
+        ramp &  surf,       "ramp_sf",
+                            "surface"
+    ))))
+    result["node_type"] = labels
+    return result
+
+
+def assign_endpoint_type(gdf_ep_unique: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """
+    Add an ep_type column to gdf_ep_unique derived from the three boolean
+    topology flags already present on the layer.
+
+    Parameters
+    ----------
+    gdf_ep_unique : GeoDataFrame
+        Deduplicated endpoint layer with columns:
+        is_freeway, is_interchange, is_surface.
+
+    Returns
+    -------
+    GeoDataFrame
+        Copy of gdf_ep_unique with ep_type column appended.
+        Values: "fwy" | "gore" | "fwy_sf" | "ramp" | "ramp_sf" | "surface"
+
+    Notes
+    -----
+    Priority cascade (matches _ep_type_label):
+        is_freeway & is_interchange            → "gore"  (mainline/ramp junction)
+        is_freeway & is_surface                → "fwy_sf" (at-grade crossing / frontage)
+        is_freeway & ~is_interchange & ~is_surface → "fwy"
+        ~is_freeway & is_interchange & is_surface  → "ramp_sf" (ramp-to-arterial)
+        ~is_freeway & is_interchange & ~is_surface → "ramp"
+        else                                   → "surface"
+    """
+    result = gdf_ep_unique.copy()
+    fw  = result["is_freeway"].values.astype(bool)
+    ic  = result["is_interchange"].values.astype(bool)
+    sf  = result["is_surface"].values.astype(bool)
+
+    labels = np.where(
+        fw &  ic,           "gore",
+        np.where(
+        fw &  sf,           "fwy_sf",
+        np.where(
+        fw & ~ic & ~sf,     "fwy",
+        np.where(
+        ~fw & ic & sf,      "ramp_sf",
+        np.where(
+        ~fw & ic & ~sf,     "ramp",
+                            "surface"
+    )))))
+    result["ep_type"] = labels
+    return result
+
+
+
+
+# ---------------------------------------------------------------------------
+# Topology type-tier lookup (private)
+# ---------------------------------------------------------------------------
+
+# Type tier table: (node_type, endpoint_type) → int
+# 0 = same type (preferred), 1 = adjacent type (permitted), None = reject.
+#
+# Node types    : "fwy", "gore", "ramp", "ramp_sf", "surface"
+# Endpoint types: "fwy", "gore", "ramp", "ramp_sf", "surface", "fwy_sf"
+#
+# Design rationale (data-driven from diagnostic):
+#   - fwy-only nodes: same-type median 83m vs any-type 24m (3.5× gap).
+#     Gore and fwy+sf endpoints are Tier-1 adjacents; all ramp/surface rejected.
+#   - gore nodes: same-type median 108m vs any-type 53m (2×).
+#     fwy-only, fwy+sf, ramp-only are Tier-1; ramp+sf and surface rejected.
+#   - ramp-only nodes: same-type median 84m vs any-type 19m (4.5×).
+#     Gore and ramp+sf are Tier-1; fwy and surface rejected.
+#   - ramp+sf nodes: same-type median 35m vs any-type 11m (3.1×). 119 of 284
+#     failed nodes were within 50m of a ramp+sf endpoint; 206 within 150m of
+#     a surface endpoint — surface is the natural Tier-1 fallback.
+#   - surface nodes: same-type median 23m vs any-type 19m (1.2x gap — small).
+#     fwy+sf endpoints sit at surface intersections — Tier-0 for surface nodes.
+#     No ramp/fwy adjacents needed.
+
+_TYPE_TIER: dict[tuple[str, str], int] = {
+    # fwy-only node
+    ("fwy",     "fwy"):     0,
+    ("fwy",     "gore"):    1,
+    ("fwy",     "fwy_sf"):  1,
+    # gore node
+    ("gore",    "gore"):    0,
+    ("gore",    "fwy"):     1,
+    ("gore",    "fwy_sf"):  1,
+    ("gore",    "ramp"):    1,
+    # ramp-only node
+    ("ramp",    "ramp"):    0,
+    ("ramp",    "gore"):    1,
+    ("ramp",    "ramp_sf"): 1,
+    # ramp+surface node
+    ("ramp_sf", "ramp_sf"): 0,
+    ("ramp_sf", "surface"): 1,
+    ("ramp_sf", "ramp"):    1,
+    # surface-only node
+    ("surface", "surface"): 0,
+    ("surface", "fwy_sf"):  0,   # fwy+sf endpoints sit at surface intersections
+}
+_TYPE_TIER_REJECT = 99   # sentinel for hard reject
+
+
+def _node_type_label(is_fwy: bool, is_ramp: bool, is_surface: bool) -> str:
+    """Classify a single node into one of 5 topology type labels."""
+    if is_fwy and not is_ramp:
+        return "fwy"
+    if is_fwy and is_ramp:
+        return "gore"
+    if is_ramp and not is_surface:
+        return "ramp"
+    if is_ramp and is_surface:
+        return "ramp_sf"
+    return "surface"
+
+
+def _ep_type_label(is_freeway: bool, is_interchange: bool, is_surface: bool) -> str:
+    """Classify a single endpoint into one of 6 topology type labels."""
+    if is_freeway and not is_interchange and not is_surface:
+        return "fwy"
+    if is_freeway and is_interchange:
+        return "gore"
+    if is_freeway and is_surface:
+        return "fwy_sf"
+    if not is_freeway and is_interchange and not is_surface:
+        return "ramp"
+    if not is_freeway and is_interchange and is_surface:
+        return "ramp_sf"
+    return "surface"
+
+
+# ---------------------------------------------------------------------------
 # Snapping core (private)
 # ---------------------------------------------------------------------------
 
@@ -454,6 +643,7 @@ def _spatial_snap(
     crs_projected: str,
     direction_col: str = "link_directions",
     target_id_cols: list[str] = None,
+    node_type_col: str = "node_type",
 ) -> tuple[list, list, list, dict]:
     """
     Snap nodes to target points using Gale-Shapley Stable Matching.
@@ -465,6 +655,7 @@ def _spatial_snap(
         - is_freeway      : bool
         - is_interchange  : bool
         - is_surface      : bool
+        - ep_type         : str  (one of: fwy, gore, fwy_sf, ramp, ramp_sf, surface)
 
     For transit snapping, snap_targets may be a plain point GeoDataFrame
     without direction columns — direction matching is skipped automatically.
@@ -472,14 +663,18 @@ def _spatial_snap(
     Algorithm overview
     ------------------
     Phase 1 — Bulk spatial query via STRtree dwithin predicate.
-    Phase 2 — Direction compatibility check and tier assignment per
-              (node, target) pair. Tier-0 = exact direction match.
-              Tier-1 = same P/N group (overpass protection for mainlines).
-              For interchange-only endpoints, direction is agnostic (tier-0
-              for all nodes since ep_allowed_dirs will be empty or vague).
+    Phase 2 — Two-dimensional tier assignment per (node, target) pair:
+              type_tier   : topology compatibility (0=same, 1=adjacent, 99=reject).
+                            Derived from _TYPE_TIER lookup using node_type_col on
+                            gdf_nodes and ep_type on snap_targets. Hard rejects
+                            (type_tier == 99) are dropped before Gale-Shapley.
+              dir_tier    : direction compatibility (0=exact cardinal, 1=same P/N
+                            group). Interchange-only endpoints are direction-agnostic
+                            so P/N group matches are promoted to dir_tier=0.
+              Sort key    : (type_tier, dir_tier, dist) — type dominates direction.
     Phase 3 — Node-proposing Gale-Shapley stable match.
-              Nodes rank targets by (tier, dist). Targets rank nodes by
-              (tier, dist, n_idx). Node-optimal stable assignment.
+              Nodes rank targets by (type_tier, dir_tier, dist). Targets rank nodes
+              by the same key plus n_idx as deterministic tie-break.
     Phase 4 — Write assignments and extract GERS attributes.
 
     Parameters
@@ -488,6 +683,12 @@ def _spatial_snap(
         Column on gdf_nodes to use for directional matching.
         Pass "link_directions" for passes (a) and (c),
         "fw_directions" for pass (b) gore nodes.
+    node_type_col : str
+        Column on gdf_nodes containing the topology type label
+        (one of: "fwy", "gore", "ramp", "ramp_sf", "surface").
+        If the column is absent, type-tier matching is skipped and all
+        endpoints within max_distance_m are treated as Tier-0 candidates
+        (preserves backward compatibility with transit snapping).
     """
     nodes_proj = gdf_nodes.to_crs(crs_projected)
     num_nodes = len(gdf_nodes)
@@ -513,16 +714,27 @@ def _spatial_snap(
     # Direction columns on snap_targets
     has_dirs = "ep_allowed_dirs" in snap_targets.columns
 
-    # Interchange-only flag per target endpoint — used for tier promotion.
-    # An interchange-only endpoint (is_interchange & ~is_freeway & ~is_surface)
-    # has inherently ambiguous direction, so group matches are promoted to tier-0
-    # (same logic as the old is_ramp promotion, now generalised).
+    # --- Type-tier pre-computation ---
+    # Precompute a type label per node (positional — aligned to candidate_nodes)
+    # and a type label per target endpoint (positional — aligned to snap_targets).
+    # If node_type_col is absent (e.g. transit snapping), type matching is skipped
+    # and every (node, endpoint) pair gets type_tier=0.
+    has_type = node_type_col in gdf_nodes.columns and "ep_type" in snap_targets.columns
+    node_type_labels: list[str] = []
+    target_type_labels: list[str] = []
+    if has_type:
+        node_type_labels = gdf_nodes[node_type_col].tolist()
+        target_type_labels = snap_targets["ep_type"].tolist()
+
+    # --- Direction-agnostic flag per target endpoint ---
+    # An interchange-only endpoint (ramp or ramp_sf) has inherently vague direction
+    # (LRS P/N encodes corridor side, not approach direction), so same-group matches
+    # are promoted to dir_tier=0 to avoid starving ramp nodes via overpass-protection.
     is_ic_only_target = np.zeros(len(targets_proj), dtype=bool)
     if all(c in snap_targets.columns for c in ["is_interchange", "is_freeway", "is_surface"]):
         is_ic_only_target = (
             snap_targets["is_interchange"].values.astype(bool)
             & ~snap_targets["is_freeway"].values.astype(bool)
-            & ~snap_targets["is_surface"].values.astype(bool)
         )
 
     # ==========================================
@@ -564,17 +776,33 @@ def _spatial_snap(
     # ==========================================
     # snap_targets are Points (endpoint layer), not LineStrings.
     # Each target IS an endpoint — no need to extract start/end coords.
+    #
+    # Sort key is (type_tier, dir_tier, dist):
+    #   type_tier  — topology compatibility from _TYPE_TIER lookup.
+    #                0 = same type, 1 = adjacent type, 99 = hard reject (dropped).
+    #   dir_tier   — directional compatibility.
+    #                0 = exact cardinal or direction-agnostic endpoint.
+    #                1 = same P/N group (overpass protection for mainline endpoints).
+    #   dist       — projected distance in metres.
     all_candidates = []
 
     for i in range(len(node_indices)):
         n_idx = node_indices[i]
         t_idx = target_indices[i]
         dist_pt = distances_to_target[i]
-        proj_node = nodes_proj.geometry.values[n_idx]
 
-        match_tier = 0
-        is_compatible = True
+        # --- Type tier ---
+        if has_type:
+            n_type = node_type_labels[n_idx]
+            t_type = target_type_labels[t_idx]
+            type_tier = _TYPE_TIER.get((n_type, t_type), _TYPE_TIER_REJECT)
+            if type_tier == _TYPE_TIER_REJECT:
+                continue   # hard reject — cross-type mismatch
+        else:
+            type_tier = 0  # transit or legacy call — skip type matching
 
+        # --- Direction tier ---
+        dir_tier = 0
         if has_dirs:
             n_exact = node_dirs_exact[n_idx]
             n_grp   = node_dirs_grp[n_idx]
@@ -584,27 +812,22 @@ def _spatial_snap(
 
             if t_exact and n_exact:
                 if n_exact.intersection(t_exact):
-                    # Exact cardinal match — tier-0 for all endpoint types.
-                    match_tier = 0
+                    dir_tier = 0   # exact cardinal match
                 elif n_grp.intersection(t_grp):
-                    # Same P/N group, different cardinal direction.
-                    # Interchange-only endpoints: promote to tier-0 because
-                    # their direction is inherently vague (ramp corridor vs
-                    # node approach direction). This prevents ramp-only nodes
-                    # from being starved by overpass-protection tier-1 logic.
-                    # Freeway / gore endpoints: tier-1 (overpass protection —
-                    # a NB node should prefer NB over SB endpoints).
-                    match_tier = 0 if t_is_ic_only else 1
+                    # Same P/N group. Interchange-only endpoints are direction-
+                    # agnostic (LRS P/N is a corridor side, not approach dir),
+                    # so promote to dir_tier=0. Freeway/gore endpoints keep
+                    # dir_tier=1 for overpass protection (NB prefers NB over SB).
+                    dir_tier = 0 if t_is_ic_only else 1
                 else:
-                    # Opposite groups entirely — reject (cross-carriageway).
-                    is_compatible = False
+                    # Opposite P/N groups — cross-carriageway, reject.
+                    continue
 
-        if is_compatible and dist_pt <= max_distance_m:
+        if dist_pt <= max_distance_m:
             orig_pt = target_geoms_orig[t_idx]
             id_pt = (round(target_geoms_proj[t_idx].x, 3), round(target_geoms_proj[t_idx].y, 3))
-            # dist_target == dist_pt for point targets (same object)
             all_candidates.append(
-                (match_tier, dist_pt, dist_pt, n_idx, id_pt, orig_pt, t_idx, None)
+                (type_tier, dir_tier, dist_pt, n_idx, id_pt, orig_pt, t_idx)
             )
 
     # ==========================================
@@ -620,31 +843,30 @@ def _spatial_snap(
     ep_node_dist: dict[tuple, dict[int, tuple]] = defaultdict(dict)
 
     for bid in all_candidates:
-        match_tier, dist_target, dist_ep, n_idx, ep_id, geom_orig, t_idx, is_start = bid
+        type_tier, dir_tier, dist_pt, n_idx, ep_id, geom_orig, t_idx = bid
 
         payload = {
-            "tier":       match_tier,
-            "dist_ep":    dist_ep,
-            "dist_target": dist_target,
+            "type_tier":  type_tier,
+            "dir_tier":   dir_tier,
+            "dist_ep":    dist_pt,
             "ep_id":      ep_id,
             "geom_orig":  geom_orig,
             "t_idx":      t_idx,
-            "is_start":   is_start,
         }
 
-        # Keep the best bid per (node, endpoint) pair
+        # Keep the best bid per (node, endpoint) pair — lowest (type, dir, dist)
         if ep_id not in temp_node_prefs[n_idx]:
             temp_node_prefs[n_idx][ep_id] = payload
         else:
             existing = temp_node_prefs[n_idx][ep_id]
-            if (match_tier, dist_ep, dist_target) < (
-                existing["tier"], existing["dist_ep"], existing["dist_target"]
+            if (type_tier, dir_tier, dist_pt) < (
+                existing["type_tier"], existing["dir_tier"], existing["dist_ep"]
             ):
                 temp_node_prefs[n_idx][ep_id] = payload
 
-        # Endpoint scores nodes by (tier, dist, n_idx)
-        new_score = (match_tier, dist_ep, n_idx)
-        existing_score = ep_node_dist[ep_id].get(n_idx, (999, float("inf"), -1))
+        # Endpoint scores nodes by (type_tier, dir_tier, dist, n_idx)
+        new_score = (type_tier, dir_tier, dist_pt, n_idx)
+        existing_score = ep_node_dist[ep_id].get(n_idx, (99, 99, float("inf"), -1))
         if new_score < existing_score:
             ep_node_dist[ep_id][n_idx] = new_score
 
@@ -652,7 +874,8 @@ def _spatial_snap(
     node_prefs: dict[int, list] = defaultdict(list)
     for n_idx, ep_dict in temp_node_prefs.items():
         node_prefs[n_idx] = sorted(
-            ep_dict.values(), key=lambda x: (x["tier"], x["dist_ep"], x["dist_target"])
+            ep_dict.values(),
+            key=lambda x: (x["type_tier"], x["dir_tier"], x["dist_ep"])
         )
 
     # --- 3b. Node-proposing Gale-Shapley loop ---
@@ -745,24 +968,27 @@ def snap_nodes(
     direction_col: str = "link_directions",
     target_id_cols: list[str] = None,
     crs_projected: str = "EPSG:26912",
+    node_type_col: str = "node_type",
 ) -> gpd.GeoDataFrame:
     """
     Snap a masked subset of nodes to the nearest compatible endpoint,
-    using Gale-Shapley stable matching.
+    using Gale-Shapley stable matching with two-dimensional tier sorting.
 
     Parameters
     ----------
     gdf_nodes : GeoDataFrame
-        Full nodes layer (with snap_rule, link_directions, fw_directions).
+        Full nodes layer (with snap_rule, link_directions, fw_directions,
+        and node_type — the topology label column).
     gdf_endpoints : GeoDataFrame
         Pre-classified endpoint layer from the notebook's Step E block.
-        Must have ep_allowed_dirs, is_freeway, is_interchange, is_surface.
+        Must have ep_allowed_dirs, ep_type, is_freeway, is_interchange,
+        is_surface.
     node_mask : pd.Series
         Boolean mask selecting which nodes to attempt snapping.
         Nodes with snap_rule == "none" or "exceeded_threshold" are attempted,
-        allowing nodes that failed an earlier pass (e.g. interchange-only nodes
-        that found no target in Pass (c)) to fall through to subsequent passes
-        (e.g. Surface) without being permanently locked out.
+        allowing nodes that failed an earlier pass (e.g. ramp-to-surface nodes
+        that found no ramp+sf target in Pass (c)) to fall through to subsequent
+        passes (e.g. Surface) without being permanently locked out.
     max_distance_m : float
         Maximum search radius in metres.
     label : str
@@ -774,6 +1000,11 @@ def snap_nodes(
         Columns on gdf_endpoints to copy to snapped_<col> output columns.
     crs_projected : str
         CRS for metric distance calculations.
+    node_type_col : str
+        Column on gdf_nodes containing the topology type label
+        (one of: "fwy", "gore", "ramp", "ramp_sf", "surface").
+        Passed through to _spatial_snap for type-tier matching.
+        If the column is absent, type matching is skipped (e.g. transit).
     """
     result = gdf_nodes.copy()
 
@@ -796,12 +1027,13 @@ def snap_nodes(
         return result
 
     print(f"  [{label}] {len(candidate_idx):,} nodes → {len(gdf_endpoints):,} endpoints"
-          f"  (dir_col={direction_col}, max={max_distance_m}m)")
+          f"  (dir_col={direction_col}, type_col={node_type_col}, max={max_distance_m}m)")
 
     candidate_nodes = result.loc[candidate_idx]
     snapped_geoms, distances, flags, attrs = _spatial_snap(
         candidate_nodes, gdf_endpoints, max_distance_m, crs_projected,
         direction_col=direction_col, target_id_cols=target_id_cols,
+        node_type_col=node_type_col,
     )
 
     for col in attrs.keys():
