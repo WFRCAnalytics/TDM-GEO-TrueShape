@@ -1,6 +1,6 @@
 ---
 title: Node Classification
-subtitle: classifying network nodes by type and connectivity
+subtitle: Classifying and snapping WFRC network nodes to physical centerline endpoints
 description: WFRC MasterNet node conflation — snapping abstract model nodes to UGRC/UDOT physical centerlines
 author:
  - name: Pukar Bhandari
@@ -11,51 +11,51 @@ author:
 date: "2026-04-03"
 ---
 
-## Setup Environment
+## Setup
 
-### Import Libraries
+### Imports
 
 ```{python}
 import sys
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
+import folium
 import geopandas as gpd
+import gtfs_kit as gk
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-
-import gtfs_kit as gk
+import numpy as np
+import pandas as pd
+import shapely
+from shapely.geometry import LineString
+from shapely.strtree import STRtree
 
 sys.path.insert(0, str(Path.cwd()))
 from _src.node_utils import (
     nodes_on,
     count_links,
     assign_node_directions,
-    extract_endpoints,
     assign_endpoint_directions,
     snap_nodes,
     snap_transit,
 )
 ```
 
-### Filepath Configuration
+### Configuration
 
 ```{python}
-config_filepath = {
-    # Input files
+# ── Filepaths ──────────────────────────────────────────────────────────────
+PATHS = {
     "in_centerlines":      Path("_data/raw/BangerterEdits.gdb.zip"),
     "in_network_links":    Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
     "in_network_nodes":    Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
     "in_gtfs":             Path("_data/raw/uta_gtfs.zip"),
-    # Output files
     "out_node_classified": Path("_data/processed/nodes_classified.gpkg"),
     "out_node_snapped":    Path("_data/processed/nodes_snapped.gpkg"),
     "out_debug":           Path("_data/processed/debug_snapping.gpkg"),
 }
-```
 
-```{python}
+# ── CRS ───────────────────────────────────────────────────────────────────
 CRS_UTM = "EPSG:26912"   # NAD83 UTM Zone 12N — Utah (metric)
 CRS_WGS = "EPSG:4326"    # WGS84 — required by Folium
 ```
@@ -67,85 +67,62 @@ CRS_WGS = "EPSG:4326"    # WGS84 — required by Folium
 ### Roadway Centerlines
 
 ```{python}
-county_list = ["49003", "49057", "49011", "49035", "49049"]
-target_fips = "(" + ", ".join([f"'{f}'" for f in county_list]) + ")"
+COUNTY_FIPS = ["49003", "49057", "49011", "49035", "49049"]
+county_filter = "(" + ", ".join(f"'{f}'" for f in COUNTY_FIPS) + ")"
 
 gdf_centerlines = gpd.read_file(
-    f"/vsizip/{config_filepath['in_centerlines']}",
+    f"/vsizip/{PATHS['in_centerlines']}",
     layer="RoadsBangerterEtc",
-    where=f"COUNTY_L IN {target_fips} OR COUNTY_R IN {target_fips}",
+    where=f"COUNTY_L IN {county_filter} OR COUNTY_R IN {county_filter}",
 ).to_crs(CRS_UTM)
 
-# Strip leading/trailing whitespace from string columns (source data artefact)
+# Strip trailing whitespace from categorical fields (source-data artefact)
 for col in ["DOT_FCLASS", "CARTOCODE", "STATUS", "ONEWAY", "VERT_LEVEL", "POSTTYPE"]:
     if col in gdf_centerlines.columns:
         gdf_centerlines[col] = gdf_centerlines[col].str.strip()
 
-print(f"Loaded {len(gdf_centerlines):,} features | CRS: {gdf_centerlines.crs}")
+print(f"Centerlines: {len(gdf_centerlines):,} features | CRS: {gdf_centerlines.crs}")
 ```
 
 ```{python}
 #| eval: false
-
 gdf_centerlines.head(1000).explore()
 ```
 
-### Network Links
-
-Only links present in the 2027 network (LN_2027 > 0) are loaded.
+### Network Links and Nodes
 
 ```{python}
-gdf_links = gpd.read_file(config_filepath["in_network_links"], where="LN_2027 > 0").to_crs(CRS_UTM)
+# Only links active in the 2027 network (LN_2027 > 0)
+gdf_links = gpd.read_file(PATHS["in_network_links"], where="LN_2027 > 0").to_crs(CRS_UTM)
+gdf_nodes = gpd.read_file(PATHS["in_network_nodes"]).to_crs(CRS_UTM)
 
-print(f"Loaded {len(gdf_links):,} links (LN_2027 > 0) | CRS: {gdf_links.crs}")
+print(f"Links: {len(gdf_links):,} (LN_2027 > 0)")
+print(f"Nodes: {len(gdf_nodes):,}")
 ```
 
 ```{python}
 #| eval: false
-
 gdf_links.head(1000).explore()
-```
-
-### Network Nodes
-
-```{python}
-gdf_nodes = gpd.read_file(config_filepath["in_network_nodes"]).to_crs(CRS_UTM)
-
-print(f"Loaded {len(gdf_nodes):,} features | CRS: {gdf_nodes.crs}")
-```
-
-```{python}
-#| eval: false
-
 gdf_nodes.head(1000).explore()
 ```
 
-### UTA GTFS Feed
+### GTFS Rail Stops
+
+Filter GTFS stops to Light Rail (TRAX, route_type 0) and Commuter Rail
+(FrontRunner, route_type 2) only, walking the routes → trips → stop_times chain.
 
 ```{python}
-feed = gk.read_feed(config_filepath["in_gtfs"], dist_units="km")
+feed = gk.read_feed(PATHS["in_gtfs"], dist_units="km")
 
 gdf_stops  = gk.get_stops(feed,  as_gdf=True).to_crs(CRS_UTM)
 gdf_shapes = gk.get_shapes(feed, as_gdf=True).to_crs(CRS_UTM)
 gdf_routes = gk.get_routes(feed, as_gdf=True).to_crs(CRS_UTM)
 
-print(f"Stops: {len(gdf_stops):,} | Shapes: {len(gdf_shapes):,} | Routes: {len(gdf_routes):,}")
-```
-
-### Rail Stops
-
-Filter GTFS stops to Light Rail (route_type 0) and Commuter Rail (route_type 2) only,
-walking the routes → trips → stop_times → stops chain.
-
-```{python}
-# GTFS route_type: 0 = Light Rail (TRAX), 2 = Commuter Rail (FrontRunner), 3 = Bus
-RAIL_ROUTE_TYPES = [0, 2]
+RAIL_ROUTE_TYPES = {0, 2}   # 0 = Light Rail (TRAX), 2 = Commuter Rail (FrontRunner)
 
 rail_route_ids = feed.routes.loc[feed.routes["route_type"].isin(RAIL_ROUTE_TYPES), "route_id"]
-rail_trip_ids = feed.trips.loc[feed.trips["route_id"].isin(rail_route_ids), "trip_id"]
-rail_stop_ids = feed.stop_times.loc[
-    feed.stop_times["trip_id"].isin(rail_trip_ids), "stop_id"
-].unique()
+rail_trip_ids  = feed.trips.loc[feed.trips["route_id"].isin(rail_route_ids), "trip_id"]
+rail_stop_ids  = feed.stop_times.loc[feed.stop_times["trip_id"].isin(rail_trip_ids), "stop_id"].unique()
 
 gdf_rail_stops = gdf_stops[gdf_stops["stop_id"].isin(rail_stop_ids)].copy()
 print(f"Rail stops: {len(gdf_rail_stops):,} of {len(gdf_stops):,} total stops")
@@ -153,915 +130,636 @@ print(f"Rail stops: {len(gdf_rail_stops):,} of {len(gdf_stops):,} total stops")
 
 ```{python}
 #| eval: false
-
 gdf_rail_stops.explore()
 ```
 
 ---
 
-## Origin Processing (Network Nodes)
+## Part A — Origin Processing (Network Nodes)
 
-### Functional Type
+### A1 — Functional Type Flags
 
-Each flag column is assigned using `nodes_on()`, which returns `True` for any
-node whose N value appears as endpoint A or B of at least one link matching
-the query. All FT codes reference the 2027 network year. Flags are
-non-exclusive — a node touching both a freeway and a ramp link will be `True`
-for both `Freeway` and `Ramp`.
+`nodes_on(gdf_nodes, gdf_links, ft_codes)` returns True for any node whose
+N appears as endpoint A or B of at least one link whose FT code is in `ft_codes`.
+
+Flags are **non-exclusive** — a node touching both a freeway and a ramp link
+will be True for both `Freeway` and `Ramp`. Mutual exclusion is enforced later
+in the topology cascade (§A3).
 
 ```{python}
-# ---------------------------------------------------------------------------
-# ORIGIN NODE PROCESSING — Functional type flags from network link FT codes
+# ── FT code groups (2027 network year) ────────────────────────────────────
 #
-# Classification authority: FT_2027 column on network links.
-# A node inherits a flag if ANY of its connected links carries that FT code.
-# The FT code taxonomy below is the WFRC MasterNet standard for 2027.
+# FT_2027 code reference
+# ─────────────────────────────────────────────────────────────────────────
+# Freeway mainline (FW_CODES):
+#   12-15  Expressway (limited-access, divided, no full interchange control)
+#   22-26  MM freeway (posted 55-75 mph, MM series)
+#   32-36  Freeway    (posted 55-75 mph, Fwy series)
+#   30     FwyLoopRamp / 20 MMLoopRamp — fwy-to-fwy connectors with mainline geometry
+#   Note: 21 (MM CD road) and 31 (Fwy CD road) are excluded — they are
+#         physically collector-distributor geometry, not mainline.
 #
-# FT code reference table
-# -----------------------
-#  FT    Label              Notes
-#  ---   -----------------  ---------------------------------------------------
-#   1    CentroidConnector  Artificial link connecting TAZ centroid to network.
-#   2    PrincipalArterial  Highest-order surface arterial.
-#   3    MinorArterial      Second-order surface arterial.
-#   4    MajorCollector     Collector serving significant traffic movement.
-#   5    MinorCollector     Collector primarily serving local access.
-#   6    Local              Local street.
-#   7    Unpaved            Unpaved or unverified local street.
-#  12    Expressway         Expressway, posted 60-70 mph.
-#  13    Expressway         Expressway, posted 55-65 mph.
-#  14    Expressway         Expressway, posted 50-60 mph.
-#  15    Expressway         Expressway, posted 45-55 mph.
-#  20    MMLoopRamp         MM: fwy-to-fwy loop ramp.
-#  21    MMCDRoad           MM: C-D road, flyover ramp.
-#  22    MMFwy              MM: posted 55-60 mph.
-#  23    MMFwy              MM: posted 65 mph, no aux lane.
-#  24    MMFwy              MM: posted 65 mph, aux lane.
-#  25    MMFwy              MM: posted 75 mph, no aux lane.
-#  26    MMFwy              MM: posted 75 mph, aux lane.
-#  27    Placeholder        Place holder.
-#  28    MMOnRamp           MM: On-ramp.
-#  29    MMOffRamp          MM: Off-ramp.
-#  30    FwyLoopRamp        Fwy: fwy-to-fwy loop ramp.
-#  31    FwyCDRoad          Fwy: C-D road, flyover ramp.
-#  32    Fwy                Fwy: posted 55-60 mph.
-#  33    Fwy                Fwy: posted 65 mph, no aux lane.
-#  34    Fwy                Fwy: posted 65 mph, aux lane.
-#  35    Fwy                Fwy: posted 75 mph, no aux lane.
-#  36    Fwy                Fwy: posted 75 mph, aux lane.
-#  37    FwyHOV             Fwy: HOV lane.
-#  38    FwyManaged         Fwy: Managed lane.
-#  39    FwyManagedAccess   Fwy: Managed lane access.
-#  40    FwyTollway         Fwy: Tollway.
-#  41    FwyOnRamp          Fwy: On-ramp.
-#  42    FwyOffRamp         Fwy: Off-ramp.
-#  70    LightRail          TRAX light rail link.
-#  80    CommuterRail       FrontRunner commuter rail link.
-# ---------------------------------------------------------------------------
+# Ramp / CD (RAMP_CODES):
+#   28/29  MM on/off ramps  |  41/42  Fwy on/off ramps
+#   21/31  CD roads (merged with ramps — FT distinction is unreliable in practice)
+#
+# Surface (SURFACE_CODES):
+#   2/3  Principal/Minor Arterial  |  4/5  Major/Minor Collector  |  6/7  Local/Unpaved
+#
+# HOV / Managed lanes (HOV_CODES):
+#   37 HOV lane  |  38 Managed lane  |  39 Managed-lane access point
+#   Excluded from FW_CODES: HOT lane geometry does not coincide with mainline endpoints.
+#
+# Fixed transit:
+#   70 Light Rail (TRAX)  |  80 Commuter Rail (FrontRunner)
+#   N ranges 10000-19999 and 50000-59999: purpose-built station nodes with no road geometry.
+# ─────────────────────────────────────────────────────────────────────────
 
-# Freeway mainline family: FT 20–27 and 30–36, minus the CD and HOV variants.
-# CD (21, 31) and HOV (37, 38) are excluded here and flagged separately below
-# because they are physically distinct from mainline and require different
-# snapping targets.
-FW = list((set(range(20, 28)) | set(range(30, 37))) - {21, 31})
+FW_CODES      = set(range(22, 27)) | set(range(32, 37)) | {12, 13, 14, 15, 20, 30}
+RAMP_CODES    = {28, 29, 41, 42, 21, 31}
+SURFACE_CODES = {2, 3, 4, 5, 6, 7}
+HOV_CODES     = {37, 38, 39}
 
-# --- Freeway and freeway-adjacent ---
-gdf_nodes["Freeway"] = nodes_on(gdf_nodes, gdf_links, f"FT_2027 in {FW}")
-# CD: collector-distributor roads running parallel to the mainline.
-# Merged with Ramp for snapping (both are interchange geometry) but flagged
-# separately here so ConnectorOnly and other derived masks remain correct.
-gdf_nodes["CD"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 in [21, 31]")
-# HOV: managed express lanes. Excluded from is_fwy_node (no physical mainline
-# endpoint) but retained as a flag for reporting and future HOV snap pass.
-gdf_nodes["HOV"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 in [37, 38]")
-# ManagedAccess: HOT / tolled express lanes. Also excluded from is_fwy_node
-# — HOT lane geometry does not coincide with mainline endpoints.
-gdf_nodes["ManagedAccess"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 == 39")
-
-# --- Limited-access surface (expressways) ---
-# Expressways are divided and limited-access but not fully controlled.
-# They are NOT included in FW and will snap to surface endpoints, which is
-# correct for the Wasatch Front network (e.g. Redwood Rd elevated sections).
-gdf_nodes["Expressway"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 in [12, 13, 14, 15]")
-
-# --- Surface street hierarchy ---
-gdf_nodes["Arterial"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 in [2, 3]")
-gdf_nodes["Collector"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 in [4, 5]")
-gdf_nodes["Local"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 in [6, 7]")
-
-# --- Ramps (freeway and expressway) ---
-# FT 28/29: freeway on/off ramps.
-# FT 41/42: expressway on/off ramps.
-# Both are merged into Ramp because they share physical geometry with
-# interchange centerline segments (DOT_RTNAME[5] == "R") and snap to the
-# same endpoint pool. If you need to separate freeway ramps from expressway
-# ramps for reporting, add a FreewayRamp / ExpresswayRamp split here.
-gdf_nodes["Ramp"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 in [28, 29, 41, 42]")
-
-# --- Centroid / external / connector nodes ---
-# CentroidConnector: artificial link (FT 1) between TAZ centroid and network.
-gdf_nodes["CentroidConnector"] = nodes_on(gdf_nodes, gdf_links, "FT_2027 == 1")
-# CentroidNode: TAZ centroid nodes. N range 1–3600 matches WFRC TAZ numbering.
-gdf_nodes["CentroidNode"] = gdf_nodes["N"] <= 3_600
-# ExternalNode: gateway nodes at study-area boundary. N range 3601–9999.
-gdf_nodes["ExternalNode"] = gdf_nodes["N"].between(3_601, 9_999)
-# ConnectorOnly: internal nodes touched only by centroid connectors.
-# These are loading points, not physical intersections — excluded from snapping.
-gdf_nodes["ConnectorOnly"] = (
-    gdf_nodes["CentroidConnector"] & ~gdf_nodes["CentroidNode"] & ~gdf_nodes["ExternalNode"]
-)
-
-# --- Fixed transit ---
-# FT 70 = Light Rail (TRAX), FT 80 = Commuter Rail (FrontRunner).
-# N ranges identify purpose-built transit nodes that have no road geometry:
-#   10000–19999: TRAX / light rail station nodes.
-#   50000–59999: FrontRunner / commuter rail station nodes.
+gdf_nodes["Freeway"]      = nodes_on(gdf_nodes, gdf_links, FW_CODES)
+gdf_nodes["Ramp"]         = nodes_on(gdf_nodes, gdf_links, RAMP_CODES)
+gdf_nodes["Surface"]      = nodes_on(gdf_nodes, gdf_links, SURFACE_CODES)
+gdf_nodes["HOV"]          = nodes_on(gdf_nodes, gdf_links, HOV_CODES)
 gdf_nodes["FixedTransit"] = (
-    nodes_on(gdf_nodes, gdf_links, "FT_2027 in [70, 80]")
-    | gdf_nodes["N"].between(10_000, 19_999)
-    | gdf_nodes["N"].between(50_000, 59_999)
+    nodes_on(gdf_nodes, gdf_links, {70, 80})
+    | gdf_nodes["N"].between(10_000, 19_999)   # TRAX station nodes
+    | gdf_nodes["N"].between(50_000, 59_999)   # FrontRunner station nodes
 )
+
+flag_cols = ["Freeway", "Ramp", "Surface", "HOV", "FixedTransit"]
+print("Flag counts:")
+print(gdf_nodes[flag_cols].sum().rename("NodeCount").to_frame().to_string())
 ```
 
-```{python}
-flag_cols = [
-    "N", "Freeway", "CD", "Expressway", "Arterial", "Collector", "Local",
-    "Ramp", "HOV", "FixedTransit", "CentroidConnector", "CentroidNode",
-    "ExternalNode", "ConnectorOnly",
-]
-gdf_nodes[flag_cols].head(20)
-```
+### A2 — Link Count and Direction
 
-#### Summary
+`count_links` adds `LinkCount` — the number of link-endpoint references (A or B)
+that touch each node. Nodes with LinkCount == 2 are **pseudonodes** (shape
+vertices); they have no physical counterpart and are excluded from all snapping.
 
-```{python}
-gdf_nodes[flag_cols[1:]].sum().rename("NodeCount").to_frame()
-```
-
-### Link Count and Direction Assignment
-
-Pseudonodes (LinkCount == 2) are shape vertices — they have no physical counterpart
-endpoint and are excluded from all snapping passes.
-
-`assign_node_directions` produces two direction columns:
-
-- `link_directions` — freeway-priority cascade: if a node has any freeway links, only
-  those links' DIRECTION values are pooled. Interchange link directions are used only
-  when no freeway links are present.
-- `fw_directions` — freeway links only. Used in gore pass (b) so that the directional
-  signal comes exclusively from the freeway side of a mixed node. For a gore node with
-  multiple freeway links in opposing directions, the majority-vote direction wins.
+`assign_node_directions` produces two direction columns (see docstring):
+- `link_directions` — freeway-priority cascade; used in passes (a) and (c).
+- `fw_directions`   — freeway links only, majority-vote; used in pass (b) gore nodes.
 
 ```{python}
 gdf_nodes = count_links(gdf_nodes, gdf_links)
-gdf_nodes = assign_node_directions(gdf_nodes, gdf_links, freeway_ft_codes=FW)
+gdf_nodes = assign_node_directions(gdf_nodes, gdf_links, freeway_ft_codes=FW_CODES)
 
-# ---------------------------------------------------------------------------
-# Node topology type — five mutually-exclusive labels built from three
-# non-exclusive boolean masks. Priority cascade: freeway > ramp > surface.
-#
-# Masks
-# -----
-# no_pseudo    : LinkCount != 2  — exclude shape vertices (abstract geometry
-#                handles with no physical endpoint counterpart).
-# is_fwy_node  : touches ≥1 freeway mainline link (FT in FW family).
-#                ManagedAccess excluded — HOT lanes have no mainline endpoint.
-# is_ramp_node : touches ≥1 ramp or CD link.
-# is_surface_node : touches ≥1 surface street link (Arterial / Collector / Local).
-#
-# Labels
-# ------
-# "fwy"     : is_fwy_node  &  ~is_ramp_node
-#             Pure freeway mainline node — no ramp geometry nearby.
-# "gore"    : is_fwy_node  &   is_ramp_node
-#             Physical junction between mainline and ramp/CD geometry.
-# "ramp"    : ~is_fwy_node &   is_ramp_node  &  ~is_surface_node
-#             Mid-ramp node — no freeway and no surface street contact.
-# "ramp_sf" : ~is_fwy_node &   is_ramp_node  &   is_surface_node
-#             Ramp-to-arterial terminal — where an off-ramp meets a surface road.
-# "surface" : all others (including ~is_fwy_node & ~is_ramp_node)
-#             Surface street intersection.
-# ---------------------------------------------------------------------------
-no_pseudo       = gdf_nodes["LinkCount"] != 2
-is_fwy_node     = gdf_nodes["Freeway"] & ~gdf_nodes["ManagedAccess"] & no_pseudo
-is_ramp_node    = (gdf_nodes["Ramp"] | gdf_nodes["CD"]) & no_pseudo
-is_surface_node = gdf_nodes["Arterial"] | gdf_nodes["Collector"] | gdf_nodes["Local"]
-
-gdf_nodes["node_type"] = np.where(
-    is_fwy_node  & ~is_ramp_node,                    "fwy",
-np.where(
-    is_fwy_node  &  is_ramp_node,                    "gore",
-np.where(
-    ~is_fwy_node &  is_ramp_node & ~is_surface_node, "ramp",
-np.where(
-    ~is_fwy_node &  is_ramp_node &  is_surface_node, "ramp_sf",
-                                                     "surface"
-))))
-
-print("Node type distribution:")
-print(gdf_nodes["node_type"].value_counts().rename("count").to_frame())
-gdf_nodes[["N", "LinkCount", "link_directions", "fw_directions", "node_type"]].head(20)
+print(f"Pseudonodes (LinkCount==2): {(gdf_nodes['LinkCount'] == 2).sum():,}")
 ```
 
-#### Distribution of Link Counts
-
 ```{python}
+# Link-count distribution chart
 link_count_freq = gdf_nodes["LinkCount"].value_counts().sort_index()
 max_val = link_count_freq.max()
 
-BASE_COLOR     = "#B4B2A9"
-ACCENT_COLOR   = "#1D9E75"
-PSEUDO_COLOR   = "#EF9F27"
-LABEL_COLOR    = "#444441"
-SUBTITLE_COLOR = "#888780"
-GRID_COLOR     = "#D3D1C7"
+BASE_COLOR   = "#B4B2A9"
+ACCENT_COLOR = "#1D9E75"
+PSEUDO_COLOR = "#EF9F27"
+LABEL_COLOR  = "#444441"
+GRID_COLOR   = "#D3D1C7"
 
-ACCENT_COUNTS = {4, 6, 8}
-PSEUDO_COUNTS = {2}
-
-
-def bar_color(link_count):
-    if link_count in PSEUDO_COUNTS:
-        return PSEUDO_COLOR
-    if link_count in ACCENT_COUNTS:
-        return ACCENT_COLOR
-    return BASE_COLOR
-
-
-bar_colors = [bar_color(i) for i in link_count_freq.index]
+bar_colors = [
+    PSEUDO_COLOR if lc == 2 else (ACCENT_COLOR if lc in {4, 6, 8} else BASE_COLOR)
+    for lc in link_count_freq.index
+]
 
 fig, ax = plt.subplots(figsize=(11, 5.5))
 fig.patch.set_facecolor("white")
 ax.set_facecolor("white")
-
 ax.yaxis.grid(True, color=GRID_COLOR, linewidth=0.6, zorder=0)
 ax.set_axisbelow(True)
 
-bars = ax.bar(
-    link_count_freq.index, link_count_freq.values,
-    color=bar_colors, width=0.75, zorder=2,
-)
-
+bars = ax.bar(link_count_freq.index, link_count_freq.values, color=bar_colors, width=0.75, zorder=2)
 for bar in bars:
     h = bar.get_height()
-    ax.text(
-        bar.get_x() + bar.get_width() / 2,
-        h + max_val * 0.012,
-        f"{int(h):,}",
-        ha="center", va="bottom",
-        fontsize=9.5, color=LABEL_COLOR,
-    )
+    ax.text(bar.get_x() + bar.get_width() / 2, h + max_val * 0.012,
+            f"{int(h):,}", ha="center", va="bottom", fontsize=9.5, color=LABEL_COLOR)
 
 for spine in ["top", "right", "left"]:
     ax.spines[spine].set_visible(False)
 ax.spines["bottom"].set_color(GRID_COLOR)
-
 ax.set_xticks(link_count_freq.index)
-ax.set_xticklabels(link_count_freq.index, fontsize=11, color=LABEL_COLOR)
 ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
-ax.tick_params(axis="y", labelsize=9.5, colors=SUBTITLE_COLOR, length=0)
+ax.tick_params(axis="y", labelsize=9.5, colors="#888780", length=0)
 ax.tick_params(axis="x", length=0)
 ax.set_ylim(0, max_val * 1.18)
-ax.set_xlabel("Number of links connected to node", fontsize=10.5, color=SUBTITLE_COLOR, labelpad=10)
+ax.set_xlabel("Number of links connected to node", fontsize=10.5, color="#888780", labelpad=10)
 
-legend_elements = [
-    plt.Rectangle((0, 0), 1, 1, color=ACCENT_COLOR),
-    plt.Rectangle((0, 0), 1, 1, color=PSEUDO_COLOR),
-    plt.Rectangle((0, 0), 1, 1, color=BASE_COLOR),
-]
 ax.legend(
-    legend_elements,
+    [plt.Rectangle((0,0),1,1,color=c) for c in [ACCENT_COLOR, PSEUDO_COLOR, BASE_COLOR]],
     ["Typical intersection (4, 6, 8)", "Pseudonode (2)", "Other"],
-    loc="upper right", fontsize=9, frameon=False,
-    labelcolor=SUBTITLE_COLOR, handlelength=1, handleheight=0.8,
+    loc="upper right", fontsize=9, frameon=False, labelcolor="#888780",
 )
-
 fig.text(0.13, 1.01, "Most nodes connect to 4, 6, or 8 links",
          fontsize=14, fontweight="bold", color=LABEL_COLOR, transform=ax.transAxes)
 fig.text(0.13, 0.94, f"Distribution of {len(gdf_nodes):,} network nodes by link count",
-         fontsize=10.5, color=SUBTITLE_COLOR, transform=ax.transAxes)
-
+         fontsize=10.5, color="#888780", transform=ax.transAxes)
 plt.tight_layout()
 plt.show()
 ```
 
-### Export Classified Nodes
+### A3 — Node Topology Classification
+
+Three non-exclusive boolean masks → five mutually-exclusive `node_type` labels
+via priority cascade (freeway > ramp > surface). HOV excluded from `is_fwy`
+because HOT lane geometry does not coincide with mainline endpoints.
+Pseudonodes (LinkCount == 2) are shape vertices with no physical counterpart.
 
 ```{python}
-out_path = config_filepath["out_node_classified"]
+no_pseudo = gdf_nodes["LinkCount"] != 2
+
+is_fwy_node     = gdf_nodes["Freeway"] & ~gdf_nodes["HOV"] & no_pseudo
+is_ramp_node    = gdf_nodes["Ramp"]    & no_pseudo
+is_surface_node = gdf_nodes["Surface"] & no_pseudo
+
+gdf_nodes["node_type"] = np.select(
+    [
+        is_fwy_node  & ~is_ramp_node,                   # pure mainline
+        is_fwy_node  &  is_ramp_node,                   # mainline/ramp junction
+        ~is_fwy_node &  is_ramp_node & ~is_surface_node,# mid-ramp
+        ~is_fwy_node &  is_ramp_node &  is_surface_node,# ramp-to-arterial terminal
+    ],
+    ["fwy", "gore", "ramp", "ramp_sf"],
+    default="surface",
+)
+
+print("Node type distribution:")
+print(gdf_nodes["node_type"].value_counts().rename("count").to_frame().to_string())
+```
+
+```{python}
+# Optional: inspect node flags and directions
+gdf_nodes[["N", "LinkCount", "node_type", "link_directions", "fw_directions"]].head(20)
+```
+
+```{python}
+out_path = PATHS["out_node_classified"]
 out_path.parent.mkdir(parents=True, exist_ok=True)
-gdf_nodes.to_file(out_path, driver="GPKG")
+gdf_nodes.to_crs(CRS_WGS).to_file(out_path, driver="GPKG")
 print(f"Classified nodes saved to: {out_path}")
 ```
 
 ---
 
-## Node Snapping
+## Part B — Target Processing (Centerline Endpoints)
 
-All spatial operations are in UTM (metres). The approach is piecemeal — validate
-each pass before proceeding to the next.
+The endpoint layer makes topology and direction assignments explicit and
+inspectable in QGIS **before** any snapping happens. The full workflow is:
+B1 filter to active segments → B2 classify segments → B3 extract endpoints →
+B4 deduplicate → B5 assign directions → B6 assign ep_type → B7 export.
 
-### Prepare Centerlines
+### B1 — Filter to Active Segments
 
 ```{python}
-import folium
-from shapely.geometry import LineString, Point
-from shapely.strtree import STRtree
-
-# Exclude retired and planned segments — only active physical geometry
+# Exclude retired and planned segments — active physical geometry only
 active_cl = gdf_centerlines[~gdf_centerlines["STATUS"].isin(["Retired", "Planned"])].copy()
 print(f"Active centerlines: {len(active_cl):,} of {len(gdf_centerlines):,}")
 ```
 
----
+### B2 — Classify Segments
 
-## Target Processing (Centerline Endpoints)
-
-The endpoint layer is the foundation of the new snapping approach. Instead of
-snapping directly to centerline segments (and extracting endpoints inside the
-algorithm), we pre-classify every unique endpoint coordinate by what types of
-segments meet there. This makes topology and direction assignments explicit and
-inspectable in QGIS before any snapping happens.
-
-### Classify Centerline Segments
-
-Each active centerline segment gets three non-exclusive boolean flags:
-`is_freeway`, `is_interchange`, `is_surface`. These flow downstream into
-every endpoint pool and type-tier decision, so their definitions are the
-single most important place to audit when snapping results look wrong.
-
-The classification authority here is the **UDOT LRS route name**
-(`DOT_RTNAME`), not `DOT_FCLASS`. `DOT_FCLASS` is inconsistently coded
-across data vintages; `DOT_RTNAME` is the authoritative UDOT identifier
-and its character positions have stable, documented semantics:
+Three non-exclusive boolean flags per segment. Classification authority is
+`DOT_RTNAME` (UDOT LRS), not `DOT_FCLASS` (inconsistently coded across vintages).
 
 ```
 DOT_RTNAME layout (11 characters, zero-padded):
-  [0:4]  Route number          e.g. "0015" = I-15, "0154" = Bangerter
-  [4]    LRS direction char    "P" = primary (NB/EB), "N" = negative (SB/WB)
-  [5]    Facility type char    " " = mainline, "R" = ramp, "C" = collector-distributor
-  [6:]   Sequence / suffix     varies
+  [0:4]  Route number      e.g. "0015" = I-15, "0154" = Bangerter
+  [4]    LRS direction     "P" = primary (NB/EB),  "N" = negative (SB/WB)
+  [5]    Facility type     " " = mainline, "R" = ramp, "C" = collector-distributor
+  [6:]   Sequence/suffix   varies
 ```
 
+These flags flow into every endpoint pool and type-tier decision, making this
+the **primary place to audit** when snapping results look wrong.
+
 ```{python}
-# ---------------------------------------------------------------------------
-# TARGET ENDPOINT PROCESSING — Step E1: Segment-level topology classification
-#
-# Freeway route numbers (DOT_RTNAME[:4])
-# ---------------------------------------
-# These are the controlled-access corridors in the Wasatch Front study area.
-# Only segments whose route number appears in this list AND whose facility
-# type character (DOT_RTNAME[5]) is NOT "R" or "C" are classified as freeway
-# mainline. Adding or removing a route here is the primary tuning lever for
-# freeway coverage — e.g. add "0071" if SR-71 is built, remove "0089" if
-# US-89 should be treated as surface for a given scenario.
-# ---------------------------------------------------------------------------
-FREEWAY_ROUTES = [
+# Controlled-access corridors in the Wasatch Front study area.
+# Adding/removing a route here is the primary tuning lever for freeway coverage.
+FREEWAY_ROUTES = {
     "0015",   # Interstate 15         (primary N-S spine)
     "0067",   # Legacy Parkway        (limited-access, no ramps)
     "0080",   # Interstate 80         (E-W, SLC to Parley's Canyon)
     "0084",   # Interstate 84         (Ogden corridor)
-    "0089",   # US-89                 (surface in places — watch for misclassification)
-    "0092",   # Timpanogos Highway    (SR-92, American Fork Canyon access)
+    "0089",   # US-89                 (surface in places — watch for mis-classification)
+    "0092",   # Timpanogos Highway    (SR-92, American Fork Canyon)
     "0154",   # Bangerter Highway     (semi-controlled ring road)
-    "0177",   # West Davis Corridor   (new build, limited segments in data)
-    "0201",   # SR-201                (W. Valley connector)
+    "0177",   # West Davis Corridor   (new build, limited segments)
+    "0201",   # SR-201                (West Valley connector)
     "0215",   # Interstate 215        (belt route, SLC)
-]
+}
 
-# ---------------------------------------------------------------------------
-# is_freeway : mainline segments of the above corridors only.
-#
-# Condition 1 — route number in FREEWAY_ROUTES (DOT_RTNAME[:4])
-#   Identifies the corridor.
-# Condition 2 — DOT_RTNAME[5] is NOT "R" (ramp)
-#   Ramp segments share the parent route number but have "R" in position 5.
-#   Without this exclusion, on-ramps and off-ramps would be mis-tagged as
-#   freeway mainline, inflating the is_freeway pool and corrupting gore detection.
-# Condition 3 — DOT_RTNAME[5] is NOT "C" (collector-distributor)
-#   CD segments also carry the parent route number. They function like ramps
-#   for snapping purposes (node FT 31 = CD) so must be excluded from mainline.
-# ---------------------------------------------------------------------------
+rtname = active_cl["DOT_RTNAME"].str
+
+# is_freeway: mainline segments only.
+#   Route must be in FREEWAY_ROUTES AND facility char must not be "R" (ramp) or "C" (CD).
+#   Ramp/CD segments share the parent route number — without these exclusions they
+#   inflate the freeway pool and corrupt gore detection.
 active_cl["is_freeway"] = (
-    active_cl["DOT_RTNAME"].str[:4].isin(FREEWAY_ROUTES)   # on a freeway corridor
-    & ~(active_cl["DOT_RTNAME"].str[5] == "R")              # not a ramp
-    & ~(active_cl["DOT_RTNAME"].str[5] == "C")              # not a CD
+    rtname.slice(0, 4).isin(FREEWAY_ROUTES)
+    & (rtname.slice(5, 6) != "R")
+    & (rtname.slice(5, 6) != "C")
 )
 
-# ---------------------------------------------------------------------------
-# is_interchange : ramp and CD segments.
-#
-# Ramp (DOT_RTNAME[5] == "R")
-#   Official UDOT ramp segments — on/off ramps, loop ramps, directional ramps.
-#   These carry the parent freeway route number with "R" in position 5.
-# Collector-distributor (DOT_RTNAME[5] == "C")
-#   CD road segments. In the network, FT 21/31 (CD) nodes regularly sit at
-#   physical ramp endpoints and vice versa — the FT distinction between ramp
-#   and CD is unreliable, so they are merged into one interchange class here.
-# POSTTYPE == "RAMP" (local slip ramps)
-#   Short local ramps and freeway-frontage connectors that do NOT have a
-#   full 11-character UDOT LRS name. Their POSTTYPE field is coded "RAMP"
-#   by the GIS source. Without this clause, these segments fall through to
-#   is_surface and their endpoints pollute the surface pool.
-#
-# Note: is_interchange is non-exclusive with is_freeway intentionally — a
-# segment at a gore point may carry both flags (e.g. a very short connector
-# between a mainline spur and a ramp). The OR-aggregation in Step E3 then
-# correctly tags that endpoint coordinate as both is_freeway and is_interchange,
-# producing ep_type = "gore".
-# ---------------------------------------------------------------------------
+# is_interchange: ramp and CD segments.
+#   DOT_RTNAME[5] == "R" : official UDOT ramp (on/off ramps, loop ramps).
+#   DOT_RTNAME[5] == "C" : collector-distributor roads.
+#   POSTTYPE == "RAMP"   : short local slip ramps without a full 11-char LRS name.
+#   Note: non-exclusive with is_freeway intentionally — a gore segment may carry both.
 active_cl["is_interchange"] = (
-    (active_cl["DOT_RTNAME"].str[5] == "R")                                    # official ramp
-    | (active_cl["DOT_RTNAME"].str[5] == "C")                                  # collector-distributor
-    | (active_cl["POSTTYPE"].astype(str).str.strip().str.upper() == "RAMP")    # local slip ramp
+    (rtname.slice(5, 6) == "R")
+    | (rtname.slice(5, 6) == "C")
+    | (active_cl["POSTTYPE"].astype(str).str.strip().str.upper() == "RAMP")
 )
 
-# ---------------------------------------------------------------------------
-# is_surface : everything that is neither freeway mainline nor interchange.
-#
-# This is a residual category — it catches state highways, arterials,
-# collectors, locals, and any freeway-adjacent segments that do not meet
-# the mainline or ramp criteria above.
-#
-# Tuning note: US-89 (route "0089") is included in FREEWAY_ROUTES but has
-# many at-grade segments. Those segments will be is_surface here because
-# they lack the controlled-access DOT_RTNAME structure. This is correct
-# behaviour — their endpoints should land in the surface pool, not the
-# freeway pool. If you see US-89 surface nodes snapping to freeway endpoints,
-# check whether any US-89 segments are being mis-classified as is_freeway.
-# ---------------------------------------------------------------------------
+# is_surface: residual — everything that is neither freeway mainline nor interchange.
 active_cl["is_surface"] = ~active_cl["is_freeway"] & ~active_cl["is_interchange"]
 
-print("Target centerline segment classification:")
-print(f"  is_freeway    (mainline):    {active_cl['is_freeway'].sum():,}")
-print(f"  is_interchange (ramp / CD): {active_cl['is_interchange'].sum():,}")
-print(f"  is_surface    (all others): {active_cl['is_surface'].sum():,}")
-print(f"  both fwy + ic (gore segs):  {(active_cl['is_freeway'] & active_cl['is_interchange']).sum():,}")
-print(f"  total active segments:      {len(active_cl):,}")
+print("Segment-level classification:")
+print(f"  is_freeway     (mainline):   {active_cl['is_freeway'].sum():,}")
+print(f"  is_interchange (ramp / CD):  {active_cl['is_interchange'].sum():,}")
+print(f"  is_surface     (all others): {active_cl['is_surface'].sum():,}")
+print(f"  both fwy + ic  (gore segs):  {(active_cl['is_freeway'] & active_cl['is_interchange']).sum():,}")
+print(f"  total active:                {len(active_cl):,}")
 ```
 
-### Extract Raw Endpoints
+### B3 — Extract Raw Endpoints
 
-`extract_endpoints` pulls the start and end coordinate of every segment as a flat
-point GeoDataFrame. Each row carries the source segment's type flags and key
-attributes. No deduplication yet.
+Extract the start and end point of every active segment into a flat GeoDataFrame
+(two rows per segment). Carries `FULLNAME`, `DOT_RTNAME`, and the three topology
+flags forward for direction resolution and deduplication downstream.
 
 ```{python}
-gdf_ep_raw = extract_endpoints(active_cl)
+# Explode MultiLineString → LineString so get_point works correctly
+active_cl = active_cl.explode(index_parts=False).reset_index(drop=True)
+print(
+    f"After explode: {len(active_cl):,} segments (was {len(gdf_centerlines[~gdf_centerlines['STATUS'].isin(['Retired', 'Planned'])]):,})"
+)
 
-print(f"Raw endpoint records: {len(gdf_ep_raw):,}")
-print(f"  (≈2× the number of segments — one start, one end per segment)")
+starts = shapely.get_point(active_cl.geometry.values, 0)
+ends = shapely.get_point(active_cl.geometry.values, -1)
+print(f"Null starts after explode: {shapely.is_missing(starts).sum()}")  # should be 0
+
+xs_all = np.concatenate([shapely.get_x(starts), shapely.get_x(ends)])
+ys_all = np.concatenate([shapely.get_y(starts), shapely.get_y(ends)])
+tile = lambda col: np.concatenate([active_cl[col].values, active_cl[col].values])
+
+gdf_ep_raw = gpd.GeoDataFrame(
+    {
+        "geometry": np.concatenate([starts, ends]),
+        "seg_idx": tile("index")
+        if "index" in active_cl.columns
+        else np.concatenate([active_cl.index.values, active_cl.index.values]),
+        "x_round": np.round(xs_all, 2),
+        "y_round": np.round(ys_all, 2),
+        "fullname": tile("FULLNAME"),
+        "dot_rtname": tile("DOT_RTNAME"),
+        "is_freeway": tile("is_freeway"),
+        "is_interchange": tile("is_interchange"),
+        "is_surface": tile("is_surface"),
+        "is_start": np.concatenate([np.ones(len(active_cl), bool), np.zeros(len(active_cl), bool)]),
+    },
+    crs=CRS_UTM,
+).reset_index(drop=True)
+
+print(f"Raw endpoint records: {len(gdf_ep_raw):,}  (2 × {len(active_cl):,} segments)")
 ```
 
-### Deduplicate by Coordinate
+### B4 — Deduplicate by Coordinate
 
-Group raw endpoints by rounded XY coordinate (millimetre precision). For each
-unique location, aggregate the type flags from all contributing segments using OR —
-a coordinate is tagged `is_freeway=True` if any freeway segment terminates there.
+Group raw endpoints by rounded XY (millimetre precision). Aggregate type flags
+with OR — a coordinate is `is_freeway=True` if any freeway segment terminates there.
 
 ```{python}
-# Aggregate topology flags per unique coordinate
 ep_agg = gdf_ep_raw.groupby(["x_round", "y_round"], as_index=False).agg(
     is_freeway=("is_freeway", "any"),
     is_interchange=("is_interchange", "any"),
     is_surface=("is_surface", "any"),
 )
-
-# Reconstruct geometry from rounded coordinates
 ep_agg["geometry"] = gpd.points_from_xy(ep_agg["x_round"], ep_agg["y_round"])
 gdf_ep_unique = gpd.GeoDataFrame(ep_agg, crs=CRS_UTM)
 
 print(f"Unique endpoints: {len(gdf_ep_unique):,}")
 print(
-    f"  is_freeway only (pass a targets):     {(gdf_ep_unique['is_freeway'] & ~gdf_ep_unique['is_interchange']).sum():,}"
+    f"  freeway-only   : {(gdf_ep_unique['is_freeway'] & ~gdf_ep_unique['is_interchange']).sum():,}"
 )
 print(
-    f"  is_freeway + is_interchange (gore):   {(gdf_ep_unique['is_freeway'] & gdf_ep_unique['is_interchange']).sum():,}"
+    f"  freeway + ramp : {(gdf_ep_unique['is_freeway'] & gdf_ep_unique['is_interchange']).sum():,}"
 )
 print(
-    f"  is_interchange only (pass c targets): {(~gdf_ep_unique['is_freeway'] & gdf_ep_unique['is_interchange'] & ~gdf_ep_unique['is_surface']).sum():,}"
+    f"  ramp-only      : {(~gdf_ep_unique['is_freeway'] & gdf_ep_unique['is_interchange'] & ~gdf_ep_unique['is_surface']).sum():,}"
 )
-print(f"  is_surface:                           {gdf_ep_unique['is_surface'].sum():,}")
+print(f"  surface        : {gdf_ep_unique['is_surface'].sum():,}")
 ```
 
-### Step E4 — Assign Endpoint Directions
+### B5 — Assign Endpoint Directions
 
-`assign_endpoint_directions` calls `_resolve_direction` per unique endpoint,
-aggregating direction from all contributing raw segments with freeway-first priority:
-
-- Freeway segments present → FULLNAME token → LRS P/N fallback (freeway segments only)
-- Interchange-only → DOT_RTNAME[4] P/N → "NB,SB" or "EB,WB" (vague but correct group)
-- Surface or unresolved → empty string
+`assign_endpoint_directions` calls `_resolve_direction` per unique coordinate,
+aggregating direction from all contributing raw segments with freeway-first priority.
 
 ```{python}
 gdf_ep_unique = assign_endpoint_directions(gdf_ep_unique, gdf_ep_raw)
 
-# ---------------------------------------------------------------------------
-# Endpoint topology type — six mutually-exclusive labels built from the three
-# boolean flags aggregated in Step E3. Priority cascade: freeway > interchange
-# > surface. Mirrors the node_type logic so that type-tier matching can compare
-# like with like across the two datasets.
-#
-# Flags (from Step E3 OR-aggregation per unique coordinate)
-# ----------------------------------------------------------
-# is_freeway    : ≥1 freeway mainline segment terminates here.
-# is_interchange: ≥1 ramp or CD segment terminates here.
-# is_surface    : ≥1 surface street segment terminates here.
-#
-# Labels
-# ------
-# "gore"    : is_freeway  &  is_interchange
-#             Mainline/ramp junction — both a freeway and a ramp end here.
-#             Checked first: a point where fwy AND ramp meet is always gore.
-# "fwy_sf"  : is_freeway  &  is_surface  (& ~is_interchange, after gore)
-#             At-grade freeway/surface crossing or frontage road junction.
-#             Physically at a surface intersection despite freeway proximity.
-# "fwy"     : is_freeway  &  ~is_interchange  &  ~is_surface
-#             Pure freeway mainline endpoint — no ramp or surface contact.
-# "ramp_sf" : ~is_freeway &   is_interchange  &   is_surface
-#             Ramp-to-arterial terminal — where an off-ramp meets a surface road.
-# "ramp"    : ~is_freeway &   is_interchange  &  ~is_surface
-#             Mid-ramp endpoint — no freeway, no surface street contact.
-# "surface" : ~is_freeway &  ~is_interchange  (is_surface implied)
-#             Pure surface street endpoint.
-# ---------------------------------------------------------------------------
-fw = gdf_ep_unique["is_freeway"].values
-ic = gdf_ep_unique["is_interchange"].values
-sf = gdf_ep_unique["is_surface"].values
-
-gdf_ep_unique["ep_type"] = np.where(
-     fw &  ic,              "gore",
-np.where(
-     fw &  sf,              "fwy_sf",
-np.where(
-     fw & ~ic & ~sf,        "fwy",
-np.where(
-    ~fw &  ic &  sf,        "ramp_sf",
-np.where(
-    ~fw &  ic & ~sf,        "ramp",
-                            "surface"
-)))))
-
-print(f"Endpoints with direction assigned: {(gdf_ep_unique['ep_allowed_dirs'] != '').sum():,}")
-print(f"Endpoints direction-agnostic:      {(gdf_ep_unique['ep_allowed_dirs'] == '').sum():,}")
-print("\nEndpoint type distribution:")
-print(gdf_ep_unique["ep_type"].value_counts().rename("count").to_frame())
-gdf_ep_unique[["x_round", "y_round", "is_freeway", "is_interchange", "is_surface", "ep_allowed_dirs", "ep_type"]].head(20)
+print(f"Endpoints with direction: {(gdf_ep_unique['ep_allowed_dirs'] != '').sum():,}")
+print(f"Endpoints direction-agnostic: {(gdf_ep_unique['ep_allowed_dirs'] == '').sum():,}")
 ```
 
-### Step E5 — Export Endpoint Layer for QGIS Inspection
+### B6 — Assign Endpoint Type
 
-Inspect topology classification and direction assignments before running any snapping.
-Open `debug_snapping.gpkg → endpoint_layer` in QGIS and verify that:
-
-- Freeway-only endpoints are correctly identified (no ramp/CD bleeds)
-- Gore endpoints sit at the physical junction between mainline and ramp geometry
-- Direction strings match the expected cardinal for each location
+Six mutually-exclusive `ep_type` labels derived from the three boolean flags,
+mirroring the `node_type` cascade so type-tier matching compares like with like.
+`gore` is checked first — a point where freeway and ramp both terminate is always
+a gore regardless of surface contact.
 
 ```{python}
-debug_path = config_filepath["out_debug"]
+fw = gdf_ep_unique["is_freeway"]
+ic = gdf_ep_unique["is_interchange"]
+sf = gdf_ep_unique["is_surface"]
+
+gdf_ep_unique["ep_type"] = np.select(
+    [
+        fw &  ic,            # freeway/ramp junction
+        fw &  sf,            # at-grade freeway/surface crossing or frontage
+        fw & ~ic & ~sf,      # pure freeway mainline endpoint
+        ~fw & ic &  sf,      # ramp-to-arterial terminal
+        ~fw & ic & ~sf,      # mid-ramp endpoint
+    ],
+    ["gore", "fwy_sf", "fwy", "ramp_sf", "ramp"],
+    default="surface",
+)
+
+print("Endpoint type distribution:")
+print(gdf_ep_unique["ep_type"].value_counts().rename("count").to_frame().to_string())
+```
+
+```{python}
+gdf_ep_unique[["x_round", "y_round", "is_freeway", "is_interchange", "is_surface",
+               "ep_allowed_dirs", "ep_type"]].head(20)
+```
+
+### B7 — Export Endpoint Layer for QGIS Inspection
+
+Verify before running any snapping:
+- Freeway-only endpoints correctly identified (no ramp/CD bleeds)
+- Gore endpoints at physical mainline/ramp junctions
+- Direction strings match expected cardinal for each location
+
+```{python}
+debug_path = PATHS["out_debug"]
 debug_path.parent.mkdir(parents=True, exist_ok=True)
-gdf_ep_unique.to_file(debug_path, layer="endpoint_layer", driver="GPKG")
-print(f"Endpoint layer exported to: {debug_path} → layer='endpoint_layer'")
+gdf_ep_unique.to_crs(CRS_WGS).to_file(debug_path, layer="endpoint_layer", driver="GPKG")  # reproject to WGS84 for export only
+print(f"Endpoint layer → {debug_path} / layer='endpoint_layer'")
 ```
 
 ---
 
-## Step 1 — Freeway and Interchange Node Snapping
+## Part C — Interchange Node Direction Enrichment
 
-### Step 1a — Build Node Snap Masks
-
-The `node_type` column built above drives type-tier matching inside `snap_nodes`.
-The boolean masks below select which nodes enter each pass — they reuse the masks
-defined in the classification block above.
+For interchange-only nodes (pass c), the directional signal is inherited one hop
+from adjacent freeway mainline links. This enrichment is done **explicitly here**
+(not hidden inside `snap_nodes`) so the lookup table is inspectable.
 
 ```{python}
-# no_pseudo, is_fwy_node, is_ramp_node, is_surface_node defined above.
-# is_ramp_node replaces the old is_ic_node — same mask, consistent naming.
-is_ic_node = is_ramp_node   # alias kept for backward compat with Step 1b/1c code
+# Build a flat edge list: (node_N, FT, DIRECTION) — vectorised via pd.concat
+edges = pd.concat([
+    gdf_links[["A", "FT_2027", "DIRECTION"]].rename(columns={"A": "N"}),
+    gdf_links[["B", "FT_2027", "DIRECTION"]].rename(columns={"B": "N"}),
+], ignore_index=True)
+edges["is_freeway_link"] = edges["FT_2027"].isin(FW_CODES)
+edges["DIRECTION"]       = edges["DIRECTION"].astype(str).str.strip().str.upper()
 
-print(f"Pass (a) — freeway-only nodes:     {(is_fwy_node & ~is_ramp_node).sum():,}")
-print(f"Pass (b) — gore nodes:             {(is_fwy_node &  is_ramp_node).sum():,}")
-print(f"Pass (c) — ramp-only nodes:        {(~is_fwy_node & is_ramp_node).sum():,}")
-print(f"  of which ramp+surface:           {(~is_fwy_node & is_ramp_node & is_surface_node).sum():,}")
-print(f"ManagedAccess-only (skipped):      "
-      f"{(gdf_nodes['Freeway'] & gdf_nodes['ManagedAccess'] & ~is_ramp_node & no_pseudo).sum():,}")
-print(f"\nnode_type distribution (confirmation):")
-print(gdf_nodes["node_type"].value_counts().rename("count").to_frame())
-```
-
-### Step 1b — Freeway Neighbor Direction Lookup (for Pass c)
-
-For interchange-only nodes (pass c), direction on the node side comes from
-freeway mainline links connected one hop away in the network graph. This lookup
-is done explicitly here so the logic is visible and the result is inspectable.
-
-We walk the link table: for each interchange-only node N, find all links where
-A == N or B == N. If any of those links is a freeway link (FT in FW), pull its
-DIRECTION value. If the neighbor is itself a freeway node, inherit its
-`fw_directions`. The enriched direction is stored in a temporary column
-`ic_fw_directions` used only in pass (c) snapping.
-
-```{python}
-# Build a flat edge list: (node_N, neighbor_N, FT, DIRECTION)
-edges_a = gdf_links[["A", "B", "FT_2027", "DIRECTION"]].rename(columns={"A": "node", "B": "neighbor"})
-edges_b = gdf_links[["B", "A", "FT_2027", "DIRECTION"]].rename(columns={"B": "node", "A": "neighbor"})
-edges = pd.concat([edges_a, edges_b], ignore_index=True)
-edges["is_freeway_link"] = edges["FT_2027"].isin(set(FW))
-
-# For each interchange-only node, collect DIRECTION values from adjacent
-# freeway links only.
 CARDINAL = {"NB", "SB", "EB", "WB"}
-ic_only_nodes = gdf_nodes.loc[~is_fwy_node & is_ic_node, "N"].values
-ic_node_set = set(ic_only_nodes)
 
-ic_fw_dir_map: dict[int, str] = {}
-for node_n in ic_node_set:
-    adj_fw = edges[(edges["node"] == node_n) & (edges["is_freeway_link"])]
-    if adj_fw.empty:
-        ic_fw_dir_map[node_n] = ""
-        continue
-    dirs = set()
-    for d in adj_fw["DIRECTION"].dropna():
-        d = str(d).strip().upper()
-        if d in CARDINAL:
-            dirs.add(d)
-    ic_fw_dir_map[node_n] = ",".join(sorted(dirs))
+# For each interchange-only node, collect cardinals from adjacent freeway links.
+ic_only_mask = ~is_fwy_node & is_ramp_node
+ic_only_Ns   = set(gdf_nodes.loc[ic_only_mask, "N"])
 
-# Store on the nodes GeoDataFrame as a temporary working column
-gdf_nodes["ic_fw_directions"] = gdf_nodes["N"].map(ic_fw_dir_map).fillna("")
+adj_fw = (
+    edges[edges["N"].isin(ic_only_Ns) & edges["is_freeway_link"] & edges["DIRECTION"].isin(CARDINAL)]
+    .groupby("N")["DIRECTION"]
+    .apply(lambda s: ",".join(sorted(set(s))))
+)
 
-# Diagnostic: how many interchange-only nodes resolved a freeway direction?
-resolved = (gdf_nodes.loc[~is_fwy_node & is_ic_node, "ic_fw_directions"] != "").sum()
-total_ic = (~is_fwy_node & is_ic_node).sum()
-print(f"Interchange-only nodes with freeway neighbor direction: {resolved:,} of {total_ic:,}")
-print(f"  (remaining {total_ic - resolved:,} have no adjacent freeway link — direction-agnostic)")
+gdf_nodes["ic_fw_directions"] = gdf_nodes["N"].map(adj_fw).fillna("")
+
+resolved = (gdf_nodes.loc[ic_only_mask, "ic_fw_directions"] != "").sum()
+total_ic  = ic_only_mask.sum()
+print(f"Interchange-only nodes with freeway-neighbor direction: {resolved:,} of {total_ic:,}")
+print(f"  remaining {total_ic - resolved:,} are direction-agnostic (no adjacent freeway link)")
 ```
 
-### Step 1c — Pre-Snap Validation
+---
 
-Check nearest-endpoint distances before snapping to confirm coverage and thresholds.
+## Part D — Node Snapping
+
+Hierarchical execution — first-call-wins. Nodes snapped in an earlier pass are
+skipped by subsequent passes.
+
+### D1 — Freeway and Interchange Snapping
+
+Three passes in topology-priority order.
 
 ```{python}
-# ---------------------------------------------------------------------------
-# Endpoint pools for each pass — derived from ep_type for clarity.
-#
-# Pass (a): fwy endpoints only  (ep_type == "fwy")
-#           Type-tier also admits gore and fwy_sf as Tier-1 adjacents.
-# Pass (b): gore endpoints      (ep_type == "gore")
-#           Type-tier also admits fwy, fwy_sf, ramp as Tier-1 adjacents.
-# Pass (c): ramp + ramp_sf endpoints (ep_type in {"ramp", "ramp_sf"})
-#           Includes ramp+surface endpoints so ramp_sf nodes have a Tier-0
-#           target available. ramp_sf nodes exceeding 100m are recycled into
-#           Step 2 (Surface) where surface ep is Tier-0 for ramp_sf.
-# ---------------------------------------------------------------------------
+# ── Endpoint pools (by ep_type) ───────────────────────────────────────────
 ep_fwy_only = gdf_ep_unique[gdf_ep_unique["ep_type"] == "fwy"].copy()
 ep_gore     = gdf_ep_unique[gdf_ep_unique["ep_type"] == "gore"].copy()
 ep_ic_only  = gdf_ep_unique[gdf_ep_unique["ep_type"].isin(["ramp", "ramp_sf"])].copy()
 
-print(f"Pass (a) endpoint pool — fwy only:        {len(ep_fwy_only):,}  (ep_type='fwy')")
-print(f"Pass (b) endpoint pool — gore:            {len(ep_gore):,}  (ep_type='gore')")
-print(f"Pass (c) endpoint pool — ramp + ramp_sf:  {len(ep_ic_only):,}  (ep_type in ramp/ramp_sf)")
-print(f"  of which ramp-only:                     {(gdf_ep_unique['ep_type']=='ramp').sum():,}")
-print(f"  of which ramp+surface:                  {(gdf_ep_unique['ep_type']=='ramp_sf').sum():,}")
+print(f"Pass (a) endpoint pool — fwy only:       {len(ep_fwy_only):,}")
+print(f"Pass (b) endpoint pool — gore:           {len(ep_gore):,}")
+print(f"Pass (c) endpoint pool — ramp + ramp_sf: {len(ep_ic_only):,}")
+
+# ── Node masks ────────────────────────────────────────────────────────────
+print()
+print(f"Pass (a) nodes — freeway-only: {(is_fwy_node & ~is_ramp_node).sum():,}")
+print(f"Pass (b) nodes — gore:         {(is_fwy_node &  is_ramp_node).sum():,}")
+print(f"Pass (c) nodes — ramp-only:    {(~is_fwy_node & is_ramp_node).sum():,}")
+print(f"  of which ramp+surface:       {(~is_fwy_node & is_ramp_node & is_surface_node).sum():,}")
 ```
 
 ```{python}
-# Distance distribution for all freeway-eligible nodes to their nearest endpoint
-all_fwy_eligible = gdf_nodes[is_fwy_node | is_ic_node].copy()
-all_ep_fwy = gdf_ep_unique[gdf_ep_unique["is_freeway"] | gdf_ep_unique["is_interchange"]]
+# ── Pre-snap distance check ────────────────────────────────────────────────
+# Confirm coverage and validate distance thresholds before committing.
+fwy_ic_eligible = gdf_nodes[is_fwy_node | is_ramp_node]
+all_fwy_ep = gdf_ep_unique[gdf_ep_unique["is_freeway"] | gdf_ep_unique["is_interchange"]]
 
-tree_pre = STRtree(all_ep_fwy.to_crs(CRS_UTM).geometry.values)
-dists = np.array([
-    g.distance(all_ep_fwy.geometry.iloc[tree_pre.nearest(g)])
-    for g in all_fwy_eligible.to_crs(CRS_UTM).geometry
-])
-all_fwy_eligible["nearest_ep_m"] = np.round(dists, 1)
+ep_geoms   = all_fwy_ep.geometry.to_numpy()
+node_geoms = fwy_ic_eligible.geometry.to_numpy()
 
-print(f"\nNearest endpoint distance (m) — all freeway + interchange eligible nodes:")
-print(f"  min:    {dists.min():.1f}")
-print(f"  median: {np.median(dists):.1f}")
-print(f"  p75:    {np.percentile(dists, 75):.1f}")
-print(f"  p95:    {np.percentile(dists, 95):.1f}")
-print(f"  max:    {dists.max():.1f}")
-print(f"\n  ≤  50m: {(dists <=  50).sum():,}  ({(dists <=  50).mean()*100:.0f}%)")
-print(f"  ≤ 150m: {(dists <= 150).sum():,}  ({(dists <= 150).mean()*100:.0f}%)")
-print(f"  ≤ 300m: {(dists <= 300).sum():,}  ({(dists <= 300).mean()*100:.0f}%)")
-print(f"  > 300m: {(dists >  300).sum():,}  ({(dists >  300).mean()*100:.0f}%)")
+tree_pre     = STRtree(ep_geoms)
+nearest_idxs = tree_pre.nearest(node_geoms)
+pre_dists    = shapely.distance(node_geoms, ep_geoms[nearest_idxs])
+
+print("Nearest endpoint distance — all freeway + interchange eligible nodes:")
+print(f"  min:    {pre_dists.min():.1f}m")
+print(f"  median: {np.median(pre_dists):.1f}m")
+print(f"  p75:    {np.percentile(pre_dists, 75):.1f}m")
+print(f"  p95:    {np.percentile(pre_dists, 95):.1f}m")
+print(f"  max:    {pre_dists.max():.1f}m")
+print(f"  ≤  50m: {(pre_dists <= 50).sum():,}  ({(pre_dists <= 50).mean() * 100:.0f}%)")
+print(f"  ≤ 150m: {(pre_dists <= 150).sum():,}  ({(pre_dists <= 150).mean() * 100:.0f}%)")
+print(f"  > 300m: {(pre_dists > 300).sum():,}  ({(pre_dists > 300).mean() * 100:.0f}%)")
 ```
-
-### Step 1d — Snap Freeway and Interchange Nodes
-
-Three passes in topology-priority order. Each pass only attempts nodes with
-`snap_rule == "none"` or `"exceeded_threshold"` — nodes that fail an earlier
-pass (e.g. `ramp_sf` nodes finding no target in Pass (c)) are recycled into
-subsequent passes rather than permanently locked out.
-
-Type-tier matching is active in all three passes via `node_type_col="node_type"`
-(the default). Within each pass the endpoint pool still constrains the search
-space, but the type tier ensures that when adjacent-type endpoints are the only
-ones within range (due to dataset classification mismatches), they are preferred
-over same-pass endpoints of a more distant type.
 
 ```{python}
 gdf_nodes_snapped = gdf_nodes.copy()
 
-# ---------------------------------------------------------------------------
-# Pass (a) — Freeway-only nodes (node_type="fwy") → freeway-only endpoint pool
-# Type tier: fwy ep = Tier 0, gore/fwy_sf ep = Tier 1 (adjacent).
-# Direction: link_directions.
-# Threshold: 500m (freeway geometry can sit well off the model centroid).
-# ---------------------------------------------------------------------------
+# Pass (a) — Freeway-only nodes → fwy-only endpoint pool
+#   Type tier: fwy ep = Tier 0,  gore/fwy_sf ep = Tier 1.
+#   Direction: link_directions (freeway-priority cascade).
+#   Threshold: 500m (freeway geometry can sit well off the model centroid).
 gdf_nodes_snapped = snap_nodes(
-    gdf_nodes_snapped,
-    ep_fwy_only,
-    node_mask=is_fwy_node & ~is_ic_node,
-    max_distance_m=500,
-    label="Freeway_Only",
-    direction_col="link_directions",
-    target_id_cols=["x_round", "y_round"],
+    gdf_nodes_snapped, ep_fwy_only,
+    node_mask      = is_fwy_node & ~is_ramp_node,
+    max_distance_m = 500,
+    label          = "Freeway_Only",
+    direction_col  = "link_directions",
+    target_id_cols = ["x_round", "y_round"],
 )
 
-# ---------------------------------------------------------------------------
-# Pass (b) — Gore nodes (node_type="gore") → gore endpoint pool
-# Type tier: gore ep = Tier 0, fwy/fwy_sf/ramp ep = Tier 1 (adjacent).
-# Direction: fw_directions (freeway side of the mixed node only — isolates
-#            mainline direction, ignoring ramp/CD link directions).
-# Threshold: 250m.
-# ---------------------------------------------------------------------------
+# Pass (b) — Gore nodes → gore endpoint pool
+#   Type tier: gore ep = Tier 0,  fwy/fwy_sf/ramp ep = Tier 1.
+#   Direction: fw_directions (freeway side of the mixed node only —
+#              isolates mainline direction, ignoring ramp/CD link directions).
+#   Threshold: 250m.
 gdf_nodes_snapped = snap_nodes(
-    gdf_nodes_snapped,
-    ep_gore,
-    node_mask=is_fwy_node & is_ic_node,
-    max_distance_m=250,
-    label="Freeway_Gore",
-    direction_col="fw_directions",
-    target_id_cols=["x_round", "y_round"],
+    gdf_nodes_snapped, ep_gore,
+    node_mask      = is_fwy_node & is_ramp_node,
+    max_distance_m = 250,
+    label          = "Freeway_Gore",
+    direction_col  = "fw_directions",
+    target_id_cols = ["x_round", "y_round"],
 )
 
-# ---------------------------------------------------------------------------
-# Pass (c) — Ramp/interchange nodes (node_type="ramp" or "ramp_sf") →
-#            interchange-only endpoint pool (ramp + ramp_sf endpoints).
-# Type tier:
-#   ramp nodes    : ramp ep = Tier 0, gore/ramp_sf ep = Tier 1.
-#   ramp_sf nodes : ramp_sf ep = Tier 0, ramp ep = Tier 1.
-#                   ramp_sf nodes that find no target here are recycled into
-#                   Step 2 (Surface) where surface ep = Tier 0 for ramp_sf.
-# Direction: ic_fw_directions (direction inherited one hop from adjacent
-#            freeway mainline link — Step 1b above).
-# Threshold: 100m (tight — ramp terminals are physically close).
-# NOTE: ep_ic_only includes both ramp-only and ramp+surface endpoints so that
-#       ramp_sf nodes have same-type targets available in this pass.
-# ---------------------------------------------------------------------------
+# Pass (c) — Ramp/interchange nodes → ramp + ramp_sf endpoint pool
+#   Type tier: ramp ep = Tier 0 for ramp nodes, ramp_sf ep = Tier 0 for ramp_sf nodes.
+#   Direction: ic_fw_directions (inherited one hop from adjacent freeway — see Part C).
+#   Threshold: 100m (ramp terminals are physically close).
+#   ramp_sf nodes that exceed 100m are recycled into Step D3 (Surface, Tier-1).
 gdf_nodes_snapped = snap_nodes(
-    gdf_nodes_snapped,
-    ep_ic_only,
-    node_mask=~is_fwy_node & is_ic_node,
-    max_distance_m=100,
-    label="Interchange_Only",
-    direction_col="ic_fw_directions",
-    target_id_cols=["x_round", "y_round"],
+    gdf_nodes_snapped, ep_ic_only,
+    node_mask      = ~is_fwy_node & is_ramp_node,
+    max_distance_m = 100,
+    label          = "Interchange_Only",
+    direction_col  = "ic_fw_directions",
+    target_id_cols = ["x_round", "y_round"],
 )
 ```
 
-### Step 1e — Post-Snap Distance Summary
+### D1 Summary
 
 ```{python}
-ALL_SNAP_RULES = ["Freeway_Only", "Freeway_Gore", "Interchange_Only"]
+FWY_IC_RULES = ["Freeway_Only", "Freeway_Gore", "Interchange_Only"]
 
-for rule in ALL_SNAP_RULES:
+for rule in FWY_IC_RULES:
     dists = gdf_nodes_snapped.loc[gdf_nodes_snapped["snap_rule"] == rule, "snap_distance_m"]
     if len(dists) == 0:
         print(f"{rule}: 0 nodes snapped")
         continue
     print(f"{rule} ({len(dists):,} nodes):")
-    print(f"  median: {dists.median():.1f}m  |  p90: {dists.quantile(0.9):.1f}m  |  max: {dists.max():.1f}m")
-    print(f"  < 50m:  {(dists < 50).sum():,}  ({(dists < 50).mean()*100:.0f}%)")
-    print()
+    print(f"  median {dists.median():.1f}m  |  p90 {dists.quantile(0.9):.1f}m  |  max {dists.max():.1f}m")
+    print(f"  < 50m: {(dists < 50).sum():,}  ({(dists < 50).mean()*100:.0f}%)")
 
-all_eligible = is_fwy_node | is_ramp_node
-exceeded = gdf_nodes_snapped[all_eligible & (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold")]
-print(f"Nodes exceeded threshold (all passes): {len(exceeded):,}")
-
-# Breakdown by node_type — shows which topology category is recycling into Step 2
-print("\nExceeded threshold breakdown by node_type:")
-if len(exceeded) > 0:
-    print(exceeded["node_type"].value_counts().rename("count").to_frame().to_string())
-    ramp_sf_recycling = exceeded[exceeded["node_type"] == "ramp_sf"]
-    print(f"\nramp_sf nodes recycling to Step 2 (Surface): {len(ramp_sf_recycling):,}")
-    print("  (Expected — these are ramp-to-arterial terminals; surface ep is Tier-0 for them)")
+exceeded_fwy_ic = gdf_nodes_snapped[
+    (is_fwy_node | is_ramp_node) & (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold")
+]
+print(f"\nNodes exceeding threshold (all passes): {len(exceeded_fwy_ic):,}")
+if len(exceeded_fwy_ic) > 0:
+    print(exceeded_fwy_ic["node_type"].value_counts().rename("count").to_frame().to_string())
+    recycled = (exceeded_fwy_ic["node_type"] == "ramp_sf").sum()
+    print(f"\nramp_sf recycling to Surface pass: {recycled:,}")
+    print("  (Expected — ramp-to-arterial terminals; surface ep is Tier-0 for them)")
 ```
 
-### Step 1f — Post-Snap Validation Map
-
 ```{python}
-# | eval: false
+#| eval: false
 
-fwy_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(ALL_SNAP_RULES)]
+# Folium validation map — Freeway + Interchange snapping
+fwy_snapped  = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(FWY_IC_RULES)]
 fwy_original = gdf_nodes.loc[fwy_snapped.index]
 
-fwy_snapped_wgs = fwy_snapped.to_crs(CRS_WGS)
+fwy_snapped_wgs  = fwy_snapped.to_crs(CRS_WGS)
 fwy_original_wgs = fwy_original.to_crs(CRS_WGS)
 
-connectors = []
-for idx in fwy_snapped.index:
-    orig = fwy_original_wgs.geometry.loc[idx]
-    snap = fwy_snapped_wgs.geometry.loc[idx]
-    if orig.distance(snap) > 0:
-        connectors.append(
-            {
-                "geometry": LineString([orig, snap]),
-                "N": int(fwy_snapped.loc[idx, "N"]),
-                "dist_m": float(fwy_snapped.loc[idx, "snap_distance_m"]),
-            }
-        )
+connectors = [
+    {"geometry": LineString([fwy_original_wgs.geometry.loc[idx], fwy_snapped_wgs.geometry.loc[idx]]),
+     "N": int(fwy_snapped.loc[idx, "N"]),
+     "dist_m": float(fwy_snapped.loc[idx, "snap_distance_m"])}
+    for idx in fwy_snapped.index
+    if fwy_original_wgs.geometry.loc[idx].distance(fwy_snapped_wgs.geometry.loc[idx]) > 0
+]
 gdf_fwy_connectors = gpd.GeoDataFrame(connectors, crs=CRS_WGS)
 
+RULE_COLORS = {"Freeway_Only": "#1D9E75", "Freeway_Gore": "#534AB7", "Interchange_Only": "#EF9F27"}
+
 center = [fwy_original_wgs.geometry.y.mean(), fwy_original_wgs.geometry.x.mean()]
-m_post_fwy = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
+m = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
 
 conn_layer = folium.FeatureGroup(name="Displacement lines", show=True)
 for _, row in gdf_fwy_connectors.iterrows():
-    folium.PolyLine(
-        [(c[1], c[0]) for c in row.geometry.coords],
-        color="#888780",
-        weight=1,
-        opacity=0.7,
-        tooltip=f"N: {row['N']} | moved {row['dist_m']}m",
-    ).add_to(conn_layer)
-conn_layer.add_to(m_post_fwy)
+    folium.PolyLine([(c[1], c[0]) for c in row.geometry.coords],
+                    color="#888780", weight=1, opacity=0.7,
+                    tooltip=f"N: {row['N']} | {row['dist_m']}m").add_to(conn_layer)
+conn_layer.add_to(m)
 
 orig_layer = folium.FeatureGroup(name="Original positions", show=True)
 for idx, row in fwy_original_wgs.iterrows():
-    folium.CircleMarker(
-        location=[row.geometry.y, row.geometry.x],
-        radius=4,
-        color="#E24B4A",
-        fill=True,
-        fill_opacity=0.8,
-        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)",
-    ).add_to(orig_layer)
-orig_layer.add_to(m_post_fwy)
+    folium.CircleMarker(location=[row.geometry.y, row.geometry.x], radius=4,
+                        color="#E24B4A", fill=True, fill_opacity=0.8,
+                        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)").add_to(orig_layer)
+orig_layer.add_to(m)
 
-RULE_COLORS = {"Freeway_Only": "#1D9E75", "Freeway_Gore": "#534AB7", "Interchange_Only": "#EF9F27"}
 snap_layer = folium.FeatureGroup(name="Snapped positions", show=True)
 for idx, row in fwy_snapped_wgs.iterrows():
     rule = fwy_snapped.loc[idx, "snap_rule"]
-    folium.CircleMarker(
-        location=[row.geometry.y, row.geometry.x],
-        radius=4,
-        color=RULE_COLORS.get(rule, "#888780"),
-        fill=True,
-        fill_opacity=0.8,
-        tooltip=f"N: {int(fwy_snapped.loc[idx, 'N'])} | {rule} | {fwy_snapped.loc[idx, 'snap_distance_m']}m",
-    ).add_to(snap_layer)
-snap_layer.add_to(m_post_fwy)
+    folium.CircleMarker(location=[row.geometry.y, row.geometry.x], radius=4,
+                        color=RULE_COLORS.get(rule, "#888780"), fill=True, fill_opacity=0.8,
+                        tooltip=f"N: {int(fwy_snapped.loc[idx, 'N'])} | {rule} | {fwy_snapped.loc[idx, 'snap_distance_m']}m").add_to(snap_layer)
+snap_layer.add_to(m)
 
-folium.LayerControl(collapsed=False).add_to(m_post_fwy)
-m_post_fwy
+folium.LayerControl(collapsed=False).add_to(m)
+m
 ```
 
-### Step 1g — Export Debug GeoPackage
-
 ```{python}
-all_eligible = is_fwy_node | is_ramp_node
-
-# Snapped nodes across all three passes
-fwy_snapped  = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(ALL_SNAP_RULES)].copy()
+# Export freeway + interchange debug layers
+fwy_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(FWY_IC_RULES)].copy()
 fwy_original = gdf_nodes.loc[fwy_snapped.index].copy()
 
-# Displacement lines (original → snapped)
-lines = []
-for idx in fwy_snapped.index:
-    orig_geom = fwy_original.loc[idx, "geometry"]
-    snap_geom = fwy_snapped.loc[idx, "geometry"]
-    if orig_geom.distance(snap_geom) > 0:
-        lines.append({
-            "N":               fwy_snapped.loc[idx, "N"],
-            "snap_rule":       fwy_snapped.loc[idx, "snap_rule"],
-            "snap_distance_m": fwy_snapped.loc[idx, "snap_distance_m"],
-            "geometry":        LineString([orig_geom, snap_geom]),
-        })
+lines = [
+    {
+        "N": fwy_snapped.loc[idx, "N"],
+        "snap_rule": fwy_snapped.loc[idx, "snap_rule"],
+        "snap_distance_m": fwy_snapped.loc[idx, "snap_distance_m"],
+        "geometry": LineString(
+            [fwy_original.loc[idx, "geometry"], fwy_snapped.loc[idx, "geometry"]]
+        ),
+    }
+    for idx in fwy_snapped.index
+    if fwy_original.loc[idx, "geometry"].distance(fwy_snapped.loc[idx, "geometry"]) > 0
+]
 gdf_fwy_lines = (
-    gpd.GeoDataFrame(lines, crs=CRS_UTM) if lines
+    gpd.GeoDataFrame(lines, crs=CRS_UTM)
+    if lines
     else gpd.GeoDataFrame(columns=["N", "snap_rule", "snap_distance_m", "geometry"], crs=CRS_UTM)
 )
 
-# Unsnapped eligible nodes — exceeded threshold in all three passes
 fwy_unsnapped = gdf_nodes_snapped[
-    all_eligible & (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold")
+    (is_fwy_node | is_ramp_node) & (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold")
 ].copy()
 
-# Write all layers to the shared debug GeoPackage
-fwy_snapped.to_file(debug_path,  layer="snapped_positions",   driver="GPKG")
-fwy_original.to_file(debug_path, layer="original_positions",  driver="GPKG")
+fwy_snapped.to_crs(CRS_WGS).to_file(debug_path, layer="snapped_positions", driver="GPKG")   # WGS84 for export only
+fwy_original.to_crs(CRS_WGS).to_file(debug_path, layer="original_positions", driver="GPKG") # WGS84 for export only
 if not gdf_fwy_lines.empty:
-    gdf_fwy_lines.to_file(debug_path, layer="displacement_lines", driver="GPKG")
+    gdf_fwy_lines.to_crs(CRS_WGS).to_file(debug_path, layer="displacement_lines", driver="GPKG")  # WGS84 for export only
 if not fwy_unsnapped.empty:
-    fwy_unsnapped.to_file(debug_path, layer="unsnapped_nodes",    driver="GPKG")
-# Endpoint layer already exported in Step E5 — no need to re-export here
+    fwy_unsnapped.to_crs(CRS_WGS).to_file(debug_path, layer="unsnapped_nodes", driver="GPKG")     # WGS84 for export only
 
-print(f"Debug package saved to: {debug_path}")
+print(f"Debug package → {debug_path}")
 print(f"  snapped_positions:  {len(fwy_snapped):,}")
 print(f"    Freeway_Only:     {(fwy_snapped['snap_rule'] == 'Freeway_Only').sum():,}")
 print(f"    Freeway_Gore:     {(fwy_snapped['snap_rule'] == 'Freeway_Gore').sum():,}")
@@ -1069,150 +767,120 @@ print(f"    Interchange_Only: {(fwy_snapped['snap_rule'] == 'Interchange_Only').
 print(f"  unsnapped_nodes:    {len(fwy_unsnapped):,}")
 ```
 
----
+### D2 — Surface Snapping
 
-## Step 2 — Surface Street Node Snapping
-
-Arterial, Collector, and Local nodes snapped to surface street endpoints.
-No direction filtering — snap to nearest within threshold.
-
-### Step 2a — Build Surface Endpoint Pool
+Arterial, Collector, and Local nodes snap to surface street endpoints.
+`ramp_sf` nodes recycled from pass (c) also land here — surface ep is Tier-1 for them.
 
 ```{python}
-# Surface pool: surface-only and ramp_sf endpoints.
-# For surface-only nodes  : surface ep = Tier 0, fwy_sf ep = Tier 0.
-# For ramp_sf nodes       : ramp_sf ep = Tier 0, surface ep = Tier 1
-#   (ramp_sf nodes recycled from Pass (c) find their ramp+arterial target here).
-# fwy_sf endpoints (728 total) are included because they sit at at-grade
-# surface intersections and are Tier-0 for surface-only nodes.
-ep_surface = gdf_ep_unique[
-    gdf_ep_unique["ep_type"].isin(["surface", "ramp_sf", "fwy_sf"])
-].copy()
+# Surface pool: surface, ramp_sf, and fwy_sf endpoints.
+# fwy_sf endpoints (freeway+surface junctions) are Tier-0 for surface-only nodes
+# because they physically sit at surface intersections.
+ep_surface = gdf_ep_unique[gdf_ep_unique["ep_type"].isin(["surface", "ramp_sf", "fwy_sf"])].copy()
 print(f"Surface endpoint pool: {len(ep_surface):,}")
-print(f"  surface-only: {(gdf_ep_unique['ep_type']=='surface').sum():,}")
-print(f"  ramp+surface: {(gdf_ep_unique['ep_type']=='ramp_sf').sum():,}")
-print(f"  fwy+surface:  {(gdf_ep_unique['ep_type']=='fwy_sf').sum():,}")
+print(f"  surface-only: {(gdf_ep_unique['ep_type'] == 'surface').sum():,}")
+print(f"  ramp+surface: {(gdf_ep_unique['ep_type'] == 'ramp_sf').sum():,}")
+print(f"  fwy+surface:  {(gdf_ep_unique['ep_type'] == 'fwy_sf').sum():,}")
 ```
 
-### Step 2b — Snap Surface Nodes
-
 ```{python}
-surface_snap_mask = (
-    (gdf_nodes_snapped["Arterial"] | gdf_nodes_snapped["Collector"] | gdf_nodes_snapped["Local"])
+surface_mask = (
+    (gdf_nodes_snapped["Surface"])
     & (gdf_nodes_snapped["LinkCount"] != 2)
 )
-print(f"Surface nodes eligible: {surface_snap_mask.sum():,}")
+print(f"Surface nodes eligible: {surface_mask.sum():,}")
 
 gdf_nodes_snapped = snap_nodes(
-    gdf_nodes_snapped,
-    ep_surface,
-    node_mask=surface_snap_mask,
-    max_distance_m=250,
-    label="Surface",
-    direction_col="link_directions",
-    target_id_cols=["x_round", "y_round"],
+    gdf_nodes_snapped, ep_surface,
+    node_mask      = surface_mask,
+    max_distance_m = 250,
+    label          = "Surface",
+    direction_col  = "link_directions",
+    target_id_cols = ["x_round", "y_round"],
 )
 ```
 
-### Step 2c — Post-Snap Summary (Surface)
-
 ```{python}
-surf_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Surface"]["snap_distance_m"]
-print(f"Surface nodes snapped:   {len(surf_snapped):,}")
-print(f"  median move:           {surf_snapped.median():.1f}m")
-print(f"  max move:              {surf_snapped.max():.1f}m")
-print(f"  moved < 50m:           {(surf_snapped < 50).sum():,}  ({(surf_snapped < 50).mean()*100:.0f}%)")
-print(f"  moved 50–200m:         {((surf_snapped >= 50) & (surf_snapped <= 200)).sum():,}")
+surf_dists = gdf_nodes_snapped.loc[gdf_nodes_snapped["snap_rule"] == "Surface", "snap_distance_m"]
+print(f"Surface nodes snapped:  {len(surf_dists):,}")
+print(f"  median: {surf_dists.median():.1f}m  |  max: {surf_dists.max():.1f}m")
+print(f"  < 50m:  {(surf_dists < 50).sum():,}  ({(surf_dists < 50).mean()*100:.0f}%)")
+print(f"  50-200m: {((surf_dists >= 50) & (surf_dists <= 200)).sum():,}")
 ```
-
-### Step 2d — Surface Post-Snap Map
 
 ```{python}
 #| eval: false
 
+# Folium validation map — Surface snapping
 surf_snapped_gdf  = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Surface"]
 surf_original_gdf = gdf_nodes.loc[surf_snapped_gdf.index]
-
 surf_snapped_wgs  = surf_snapped_gdf.to_crs(CRS_WGS)
 surf_original_wgs = surf_original_gdf.to_crs(CRS_WGS)
 
-connectors_surf = []
-for idx in surf_snapped_gdf.index:
-    orig = surf_original_wgs.geometry.loc[idx]
-    snap = surf_snapped_wgs.geometry.loc[idx]
-    if orig.distance(snap) > 0:
-        connectors_surf.append({
-            "geometry": LineString([orig, snap]),
-            "N": int(surf_snapped_gdf.loc[idx, "N"]),
-            "dist_m": float(surf_snapped_gdf.loc[idx, "snap_distance_m"]),
-        })
+connectors_surf = [
+    {"geometry": LineString([surf_original_wgs.geometry.loc[idx], surf_snapped_wgs.geometry.loc[idx]]),
+     "N": int(surf_snapped_gdf.loc[idx, "N"]),
+     "dist_m": float(surf_snapped_gdf.loc[idx, "snap_distance_m"])}
+    for idx in surf_snapped_gdf.index
+    if surf_original_wgs.geometry.loc[idx].distance(surf_snapped_wgs.geometry.loc[idx]) > 0
+]
 gdf_surf_connectors = gpd.GeoDataFrame(connectors_surf, crs=CRS_WGS)
 
 center = [surf_original_wgs.geometry.y.mean(), surf_original_wgs.geometry.x.mean()]
-m_post_surf = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
-
+m_surf = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
 for _, row in gdf_surf_connectors.iterrows():
-    folium.PolyLine(
-        [(c[1], c[0]) for c in row.geometry.coords],
-        color="#888780", weight=1, opacity=0.5,
-        tooltip=f"N: {row['N']} | {row['dist_m']}m",
-    ).add_to(m_post_surf)
-
+    folium.PolyLine([(c[1], c[0]) for c in row.geometry.coords],
+                    color="#888780", weight=1, opacity=0.5,
+                    tooltip=f"N: {row['N']} | {row['dist_m']}m").add_to(m_surf)
 for idx, row in surf_original_wgs.iterrows():
-    folium.CircleMarker(
-        location=[row.geometry.y, row.geometry.x], radius=3,
-        color="#E24B4A", fill=True, fill_opacity=0.7,
-        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)",
-    ).add_to(m_post_surf)
-
+    folium.CircleMarker(location=[row.geometry.y, row.geometry.x], radius=3,
+                        color="#E24B4A", fill=True, fill_opacity=0.7,
+                        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)").add_to(m_surf)
 for idx, row in surf_snapped_wgs.iterrows():
-    folium.CircleMarker(
-        location=[row.geometry.y, row.geometry.x], radius=3,
-        color="#1D9E75", fill=True, fill_opacity=0.7,
-        tooltip=f"N: {int(surf_snapped_gdf.loc[idx, 'N'])} | {surf_snapped_gdf.loc[idx, 'snap_distance_m']}m",
-    ).add_to(m_post_surf)
-
-folium.LayerControl(collapsed=False).add_to(m_post_surf)
-m_post_surf
+    folium.CircleMarker(location=[row.geometry.y, row.geometry.x], radius=3,
+                        color="#1D9E75", fill=True, fill_opacity=0.7,
+                        tooltip=f"N: {int(surf_snapped_gdf.loc[idx, 'N'])} | {surf_snapped_gdf.loc[idx, 'snap_distance_m']}m").add_to(m_surf)
+folium.LayerControl(collapsed=False).add_to(m_surf)
+m_surf
 ```
 
----
+### D3 — Transit Snapping
 
-## Step 3 — Transit Node Snapping
-
-FixedTransit nodes snapped to Light Rail (TRAX) and Commuter Rail (FrontRunner)
-stops only — bus stops are excluded. Twin platforms merged to station centroid.
-
-### Step 3a — Snap Transit Nodes
+FixedTransit nodes snap to Light Rail (TRAX) and Commuter Rail (FrontRunner)
+stops. Bus stops are excluded. Twin platforms merged to station centroid.
 
 ```{python}
-rail_stops_grouped = []
-for name, group in gdf_rail_stops.groupby("stop_name"):
-    merged_geom = group.geometry.union_all().centroid
-    merged_ids = ",".join(group["stop_id"].astype(str).unique())
-    rail_stops_grouped.append({"stop_name": name, "stop_id": merged_ids, "geometry": merged_geom})
-
-gdf_rail_stops_grouped = gpd.GeoDataFrame(rail_stops_grouped, crs=CRS_UTM)
-
-gdf_nodes_snapped = snap_transit(
-    gdf_nodes_snapped,
-    gdf_rail_stops_grouped,
-    node_mask=gdf_nodes_snapped["FixedTransit"],
-    max_distance_m=200,
-    label="FixedTransit_Rail",
-    target_id_cols=["stop_name", "stop_id"],
+# Merge co-located platforms (same stop_name) to a single centroid.
+# geometry column is plain shapely objects after the lambda — no inherited CRS.
+# gdf_rail_stops is already in CRS_UTM (reprojected at import), so set directly.
+rail_stops_merged = (
+    gdf_rail_stops.groupby("stop_name")
+    .apply(
+        lambda g: pd.Series(
+            {
+                "stop_id": ",".join(g["stop_id"].astype(str).unique()),
+                "geometry": g.geometry.union_all().centroid,
+            }
+        ),
+        include_groups=False,
+    )
+    .reset_index()
 )
+gdf_rail_stops_grouped = gpd.GeoDataFrame(
+    rail_stops_merged,
+    geometry="geometry",
+    crs=CRS_UTM,
+)
+
+print(f"Grouped rail stops: {len(gdf_rail_stops_grouped):,}")
 ```
 
-### Step 3b — Post-Snap Summary (Transit)
-
 ```{python}
-transit_snapped = gdf_nodes_snapped[
-    gdf_nodes_snapped["snap_rule"] == "FixedTransit_Rail"
-]["snap_distance_m"]
-print(f"Transit nodes snapped:   {len(transit_snapped):,}")
-print(f"  median move:           {transit_snapped.median():.1f}m")
-print(f"  max move:              {transit_snapped.max():.1f}m")
+transit_dists = gdf_nodes_snapped.loc[
+    gdf_nodes_snapped["snap_rule"] == "FixedTransit_Rail", "snap_distance_m"
+]
+print(f"Transit nodes snapped: {len(transit_dists):,}")
+print(f"  median: {transit_dists.median():.1f}m  |  max: {transit_dists.max():.1f}m")
 ```
 
 ---
@@ -1220,10 +888,9 @@ print(f"  max move:              {transit_snapped.max():.1f}m")
 ## Overall Snap Summary
 
 ```{python}
-print("Snap results by rule:")
+print("Results by snap rule:")
 print(gdf_nodes_snapped.value_counts("snap_rule").rename("NodeCount").to_frame().to_string())
-
-print(f"\nTotal nodes:        {len(gdf_nodes_snapped):,}")
+print(f"\nTotal:              {len(gdf_nodes_snapped):,}")
 print(f"Snapped:            {gdf_nodes_snapped['snapped'].sum():,}"
       f"  ({gdf_nodes_snapped['snapped'].mean()*100:.1f}%)")
 print(f"Exceeded threshold: {(gdf_nodes_snapped['snap_rule'] == 'exceeded_threshold').sum():,}")
@@ -1231,13 +898,14 @@ print(f"Not attempted:      {(gdf_nodes_snapped['snap_rule'] == 'none').sum():,}
 ```
 
 ```{python}
+# Exceeded-threshold detail table
 bool_cols = [c for c in gdf_nodes_snapped.columns if gdf_nodes_snapped[c].dtype == bool]
 gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "exceeded_threshold"][
     ["N", "snap_distance_m"] + bool_cols
 ].sort_values("snap_distance_m", ascending=False)
 ```
 
-### Conflation Performance Metrics
+### Conflation Performance — KPIs and ECDF
 
 ```{python}
 snapped_nodes = gdf_nodes_snapped[gdf_nodes_snapped["snapped"]]
@@ -1252,35 +920,30 @@ kpi_table = (
     )
     .round(1)
 )
-
 print("=== SNAPPING PERFORMANCE KPIs ===")
 print(kpi_table.to_string())
-print(
-    "\nTotal Nodes Exceeding Threshold:",
-    (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold").sum(),
-)
+print("\nNodes exceeding threshold:", (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold").sum())
+```
+
+```{python}
+COLOR_MAP = {
+    "Freeway_Only":      "#1D9E75",
+    "Freeway_Gore":      "#534AB7",
+    "Interchange_Only":  "#EF9F27",
+    "Surface":           "#378ADD",
+    "FixedTransit_Rail": "#888780",
+}
 
 fig, ax = plt.subplots(figsize=(10, 6))
 fig.patch.set_facecolor("white")
 ax.set_facecolor("white")
 
-color_map = {
-    "Freeway_Only":       "#1D9E75",
-    "Freeway_Gore":       "#534AB7",
-    "Interchange_Only":   "#EF9F27",
-    "Surface":            "#378ADD",
-    "FixedTransit_Rail":  "#888780",
-}
-
 for rule, group_data in snapped_nodes.groupby("snap_rule"):
     distances = np.sort(group_data["snap_distance_m"].dropna())
     y = np.arange(1, len(distances) + 1) / len(distances)
-    ax.step(
-        distances, y, where="post",
-        label=f"{rule} (n={len(distances):,})",
-        color=color_map.get(rule, "#000000"),
-        linewidth=2,
-    )
+    ax.step(distances, y, where="post",
+            label=f"{rule} (n={len(distances):,})",
+            color=COLOR_MAP.get(rule, "#000000"), linewidth=2)
 
 ax.set_xlim(0, 300)
 ax.set_ylim(0, 1.05)
@@ -1297,8 +960,8 @@ plt.show()
 ### Export
 
 ```{python}
-out_path = config_filepath["out_node_snapped"]
+out_path = PATHS["out_node_snapped"]
 out_path.parent.mkdir(parents=True, exist_ok=True)
-gdf_nodes_snapped.to_file(out_path, driver="GPKG")
+gdf_nodes_snapped.to_crs(CRS_WGS).to_file(out_path, driver="GPKG")
 print(f"Snapped nodes saved to: {out_path}")
 ```
