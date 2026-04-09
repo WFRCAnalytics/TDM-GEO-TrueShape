@@ -159,9 +159,11 @@ in the topology cascade (§A3).
 #         physically collector-distributor geometry, not mainline.
 #
 # Ramp / CD (RAMP_CODES):
-#   30     FwyLoopRamp / 20 MMLoopRamp — fwy-to-fwy connectors with mainline geometry
-#   28/29  MM on/off ramps  |  41/42  Fwy on/off ramps
-#   21/31  CD roads (merged with ramps — FT distinction is unreliable in practice)
+#   20     MM loop ramp  (fwy-to-fwy connector, MM series)
+#   30     Fwy loop ramp (fwy-to-fwy connector, Fwy series)
+#   28/29  MM on/off ramps
+#   41/42  Fwy on/off ramps
+#   21/31  CD roads (merged with ramps — FT distinction unreliable in practice)
 #
 # Surface (SURFACE_CODES):
 #   2/3  Principal/Minor Arterial  |  4/5  Major/Minor Collector  |  6/7  Local/Unpaved
@@ -439,6 +441,10 @@ ep_agg = gdf_ep_raw.groupby(["x_round", "y_round"], as_index=False).agg(
     is_freeway=("is_freeway", "any"),
     is_interchange=("is_interchange", "any"),
     is_surface=("is_surface", "any"),
+    fw_route_count=(
+        "dot_rtname",
+        lambda s: s[gdf_ep_raw.loc[s.index, "is_freeway"]].str[:4].nunique(),
+    ),
 )
 ep_agg["geometry"] = gpd.points_from_xy(ep_agg["x_round"], ep_agg["y_round"])
 gdf_ep_unique = gpd.GeoDataFrame(ep_agg, crs=CRS_UTM)
@@ -566,8 +572,19 @@ Three passes in topology-priority order.
 ```{python}
 # ── Endpoint pools (by ep_type) ───────────────────────────────────────────
 ep_fwy_only = gdf_ep_unique[gdf_ep_unique["ep_type"] == "fwy"].copy()
-ep_gore     = gdf_ep_unique[gdf_ep_unique["ep_type"] == "gore"].copy()
-ep_ic_only  = gdf_ep_unique[gdf_ep_unique["ep_type"].isin(["ramp", "ramp_sf"])].copy()
+ep_gore = (
+    pd.concat(
+        [
+            gdf_ep_unique[gdf_ep_unique["ep_type"] == "gore"],
+            gdf_ep_unique[
+                (gdf_ep_unique["ep_type"] == "fwy") & (gdf_ep_unique["fw_route_count"] >= 2)
+            ],
+        ]
+    )
+    .drop_duplicates()
+    .copy()
+)
+ep_ic_only = gdf_ep_unique[gdf_ep_unique["ep_type"].isin(["ramp", "ramp_sf"])].copy()
 
 print(f"Pass (a) endpoint pool — fwy only:       {len(ep_fwy_only):,}")
 print(f"Pass (b) endpoint pool — gore:           {len(ep_gore):,}")
@@ -576,9 +593,9 @@ print(f"Pass (c) endpoint pool — ramp + ramp_sf: {len(ep_ic_only):,}")
 # ── Node masks ────────────────────────────────────────────────────────────
 print()
 print(f"Pass (a)  nodes — freeway-only: {(is_fwy_node & ~is_ramp_node).sum():,}")
-print(f"Pass (b)  nodes — gore:         {(is_fwy_node &  is_ramp_node).sum():,}")
+print(f"Pass (b)  nodes — gore:         {(is_fwy_node & is_ramp_node).sum():,}")
 print(f"Pass (c)  nodes — pure ramp:    {(~is_fwy_node & is_ramp_node & ~is_surface_node).sum():,}")
-print(f"  ramp_sf nodes → surface pass: {(~is_fwy_node & is_ramp_node &  is_surface_node).sum():,}")
+print(f"  ramp_sf nodes → surface pass: {(~is_fwy_node & is_ramp_node & is_surface_node).sum():,}")
 ```
 
 ```{python}
