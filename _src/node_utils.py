@@ -287,12 +287,23 @@ def _resolve_direction(
                 lrs_char = str(rt)[4:5] if rt and len(str(rt)) > 4 else ""
                 collected.update(_DIR_FROM_LRS.get(lrs_char, set()))
     else:
-        for d, rt, is_ic in zip(directions, dot_rtnames, is_interchange_flags):
+        for d, fn, rt, is_ic in zip(directions, fullnames, dot_rtnames, is_interchange_flags):
             if not is_ic:
                 continue
             d_up = str(d).strip().upper()
             if d_up in _CARDINAL:
                 collected.add(d_up)
+            elif fn:
+                # Prefer FULLNAME cardinal token (e.g. "EB" from "I-215S EB X11 OFF STATE RAMP")
+                # over LRS P/N — the ramp's own travel direction matters, not the
+                # parent freeway corridor direction encoded in DOT_RTNAME[4].
+                token = _extract_fullname_direction(fn)
+                if token:
+                    collected.add(token)
+                elif rt:
+                    # LRS P/N fallback only when FULLNAME has no cardinal token
+                    lrs_char = str(rt)[4:5] if len(str(rt)) > 4 else ""
+                    collected.update(_DIR_FROM_LRS.get(lrs_char, set()))
             elif rt:
                 lrs_char = str(rt)[4:5] if len(str(rt)) > 4 else ""
                 collected.update(_DIR_FROM_LRS.get(lrs_char, set()))
@@ -391,7 +402,11 @@ def _spatial_snap(
     target_geoms_orig = snap_targets.geometry.values
     tree = STRtree(target_geoms_proj)
 
-    DIR_GROUP = {"NB": "P", "EB": "P", "P": "P", "SB": "N", "WB": "N", "N": "N"}
+    # Only cardinal directions are valid group keys.
+    # Raw LRS characters "P" / "N" must NOT appear here — if a DIRECTION column
+    # contains raw LRS values instead of cardinals, they fall through as unresolved
+    # rather than creating a false cross-side group match.
+    DIR_GROUP = {"NB": "P", "EB": "P", "SB": "N", "WB": "N"}
 
     # ── GERS attribute storage ─────────────────────────────────────────────
     snapped_attrs: dict[str, list] = {}
