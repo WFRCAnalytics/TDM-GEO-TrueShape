@@ -46,18 +46,18 @@ from _src.node_utils import (
 ```{python}
 # ── Filepaths ──────────────────────────────────────────────────────────────
 PATHS = {
-    "in_centerlines":      Path("_data/raw/BangerterEdits.gdb.zip"),
-    "in_network_links":    Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
-    "in_network_nodes":    Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
-    "in_gtfs":             Path("_data/raw/uta_gtfs.zip"),
+    "in_centerlines": Path("_data/raw/TestNetwork.zip"),
+    "in_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
+    "in_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
+    "in_gtfs": Path("_data/raw/uta_gtfs.zip"),
     "out_node_classified": Path("_data/processed/nodes_classified.gpkg"),
-    "out_node_snapped":    Path("_data/processed/nodes_snapped.gpkg"),
-    "out_debug":           Path("_data/processed/debug_snapping.gpkg"),
+    "out_node_snapped": Path("_data/processed/nodes_snapped.gpkg"),
+    "out_debug": Path("_data/processed/debug_snapping.gpkg"),
 }
 
 # ── CRS ───────────────────────────────────────────────────────────────────
-CRS_UTM = "EPSG:26912"   # NAD83 UTM Zone 12N — Utah (metric)
-CRS_WGS = "EPSG:4326"    # WGS84 — required by Folium
+CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
+CRS_WGS = "EPSG:4326"  # WGS84 — required by Folium
 ```
 
 ---
@@ -67,13 +67,23 @@ CRS_WGS = "EPSG:4326"    # WGS84 — required by Folium
 ### Roadway Centerlines
 
 ```{python}
+# 1. Prepare the Path
+# We use .as_posix() to handle slashes correctly regardless of OS
+# gdb_path = f"/vsizip/{PATHS['in_centerlines']}"
+gdb_path = f"/vsizip/{PATHS['in_centerlines'].as_posix()}/TestNetwork"
+
+# 2. View the actual layers within the gdb
+gpd.list_layers(gdb_path)
+```
+
+```{python}
 COUNTY_FIPS = ["49003", "49057", "49011", "49035", "49049"]
 county_filter = "(" + ", ".join(f"'{f}'" for f in COUNTY_FIPS) + ")"
 
 gdf_centerlines = gpd.read_file(
-    f"/vsizip/{PATHS['in_centerlines']}",
-    layer="RoadsBangerterEtc",
-    where=f"COUNTY_L IN {county_filter} OR COUNTY_R IN {county_filter}",
+    gdb_path,  # f"/vsizip/{PATHS['in_centerlines']}",
+    layer="TestNetwork20260410",
+    where=f"(DOT_FCLASS IN ('Interstate', 'Local', 'Major Collector', 'Minor Arterial', 'Minor Collector', 'Other Freeway', 'Principal Arterial') OR DOT_RTNAME LIKE '%R%' Or DOT_RTNAME LIKE '%C%') AND CARTOCODE <> '99' AND (COUNTY_L IN {county_filter} OR COUNTY_R IN {county_filter})",
 ).to_crs(CRS_UTM)
 
 # Strip trailing whitespace from categorical fields (source-data artefact)
