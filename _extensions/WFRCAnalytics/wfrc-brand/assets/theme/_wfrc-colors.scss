@@ -1,0 +1,66 @@
+// WFRC Brand Colors from _brand.yml
+// This file defines all color variables based on the brand palette
+
+// Primary WFRC Colors
+$wfrc-blue: #023c5b;
+$wfrc-secondary-blue: #52b6d5;
+$wfrc-yellow: #f8b93e;
+$wfrc-gray: #7f7a76;
+
+// Core Palette
+$blue: #036fa8;
+$purple: #553c8f;
+$red: #d32f00;
+$orange: #ea7b00;
+$yellow: #eab500;
+$green: #007426;
+
+// RTP (Regional Transportation Plan) Colors
+$rtp-fuschia: #9d4879;
+$rtp-maroon: #6f2d3d;
+$rtp-red: #c23c33;
+$rtp-pink: #e28c7f;
+$rtp-mustard: #c98b3a;
+$rtp-green: #789d4b;
+$rtp-seafoam: #597f72;
+$rtp-turquoise: #608a8f;
+$rtp-blue: #3f748e;
+$rtp-purple: #585377;
+
+// Wasatch Choice Center Colors
+$wc-metro: #a62966;
+$wc-urban: #e65937;
+$wc-city: #f2a03e;
+$wc-neighborhood: #f8dc26;
+$wc-residential: #fdf7ca;
+$wc-open-space: #a3bb93;
+$wc-employment: #f4c9cd;
+$wc-industrial: #ded2e8;
+
+// Wasatch Choice Transit/Line Colors
+$wc-roadways: #a3423c;
+$wc-brt: #24949a;
+$wc-light-rail: #3762ad;
+$wc-commuter-rail: #24316d;
+$wc-trails: #799f4c;
+
+// Unified Plan Colors
+$up-primary-blue: #083e5f;
+$up-secondary-blue: #5a85c4;
+$up-gray: #d3d4d5;
+
+// Neutral/Standard colors
+$white: #ffffff;
+$black: #151515;
+
+// =============================================================================
+// NOTE: Quarto auto-generates $brand-{palette-key} Sass variables from every
+// entry in brand.yml's color.palette block. For example:
+//   $brand-wfrc-blue         → #023c5b
+//   $brand-wfrc-secondary-blue → #52b6d5
+//   $brand-rtp-green         → #789d4b
+//   ... and so on for every key defined in brand.yml color.palette
+//
+// Use those auto-generated variables in any custom SCSS you write within
+// projects that install this extension — no manual aliases needed.
+// =============================================================================

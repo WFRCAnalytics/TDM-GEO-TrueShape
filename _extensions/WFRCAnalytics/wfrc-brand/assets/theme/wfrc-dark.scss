@@ -1,0 +1,321 @@
+/*-- scss:defaults --*/
+
+// Import WFRC brand colors and fonts
+@import "wfrc-colors";
+@import "wfrc-fonts";
+
+// ===== DARK MODE SCSS DEFAULTS =====
+// brand.yml handles (same for both modes, no need to repeat here):
+//   all font families, sizes, weights, line-heights, link-decoration.
+// Dark mode MUST override: primary/secondary colors, body colors, link colors,
+//   semantic colors, heading color, code colors, and layout component colors —
+//   because brand.yml only holds single (light) values for these.
+
+// Primary — dark mode inverts: secondary-blue becomes the primary interactive color
+$primary: $wfrc-secondary-blue;
+$secondary: lighten($wfrc-secondary-blue, 15%);
+
+// Body colors — inverted for dark mode
+// #081b26 is brand.yml's designed dark background (L=9%, S=65%) — richer and less harsh
+// than a pure SCSS computation off wfrc-blue (which produces oversaturated near-black).
+$body-bg: #081b26;
+$body-color: darken($white, 5%); // Slightly off-white for better readability
+$body-secondary: lighten($wfrc-gray, 20%);
+
+// Link colors — lightened for legibility on dark background
+$link-color: lighten($wfrc-secondary-blue, 10%);
+$link-hover-color: lighten($wfrc-secondary-blue, 20%);
+$link-hover-decoration: none;
+
+// Semantic colors — lightened for dark mode legibility
+$success: lighten($rtp-green, 15%);
+$info: lighten($rtp-blue, 15%);
+$warning: $wfrc-yellow;
+$danger: lighten($rtp-red, 15%);
+
+// Headings — lighter for dark (brand.yml sets wfrc-blue which is too dark on dark bg)
+$headings-color: lighten($wfrc-secondary-blue, 15%);
+
+// Code — inline and block share the same bg for visual consistency.
+// #0d2d44: elevated navy (L≈16%), clearly distinct from body-bg #081b26 (L≈9%).
+$code-color: lighten($wfrc-secondary-blue, 25%);
+$code-bg: #0d2d44;
+$code-block-bg: #0d2d44;
+$code-block-border: lighten($wfrc-blue, 12%);
+
+// Tables
+$table-border-color: lighten($wfrc-blue, 20%);
+$table-group-separator-color: lighten($wfrc-blue, 15%);
+$table-caption-color: $body-secondary;
+
+// Table of contents
+$toc-color: $link-color;
+$toc-active-border: $toc-color;
+$toc-inactive-border: darken($toc-color, 30%);
+
+// Navbar — slightly offset from body-bg for subtle visual separation
+$navbar-bg: darken(#081b26, 2%);
+$navbar-fg: lighten($wfrc-secondary-blue, 15%);
+
+// Footer
+$footer-fg: darken($white, 5%);
+$footer-bg: $body-bg;
+
+// Gray scale
+$gray-200: lighten($wfrc-blue, 15%);
+$gray-700: lighten($wfrc-blue, 10%);
+
+/*-- scss:rules --*/
+
+// Dark mode specific styles
+
+// !important bypasses Quarto's $code-block-bg-alpha mixing.
+div.sourceCode,
+pre.sourceCode {
+    background-color: #0d2d44 !important;
+    border: none;
+    // border: 1px solid $code-block-border;
+    border-radius: 4px;
+}
+
+// Code output
+pre code {
+    color: darken($white, 5%);
+}
+
+// Code with filename
+.code-with-filename .code-with-filename-file {
+    color: $code-color;
+    background-color: $code-bg !important;
+    border: none;
+    // border: 1px solid $code-block-border;
+    border-bottom: none;
+
+    pre {
+        background-color: $code-bg !important;
+    }
+}
+
+// Inline code
+p code:not(.sourceCode),
+li code:not(.sourceCode),
+td code:not(.sourceCode) {
+    color: $code-color;
+    background-color: $code-bg;
+    border: 1px solid lighten($wfrc-blue, 15%);
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+}
+
+// Blockquotes
+.blockquote {
+    color: darken($body-color, 15%);
+    font-style: italic;
+    border-left: 3px solid $wfrc-secondary-blue;
+    padding-left: 1em;
+}
+
+// Pagination
+.page-link {
+    color: darken($white, 5%);
+    background-color: lighten($body-bg, 5%);
+    border-color: lighten($body-bg, 15%);
+
+    &:hover {
+        color: $wfrc-blue;
+        background-color: $wfrc-secondary-blue;
+        border-color: $wfrc-secondary-blue;
+    }
+}
+
+// Categories
+.quarto-category {
+    background-color: $body-bg;
+    color: darken($white, 5%);
+    border-color: darken($white, 5%);
+
+    &:hover {
+        background-color: $wfrc-secondary-blue;
+        color: $wfrc-blue;
+    }
+}
+
+// Navbar title
+.navbar-title {
+    color: lighten($wfrc-secondary-blue, 15%);
+
+    &:hover {
+        border-bottom: 1px solid lighten($wfrc-secondary-blue, 15%) !important;
+    }
+}
+
+// Navbar links — color only; font/weight/spacing from wfrc.scss shared rules.
+.navbar-nav .nav-link {
+    color: lighten($wfrc-secondary-blue, 15%) !important;
+
+    &:hover {
+        color: lighten($wfrc-secondary-blue, 25%) !important;
+        border-bottom: 1px solid lighten($wfrc-secondary-blue, 15%) !important;
+    }
+}
+
+// Dropdown menu — Bootstrap defaults to a light background in dark mode, causing
+// white text (from $body-color) on white background. Explicitly override the
+// entire menu container and items to ensure readable dark-mode dropdowns.
+.dropdown-menu {
+    background-color: lighten($body-bg, 5%);
+    border-color: lighten($wfrc-blue, 15%);
+
+    .dropdown-item {
+        color: $body-color;
+
+        &:hover,
+        &:focus {
+            background-color: $wfrc-secondary-blue !important;
+            color: $wfrc-blue !important;
+        }
+    }
+}
+
+// Listing cards
+.card {
+    background: lighten($body-bg, 3%) !important;
+    box-shadow: 1px 1px 10px darken($body-bg, 5%) !important;
+    border: 1px solid lighten($wfrc-blue, 10%);
+}
+
+// Details/summaries
+details>summary {
+    color: $body-secondary;
+}
+
+// Title banner - inverted for dark mode
+.quarto-title-banner {
+    background-color: lighten($wfrc-blue, 5%) !important;
+
+    .title,
+    .subtitle,
+    .quarto-title-author-name,
+    .quarto-title-affiliation {
+        color: darken($white, 5%) !important;
+    }
+}
+
+// Buttons
+.btn-primary {
+    background-color: $wfrc-secondary-blue;
+    border-color: $wfrc-secondary-blue;
+    color: $wfrc-blue;
+
+    &:hover {
+        background-color: lighten($wfrc-secondary-blue, 10%);
+        border-color: lighten($wfrc-secondary-blue, 10%);
+    }
+}
+
+.btn-secondary {
+    background-color: lighten($wfrc-blue, 10%);
+    border-color: lighten($wfrc-blue, 10%);
+    color: $white;
+
+    &:hover {
+        background-color: lighten($wfrc-blue, 15%);
+        border-color: lighten($wfrc-blue, 15%);
+    }
+}
+
+// Footer links
+.nav-footer a {
+    color: lighten($wfrc-secondary-blue, 15%);
+
+    &:hover {
+        color: lighten($wfrc-secondary-blue, 25%);
+    }
+}
+
+// Social icons
+.nav-footer-center i,
+.about-links .about-link i,
+.link-dark.me-1 i {
+    color: lighten($wfrc-secondary-blue, 15%) !important;
+
+    &:hover {
+        color: lighten($wfrc-secondary-blue, 25%) !important;
+    }
+}
+
+// Name highlight
+.name-highlight {
+    color: $white !important;
+    // background-color: lighten($wfrc-secondary-blue, 20%) !important;
+    // padding: 0.1em 0.4em;
+    // border-radius: 3px;
+}
+
+// Headings use lighter brand color
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6 {
+    font-family: $headings-font-family;
+    color: $headings-color;
+    font-weight: $headings-font-weight;
+    line-height: $headings-line-height;
+}
+
+// Links
+a {
+    text-decoration: $link-text-decoration;
+    text-underline-offset: $link-text-underline-offset;
+}
+
+// Filter and sort icon backgrounds
+.input-group-text {
+    background-color: lighten($body-bg, 5%) !important;
+}
+
+// Panel tabset selected tab
+.panel-tabset .nav-tabs .nav-link.active {
+    color: darken($white, 5%) !important;
+    background-color: lighten($body-bg, 5%);
+    border-color: lighten($wfrc-blue, 15%);
+}
+
+// WebR cell background
+.cm-content {
+    background-color: lighten($body-bg, 3%) !important;
+}
+
+// Preserve active line highlighting
+.cm-activeLine {
+    background-color: lighten($body-bg, 8%) !important;
+}
+
+// Fix selection highlighting z-index and color
+.cm-selectionLayer {
+    z-index: 1 !important;
+}
+
+.cm-selectionBackground {
+    background-color: $wfrc-secondary-blue !important;
+    opacity: 0.3 !important;
+}
+
+// Syntax highlighting — dracula theme bolds 'cn' (constants: NULL, TRUE, FALSE, NA).
+// Override to normal weight to match light mode (github theme) behaviour.
+code span.cn {
+    font-weight: normal;
+}
+
+// WebR cell comment color
+.tok-comment {
+    color: $body-secondary !important;
+}

@@ -1,0 +1,251 @@
+/*-- scss:defaults --*/
+
+// Import WFRC brand colors and fonts
+@import "wfrc-colors";
+@import "wfrc-fonts";
+
+// ===== LIGHT MODE SCSS DEFAULTS =====
+// brand.yml already handles via its Bootstrap variable mapping:
+//   primary, secondary, body-color, body-bg, link-color, link-decoration,
+//   success/info/warning/danger, all font families/sizes/weights/line-heights,
+//   headings-color, monospace-inline code-color/code-bg.
+// Only declare what brand.yml cannot express.
+
+// Body secondary color (brand.yml has no equivalent mapping)
+$body-secondary: $wfrc-gray;
+
+// Link hover states (brand.yml only handles link.color, not hover)
+$link-hover-color: darken($wfrc-secondary-blue, 10%);
+$link-hover-decoration: none;
+
+// Code — inline and block share the same bg for visual consistency.
+// !important in CSS rules below bypasses Quarto's $code-block-bg-alpha mixing.
+$code-color: $wfrc-blue; // dark navy — readable on light bg
+$code-bg: #e6ebf1; // soft blue-gray
+$code-block-bg: #e6ebf1; // same as $code-bg
+$code-block-border: lighten($wfrc-gray, 30%);
+
+// Tables
+$table-border-color: lighten($wfrc-blue, 60%);
+$table-group-separator-color: lighten($wfrc-blue, 70%);
+$table-caption-color: $body-secondary;
+
+// Table of contents
+$toc-color: $wfrc-secondary-blue;
+$toc-active-border: $toc-color;
+$toc-inactive-border: lighten($toc-color, 50%);
+
+// Navbar (brand.yml primary/background don't directly map to these Bootstrap navbar vars)
+$navbar-bg: $white;
+$navbar-fg: $wfrc-blue;
+
+// Footer
+$footer-fg: $wfrc-blue;
+$footer-bg: $white;
+
+// Gray scale adjustment
+$gray-200: lighten($wfrc-blue, 70%);
+
+/*-- scss:rules --*/
+
+// Light mode specific styles
+
+// !important bypasses Quarto's $code-block-bg-alpha mixing
+// (which blends $code-block-bg against body-bg before emitting CSS).
+div.sourceCode,
+pre.sourceCode {
+    background-color: #e6ebf1 !important;
+    border: none;
+    // border: 1px solid $code-block-border;
+    border-radius: 4px;
+}
+
+// Code with filename
+.code-with-filename .code-with-filename-file {
+    color: $code-color;
+    background-color: $code-bg;
+    border: none;
+    // border: 1px solid $code-block-border;
+    border-bottom: none;
+
+    pre {
+        background-color: $code-bg;
+    }
+}
+
+// Inline code
+p code:not(.sourceCode),
+li code:not(.sourceCode),
+td code:not(.sourceCode) {
+    color: $code-color;
+    background-color: $code-bg;
+    border: 1px solid lighten($wfrc-blue, 50%);
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+}
+
+// Blockquotes
+.blockquote {
+    color: lighten($wfrc-blue, 15%);
+    font-style: italic;
+    border-left: 3px solid $wfrc-secondary-blue;
+    padding-left: 1em;
+}
+
+// Pagination
+.page-link {
+    color: $wfrc-blue;
+
+    &:hover {
+        color: $white;
+        background-color: $wfrc-blue;
+        border-color: $wfrc-blue;
+    }
+}
+
+// Categories
+.quarto-category {
+    background-color: $wfrc-blue;
+    color: $white;
+    border-color: $wfrc-blue;
+
+    &:hover {
+        background-color: $white;
+        color: $wfrc-blue;
+        border-color: $wfrc-blue;
+    }
+}
+
+// Navbar title
+.navbar-title {
+    color: $wfrc-blue;
+
+    &:hover {
+        border-bottom: 1px solid $wfrc-blue !important;
+    }
+}
+
+// Navbar links — primary wfrc-blue in light mode.
+// font/size/case handled in wfrc.scss shared rules.
+.navbar-nav .nav-link {
+    color: $wfrc-blue !important;
+
+    &:hover {
+        color: darken($wfrc-blue, 10%) !important;
+        border-bottom: 1px solid $wfrc-blue !important;
+    }
+}
+
+// Dropdown caret — Bootstrap compiles --bs-navbar-color as rgba($navbar-fg, α)
+// under .navbar-light, which outspecifics our .navbar override. The ::after
+// pseudo-element uses border-top:solid (currentColor). Setting color AND
+// border-top-color directly on the pseudo-element bypasses the custom-property
+// resolution chain entirely.
+.navbar-nav .nav-link.dropdown-toggle::after,
+.navbar-nav .nav-item .dropdown-toggle::after {
+    color: $wfrc-blue !important;
+    border-top-color: $wfrc-blue !important;
+}
+
+// Dropdown menu items — broad selector catches navbar menus and tools dropdowns
+.dropdown-menu .dropdown-item {
+    &:hover {
+        background-color: $wfrc-secondary-blue !important;
+        color: $white !important;
+    }
+}
+
+// Listing cards
+.card {
+    background: $white;
+    box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.1);
+    border: 1px solid lighten($wfrc-gray, 30%);
+}
+
+// Title banner
+.quarto-title-banner {
+    background-color: $wfrc-blue !important;
+
+    .title,
+    .subtitle,
+    .quarto-title-author-name,
+    .quarto-title-affiliation {
+        color: $white !important;
+    }
+}
+
+// Buttons
+.btn-primary {
+    background-color: $wfrc-blue;
+    border-color: $wfrc-blue;
+    color: $white;
+
+    &:hover {
+        background-color: darken($wfrc-blue, 10%);
+        border-color: darken($wfrc-blue, 10%);
+    }
+}
+
+.btn-secondary {
+    background-color: $wfrc-secondary-blue;
+    border-color: $wfrc-secondary-blue;
+    color: $white;
+
+    &:hover {
+        background-color: darken($wfrc-secondary-blue, 10%);
+        border-color: darken($wfrc-secondary-blue, 10%);
+    }
+}
+
+// Footer links
+.nav-footer a {
+    color: $wfrc-secondary-blue;
+
+    &:hover {
+        color: darken($wfrc-secondary-blue, 10%);
+    }
+}
+
+// Social icons
+.nav-footer-center i,
+.about-links .about-link i,
+.link-dark.me-1 i {
+    color: $wfrc-secondary-blue !important;
+
+    &:hover {
+        color: darken($wfrc-secondary-blue, 10%) !important;
+    }
+}
+
+// Name highlight
+.name-highlight {
+    color: $wfrc-blue !important;
+    // background-color: $brand-wfrc-blue !important;
+    // padding: 0.1em 0.4em;
+    // border-radius: 3px;
+}
+
+// Headings use brand color
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6 {
+    font-family: $headings-font-family;
+    color: $headings-color;
+    font-weight: $headings-font-weight;
+    line-height: $headings-line-height;
+}
+
+// Links
+a {
+    text-decoration: $link-text-decoration;
+    text-underline-offset: $link-text-underline-offset;
+}

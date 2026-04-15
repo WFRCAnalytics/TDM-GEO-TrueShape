@@ -1,0 +1,173 @@
+meta:
+  name:
+    short: WFRC
+    full: Wasatch Front Regional Council
+  link:
+    home: https://wfrc.utah.gov/
+    github: https://github.com/WFRCAnalytics
+    linkedin: https://www.linkedin.com/company/wasatch-front-regional-council
+    twitter: https://twitter.com/wasatchcouncil
+    facebook: https://www.facebook.com/WasatchFrontRegionalCouncil
+    instagram: https://www.instagram.com/wasatchfrontregionalcouncil/
+    youtube: https://www.youtube.com/user/wfrcvideo
+  description: |
+    The Wasatch Front Regional Council builds consensus and enhances quality of
+    life by developing and implementing visions and plans for a well-functioning
+    multi-modal transportation system, livable communities, a strong economy,
+    and a healthy environment.
+  founded:
+    aog: 1969
+    mpo: 1973
+
+logo:
+  images:
+    horizontal-color: "assets/logo/horizontal/WFRC_logo_horizontal_color_transparent.png"
+    horizontal-white: "assets/logo/horizontal/WFRC_logo_horizontal_white_transparent.png"
+    stacked-color: "assets/logo/stacked/WFRC_logo_stacked_color_transparent.png"
+    stacked-white: "assets/logo/stacked/WFRC_logo_stacked_white_transparent.png"
+    abbreviated-color: "assets/logo/abbreviated/WFRC_logo_abbreviated_color_transparent.png"
+    abbreviated-white: "assets/logo/abbreviated/WFRC_logo_abbreviated_white_transparent.png"
+  large:
+    light: horizontal-color
+    dark: horizontal-white
+  medium:
+    light: stacked-color
+    dark: stacked-white
+  small:
+    light: abbreviated-color
+    dark: abbreviated-white
+
+typography:
+  fonts:
+    - family: Poppins
+      source: google
+      weight: [300, 400, 500, 600, 700]
+      style: [normal, italic]
+    - family: Inter
+      source: google
+      weight: [300, 400, 500, 600, 700]
+      style: [normal, italic]
+    - family: Fira Code
+      source: google
+      weight: [400, 500, 700]
+      style: [normal, italic]
+  base:
+    family: Poppins
+    weight: 400
+    size: 16px
+    line-height: 1.5
+  headings:
+    family: Inter
+    weight: 700
+    style: normal
+    line-height: 1.2
+    color:
+      light: wfrc-blue # dark navy — high contrast on white
+      dark: "#8fcfe3" # lightened wfrc-secondary-blue — high contrast on dark bg
+  monospace:
+    family: Fira Code
+    weight: 400
+    size: 0.9em
+  monospace-inline:
+    color: wfrc-blue
+    background-color: "#e6ebf1" # matches $code-bg in wfrc-light.scss
+  link:
+    color: wfrc-secondary-blue
+    decoration: underline
+
+color:
+  palette:
+    # Primary WFRC Colors
+    wfrc-blue: "#023c5b"
+    wfrc-secondary-blue: "#52b6d5"
+    wfrc-yellow: "#f8b93e"
+    wfrc-gray: "#7f7a76"
+
+    # Core Palette
+    blue: "#036fa8"
+    purple: "#553c8f"
+    red: "#d32f00"
+    orange: "#ea7b00"
+    yellow: "#eab500"
+    green: "#007426"
+
+    # RTP (Regional Transportation Plan) Colors
+    rtp-fuschia: "#9d4879"
+    rtp-maroon: "#6f2d3d"
+    rtp-red: "#c23c33"
+    rtp-pink: "#e28c7f"
+    rtp-mustard: "#c98b3a"
+    rtp-green: "#789d4b"
+    rtp-seafoam: "#597f72"
+    rtp-turquoise: "#608a8f"
+    rtp-blue: "#3f748e"
+    rtp-purple: "#585377"
+
+    # Wasatch Choice Center Colors
+    wc-metro: "#a62966"
+    wc-urban: "#e65937"
+    wc-city: "#f2a03e"
+    wc-neighborhood: "#f8dc26"
+    wc-residential: "#fdf7ca"
+    wc-open-space: "#a3bb93"
+    wc-employment: "#f4c9cd"
+    wc-industrial: "#ded2e8"
+
+    # Wasatch Choice Transit/Line Colors
+    wc-roadways: "#a3423c"
+    wc-brt: "#24949a"
+    wc-light-rail: "#3762ad"
+    wc-commuter-rail: "#24316d"
+    wc-trails: "#799f4c"
+
+    # Unified Plan Colors
+    up-primary-blue: "#083e5f"
+    up-secondary-blue: "#5a85c4"
+    up-gray: "#d3d4d5"
+
+    # Neutral/Standard colors
+    white: "#ffffff"
+    black: "#151515" # Slightly softened black
+  foreground:
+    light: black
+    dark: white
+  background:
+    light: white
+    dark: "#081b26" # Deep navy; intentionally richer than a pure darkening of wfrc-blue
+
+  # Primary brand colors
+  primary: wfrc-blue
+  secondary: wfrc-secondary-blue
+  tertiary: wfrc-gray
+
+  # Semantic colors
+  success: rtp-green
+  info: rtp-blue
+  warning: wfrc-yellow
+  danger: rtp-red
+  light: white
+  dark: wfrc-gray
+
+defaults:
+  # Use these only when you can’t achieve the desired look with the above primitives.
+  bootstrap: # Additional SCSS you can feed to Bootstrap-based contexts (Quarto/Shiny)
+    defaults:
+      # Example of mapping brand colors to Bootstrap variables
+      primary: $brand-wfrc-blue
+      secondary: $brand-wfrc-secondary-blue
+      success: $brand-rtp-green
+      info: $brand-rtp-turquoise
+      warning: $brand-wfrc-yellow
+      danger: $brand-rtp-red
+    rules: |
+      // Keep components clean; avoid over-styling.
+      a { text-underline-offset: 2px; }
+  quarto:
+    format: {} # Add per-format overrides only when necessary
+  shiny:
+    theme:
+      defaults:
+        navbar-bg: $brand-wfrc-blue
+      rules: |
+        // Example: rounded cards and subtle borders
+        .card { border-radius: .75rem; }

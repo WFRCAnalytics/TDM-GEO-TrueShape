@@ -1,0 +1,120 @@
+website:
+  # Paths in this file must include the _extensions folder path
+  # favicon: "_extensions/WFRCAnalytics/wfrc-brand/assets/logo/abbreviated/WFRC_logo_abbreviated_color_transparent.png"
+
+  twitter-card:
+    creator: "@wasatchcouncil"
+    site: "@wasatchcouncil"
+    card-style: summary_large_image
+  open-graph: true
+  cookie-consent: false
+
+  # ── PER-PROJECT: remove or update this announcement per deployment ─────────
+  announcement:
+    icon: info-circle
+    dismissable: true
+    content: "**Alert** - This website currently contains mostly placeholder items and is currently under development."
+    type: primary
+    position: below-navbar
+
+  # repo-url: "https://github.com/WFRCAnalytics/wfrc-brand"
+  # repo-actions: [source, issue]
+
+  page-navigation: false
+  back-to-top-navigation: false
+  # margin-header: subscribe.html
+
+  # Navbar — logo-alt and Follow Us social menu are org-wide.
+  # navbar.tools (GitHub) stays per-project — repo URLs differ per site.
+  # NOTE: if a project defines its own navbar.right, it replaces this list
+  # entirely. Repeat the Follow Us block in that project's _quarto.yml if needed.
+  navbar:
+    logo-alt: "Wasatch Front Regional Council"
+    right:
+      - text: Follow Us
+        menu:
+          - icon: facebook
+            text: Facebook
+            href: https://www.facebook.com/WasatchFrontRegionalCouncil/
+            target: _blank
+          - icon: twitter-x
+            text: X (Twitter)
+            href: https://twitter.com/wasatchcouncil/
+            target: _blank
+          - icon: instagram
+            text: Instagram
+            href: https://www.instagram.com/wasatchfrontregionalcouncil/
+            target: _blank
+          - icon: linkedin
+            text: LinkedIn
+            href: https://www.linkedin.com/company/wasatch-front-regional-council/
+            target: _blank
+          - icon: youtube
+            text: YouTube
+            href: https://www.youtube.com/user/wfrcvideo/
+            target: _blank
+    tools:
+      - icon: github
+        menu:
+          - text: Source Code
+            href: https://github.com/WFRCAnalytics/wfrcanalytics.github.io
+            target: _blank
+          - text: Report a Bug
+            href: https://github.com/WFRCAnalytics/wfrcanalytics.github.io/issues/new
+            target: _blank
+          - text: Ask a Question
+            href: https://github.com/WFRCAnalytics/wfrcanalytics.github.io/discussions/new/choose
+            target: _blank
+
+  # Footer — all three columns are org-wide defaults.
+  # Right column uses absolute URLs to the main analytics site so Contact
+  # and License work from any downstream project without needing local pages.
+  page-footer:
+    left: "© 2025 [Wasatch Front Regional Council](https://wfrc.utah.gov/)"
+    center:
+      - icon: github
+        href: https://github.com/WFRCAnalytics/
+        aria-label: GitHub
+        target: _blank
+      - icon: facebook
+        href: https://www.facebook.com/WasatchFrontRegionalCouncil/
+        aria-label: Facebook
+        target: _blank
+      - icon: twitter-x
+        href: https://twitter.com/wasatchcouncil/
+        aria-label: X (Twitter)
+        target: _blank
+      - icon: instagram
+        href: https://www.instagram.com/wasatchfrontregionalcouncil/
+        aria-label: Instagram
+        target: _blank
+      - icon: linkedin
+        href: https://www.linkedin.com/company/wasatch-front-regional-council/
+        aria-label: LinkedIn
+        target: _blank
+      - icon: youtube
+        href: https://www.youtube.com/user/wfrcvideo/
+        aria-label: YouTube
+        target: _blank
+    right:
+      - text: Contact
+        aria-label: Contact
+        href: https://wfrcanalytics.github.io/contact/
+        target: _blank
+      - text: License
+        aria-label: License
+        href: https://wfrcanalytics.github.io/license/
+        target: _blank
+
+# Freeze — org standard: auto freeze outputs (re-execute only if file updated)
+# (see https://quarto.org/docs/projects/code-execution.html#freeze)
+execute:
+  freeze: auto
+
+engine: knitr
+knitr:
+  opts_chunk:
+    dev: ragg_png
+jupyter: python3
+
+citation: false

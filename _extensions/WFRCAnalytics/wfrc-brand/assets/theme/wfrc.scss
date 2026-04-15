@@ -1,0 +1,273 @@
+/*-- scss:defaults --*/
+
+// Import Variables
+@import "wfrc-colors";
+@import "wfrc-fonts";
+
+// ===== SHARED QUARTO/BOOTSTRAP COMPONENT DEFAULTS =====
+// These are Quarto-specific layout and component variables not covered by brand.yml.
+// They use !default so the light/dark SCSS files can override where mode-specific
+// values are needed. brand.yml handles: primary, link-color, code-color, and all
+// typography — those are intentionally omitted here.
+
+// Code block display settings
+$code-block-border-left: false !default;
+$code-block-border-left-style: solid !default;
+$code-block-border-left-size: 3px !default;
+$code-block-padding-left: 0.6em !default;
+
+$code-block-bg: true !default;
+$code-block-bg-padding: 0.4em !default;
+$code-block-bg-alpha: -0.35 !default;
+$code-block-theme-dark-threshhold: 40% !default;
+
+// Callout formatting
+$callout-border-width: 2px !default;
+$callout-border-scale: 0% !default;
+$callout-icon-scale: 10% !default;
+$callout-margin-top: 1.25rem !default;
+$callout-margin-bottom: 1.25rem !default;
+
+// Buttons
+$btn-bg: if(variable-exists(secondary), $secondary, #6c757d) !default;
+
+// Gray scale fallbacks
+$white: #ffffff !default;
+$gray-200: #e9ecef !default;
+$gray-900: #212529 !default;
+
+// TOC sizing (colors are set per-mode in light/dark SCSS)
+$toc-font-size: 0.875rem !default;
+$toc-tools-font-size: 0.8rem !default;
+
+// Sidebar
+$sidebar-font-size: 0.925rem !default;
+$sidebar-font-size-section: 0.875rem !default;
+$sidebar-font-size-collapse: 1rem !default;
+$sidebar-font-size-section-collapse: 1.1rem !default;
+$sidebar-border: false !default;
+
+// Title block and footer
+$title-block-padding-top: 2.5em !default;
+$footer-font-size: 0.825em !default;
+
+// CSS Grid (intentionally no !default — always override Bootstrap's grid classes)
+$enable-grid-classes: false;
+$enable-cssgrid: true;
+
+// Grid widths
+$grid-sidebar-width: 250px !default;
+$grid-body-width: 800px !default;
+$grid-margin-width: 250px !default;
+$grid-column-gutter-width: 1.5em !default;
+
+// Code annotation
+$code-annotation-higlight-color: #aaaaaa44 !default;
+$code-annotation-higlight-bg: #aaaaaa22 !default;
+
+// Breadcrumb
+$breadcrumb-divider: quote(">") !default;
+
+/*-- scss:rules --*/
+
+// =============================================================================
+// SHARED RULES — mode-agnostic structural styles only.
+// Rules that touch color belong in wfrc-light.scss or wfrc-dark.scss.
+// Load order: wfrc.scss → wfrc-light.scss (or wfrc-dark.scss)
+// Mode-specific files always win over anything set here.
+// =============================================================================
+
+// Navbar — structural only. text-transform NOT set here because it cascades
+// to every child (links, dropdown items, tool icons). Only .navbar-title
+// below gets uppercase — that's the site-name brand treatment.
+.navbar {
+    font-family: $headings-font-family;
+    font-size: 1.00em;
+    font-weight: 600;
+    letter-spacing: .02em;
+    z-index: 1030;
+}
+
+// Navbar title — site name ONLY gets uppercase brand treatment
+.navbar-title {
+    font-family: $headings-font-family;
+    font-size: 1.00em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+}
+
+// Navbar top-level links — normal case; uppercase is only for .navbar-title.
+.navbar-nav .nav-link {
+    text-transform: none; // explicitly block any cascade from .navbar
+    font-family: $headings-font-family;
+    font-size: 1.0rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    border-bottom: 0px hidden transparent;
+    margin: 0px 6px 0px 6px;
+    padding: 2px 2px 4px 2px !important;
+
+    &:hover {
+        padding: 2px 2px 0px 2px !important;
+    }
+}
+
+// Dropdown items — .navbar catches BOTH .navbar-nav (Follow Us) AND
+// .quarto-navbar-tools (GitHub) submenus for consistent typography.
+.navbar .dropdown-menu .dropdown-item {
+    font-family: $headings-font-family;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.5;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+// Footer nav links — underline on hover is structural, not color-dependent
+.nav-footer .nav-link {
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+// Buttons — border-radius is structural; colors set per-mode
+.btn-secondary {
+    border-radius: 5px;
+}
+
+// Categories — .listing-category is the legacy Quarto class (pre-1.4).
+// .quarto-category (in mode-specific files) handles the current class.
+// Keeping both for backward compatibility.
+.listing-category {
+    color: $wfrc-secondary-blue !important;
+    border-color: $wfrc-secondary-blue !important;
+
+    &:hover {
+        background-color: $wfrc-secondary-blue;
+        color: white !important;
+    }
+}
+
+// Card — border-radius is structural; border, background, shadow set per-mode
+.card {
+    border-radius: 4px;
+}
+
+.card-img {
+    border-radius: 4px 4px 0px 0px;
+}
+
+// Featured image overlay — uses hardcoded wfrc-blue rgba; acceptable as a
+// brand-permanent value (this overlay is intentional on both modes)
+.featured-image {
+    background-size: cover;
+    background-position: center;
+    color: white;
+    box-shadow: inset 0 0 0 1000px rgba(2, 60, 91, 0.75);
+}
+
+// Algolia search overlay
+.aa-DetachedOverlay {
+    position: absolute;
+}
+
+// Description links
+.description a {
+    text-decoration: underline !important;
+
+    &:hover {
+        text-decoration: none !important;
+    }
+}
+
+// Title and subtitle typography — font/size only; color comes from brand.yml or mode files
+.title {
+    font-size: 2.5em;
+    font-weight: 500;
+    line-height: 1.1em;
+    font-family: $headings-font-family;
+}
+
+.subtitle {
+    font-size: 1.2em;
+    font-family: $base-font-family;
+}
+
+// Custom page elements
+#bio {
+    font-size: 1.1em;
+    font-family: $base-font-family;
+}
+
+#landing-icons {
+    font-size: 1.4em;
+}
+
+.about-links.subtitle {
+    font-family: $base-font-family;
+}
+
+// Name highlight — font properties only; color set per-mode
+.name-highlight {
+    font-family: $base-font-family;
+    font-weight: 500;
+}
+
+// Navbar logo sizing
+.navbar-logo {
+    max-height: 45px;
+    width: auto;
+}
+
+// Syntax highlighting — italic comments in both light and dark modes.
+// Pandoc always assigns class 'co' to comment tokens regardless of theme.
+code span.co {
+    font-style: italic;
+}
+
+// Mobile Responsive Styles
+@media screen and (max-width: 991.98px) {
+
+    // Social media links
+    .about-entity .about-links {
+        flex-direction: row !important;
+        justify-content: center !important;
+    }
+
+    // Navigation footer
+    .nav-footer {
+        flex-direction: row;
+
+        &-center {
+            order: 1 !important;
+            flex-basis: 100%;
+            margin: 0 0 -1.2em 0;
+        }
+
+        &-right {
+            order: 2 !important;
+            flex-basis: 100%;
+            text-align: center;
+        }
+
+        &-left {
+            order: 3 !important;
+            flex-basis: 100%;
+            text-align: center;
+        }
+    }
+
+    // Navbar mobile styles
+    .navbar {
+        &-title {
+            justify-content: center !important;
+            font-size: 0.85rem;
+        }
+
+        .quarto-navbar-tools {
+            font-size: 1.2rem;
+            text-align: left;
+        }
+    }
+}
