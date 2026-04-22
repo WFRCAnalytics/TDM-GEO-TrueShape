@@ -23,7 +23,8 @@ Public API
         Append link_directions and fw_directions columns.
 
     assign_node_type(gdf_nodes, is_fwy_mask, is_ramp_mask, is_surface_mask) -> GeoDataFrame
-        Append node_type column — one of: "fwy" | "gore" | "ramp" | "ramp_sf" | "surface".
+        Append node_type column — one of:
+        "fwy" | "fwy_sf" | "gore" | "gore_sf" | "ramp" | "ramp_sf" | "surface".
 
     extract_endpoints(gdf_centerlines) -> GeoDataFrame
         Vectorised extraction of segment start/end points with topology flags.
@@ -57,32 +58,42 @@ from shapely.strtree import STRtree
 
 
 def nodes_on(
-    gdf_nodes: gpd.GeoDataFrame, gdf_links: gpd.GeoDataFrame, ft_mask: set | list
+    gdf_nodes: gpd.GeoDataFrame,
+    gdf_links: gpd.GeoDataFrame,
+    ft_mask: set | list | None = None,
 ) -> pd.Series:
     """
     Boolean Series: True if a node's N appears as endpoint A or B of any
-    link whose FT code is in ft_mask.
+    link in gdf_links (optionally filtered to ft_mask FT codes).
 
     The functional-type *definition* (which FT codes constitute "freeway",
-    "ramp", etc.) belongs in the notebook. This function only handles the
-    mechanical set membership test.
+    "ramp", etc.) belongs in the notebook. Pass a pre-filtered gdf_links with
+    ft_mask=None when the compound condition cannot be expressed as a simple
+    FT-code set (e.g. FT=2 AND DIRECTION=1).
 
     Parameters
     ----------
     gdf_nodes : GeoDataFrame with column N.
     gdf_links : GeoDataFrame with columns A, B, and an FT column.
     ft_mask   : Collection of FT code integers to match against.
-                e.g. {32, 33, 34, 35, 36}
+                Pass None (default) to use all rows in gdf_links as-is —
+                useful when the caller has already applied a compound filter.
 
-    Example
-    -------
-    FW_CODES = {32, 33, 34, 35, 36}
-    gdf_nodes["Freeway"] = nodes_on(gdf_nodes, gdf_links, FW_CODES)
+    Examples
+    --------
+    # Simple FT-code filter (legacy usage)
+    gdf_nodes["Freeway"] = nodes_on(gdf_nodes, gdf_links, {32, 33, 34, 35, 36})
 
+    # Pre-filtered DataFrame (compound condition handled in notebook)
+    fwy_links = gdf_links[fwy_mask]
+    gdf_nodes["Freeway"] = nodes_on(gdf_nodes, fwy_links)
     """
-    ft_set = set(ft_mask)
-    ft_col = _detect_ft_col(gdf_links)
-    matched_links = gdf_links[gdf_links[ft_col].isin(ft_set)]
+    if ft_mask is None:
+        matched_links = gdf_links
+    else:
+        ft_set = set(ft_mask)
+        ft_col = _detect_ft_col(gdf_links)
+        matched_links = gdf_links[gdf_links[ft_col].isin(ft_set)]
     connected = set(matched_links["A"]) | set(matched_links["B"])
     return gdf_nodes["N"].isin(connected)
 
@@ -320,34 +331,78 @@ def _resolve_direction(
 #   1  = adjacent class (permitted)
 #   99 = hard reject (dropped before matching)
 #
-# Node types    : "fwy", "gore", "ramp", "ramp_sf", "surface"
-# Endpoint types: "fwy", "gore", "fwy_sf", "ramp", "ramp_sf", "surface"
+# Node types    : "fwy" | "fwy_sf" | "gore" | "gore_sf" | "ramp" | "ramp_sf" | "surface"
+# Endpoint types: "fwy" | "fwy_sf" | "gore" | "ramp" | "ramp_sf" | "surface"
 #
-# Rationale (from diagnostic, see CLAUDE.md)
-# ------------------------------------------
-# fwy nodes   : median 83m same-type vs 24m any-type → strict; gore/fwy_sf Tier-1.
-# gore nodes  : median 108m vs 53m → moderate; fwy/fwy_sf/ramp Tier-1.
-# ramp nodes  : median 84m vs 19m → strict; gore/ramp_sf Tier-1.
-# ramp_sf     : median 35m vs 11m → moderate; surface Tier-1 (natural fallback).
-# surface     : median 23m vs 19m → weak; fwy_sf Tier-0 (sits at intersections).
+# Node types map the full combinatorics of the three TDM link classes:
+#   fwy     Freeway ONLY             — pure mainline, no surface contact
+#   fwy_sf  Freeway + Surface        — at-grade freeway crossing (e.g. Bangerter × local)
+#   gore    Freeway + Ramp           — elevated fwy/ramp junction, no surface
+#   gore_sf Freeway + Ramp + Surface — at-grade diamond interchange, all three classes
+#   ramp    Ramp ONLY               — mid-ramp, no surface contact
+#   ramp_sf Ramp + Surface          — ramp terminal at an arterial
+#   surface Surface ONLY            — surface street node
+#
+# Endpoint types capture the same combinations at the physical centerline level
+# (no "gore_sf" ep_type — the endpoint layer uses the same 6 types as before;
+# the physical analog of gore_sf is a gore ep at an at-grade location).
 
 _TYPE_TIER: dict[tuple[str, str], int] = {
-    ("fwy", "fwy"): 0,
-    ("fwy", "gore"): 1,
+    # ── fwy: pure freeway mainline ────────────────────────────────────────
+    # Strict — ramp and surface endpoints hard-rejected to prevent
+    # divided-highway collapse at parallel NB/SB carriageways.
+    ("fwy", "fwy"):    0,
+    ("fwy", "gore"):   1,
     ("fwy", "fwy_sf"): 1,
-    ("gore", "gore"): 0,
-    ("gore", "fwy"): 1,
+
+    # ── fwy_sf: at-grade freeway/surface crossing ─────────────────────────
+    # Exact match is fwy_sf ep (same topology).
+    # fwy and surface are both valid one-component fallbacks.
+    # gore is adjacent via the freeway component.
+    ("fwy_sf", "fwy_sf"):  0,
+    ("fwy_sf", "fwy"):     1,
+    ("fwy_sf", "surface"): 1,
+    ("fwy_sf", "gore"):    1,
+
+    # ── gore: elevated freeway/ramp junction ──────────────────────────────
+    # gore ep is exact; fwy and ramp are one-component fallbacks.
+    # fwy_sf allowed via freeway component (physically adjacent at most gores).
+    # ramp_sf and surface hard-rejected — gore is not at grade.
+    ("gore", "gore"):   0,
+    ("gore", "fwy"):    1,
+    ("gore", "ramp"):   1,
     ("gore", "fwy_sf"): 1,
-    ("gore", "ramp"): 1,
-    ("ramp", "ramp"): 0,
-    ("ramp", "gore"): 1,
+
+    # ── gore_sf: at-grade freeway/ramp/surface interchange ────────────────
+    # No ep_type covers all three components, so gore ep (fwy+ramp) is the
+    # best single match (Tier-0). fwy_sf and ramp_sf each capture one of the
+    # two at-grade component pairs and are valid Tier-1 fallbacks.
+    ("gore_sf", "gore"):    0,
+    ("gore_sf", "fwy_sf"):  1,
+    ("gore_sf", "ramp_sf"): 1,
+    ("gore_sf", "fwy"):     1,
+    ("gore_sf", "ramp"):    1,
+
+    # ── ramp: mid-ramp ────────────────────────────────────────────────────
+    # Strict — only ramp/gore/ramp_sf compatible; fwy and surface rejected.
+    ("ramp", "ramp"):    0,
+    ("ramp", "gore"):    1,
     ("ramp", "ramp_sf"): 1,
+
+    # ── ramp_sf: ramp terminal at arterial ───────────────────────────────
+    # ramp_sf ep is exact; surface and ramp are one-component fallbacks.
+    # gore permitted — a ramp terminal can sit near a freeway/ramp junction.
     ("ramp_sf", "ramp_sf"): 0,
-    ("ramp_sf", "gore"): 1,    # ramp terminal at a freeway/ramp junction — physically adjacent
     ("ramp_sf", "surface"): 1,
-    ("ramp_sf", "ramp"): 1,
+    ("ramp_sf", "ramp"):    1,
+    ("ramp_sf", "gore"):    1,
+
+    # ── surface: surface only ─────────────────────────────────────────────
+    # fwy_sf shares the surface-intersection topology (Tier-0).
+    # ramp_sf (ramp terminal at grade) is topologically adjacent (Tier-1).
     ("surface", "surface"): 0,
-    ("surface", "fwy_sf"): 0,  # fwy+sf endpoints sit at surface intersections
+    ("surface", "fwy_sf"):  0,
+    ("surface", "ramp_sf"): 1,
 }
 _TYPE_TIER_REJECT = 99
 
