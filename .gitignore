@@ -222,6 +222,14 @@ _data/raw/*
 # but keeping it here is good practice/insurance)
 !_data/TrueShape Diagnosis.qgz
 
+# 4. Explicitly ensure the contents of HOT Access folder from UDOT is tracked
+!_data/raw/20260305_UDOT-HOT_Access/
+!_data/raw/20260305_UDOT-HOT_Access/**
+
+# 4. Explicitly ensure the contents of WFv1000_MasterNet is tracked
+!_data/raw/WFv1000_MasterNet/
+!_data/raw/WFv1000_MasterNet/**
+
 # -----------------
 
 /.quarto/

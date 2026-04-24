@@ -33,14 +33,18 @@ from _src.arcgis_utils import fetch_feature_layer
 ### Filepath Configuration
 
 ```{python}
+# ── Filepaths ──────────────────────────────────────────────────────────────
 config_filepath = {
     "out_centerlines": Path("_data/raw/UtahRoads.gpkg"),
     "out_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
     "out_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
     "out_gtfs": Path("_data/raw/uta_gtfs.zip"),
 }
-```
 
+# ── CRS ───────────────────────────────────────────────────────────────────
+CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
+CRS_WGS = "EPSG:4326"  # WGS84 — required by Folium
+```
 ### ArcGIS Connections
 
 ```{python}
@@ -77,7 +81,7 @@ if not out_path.exists():
         gis=gis_anon,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    gdf_centerlines.to_file(out_path, driver="GPKG")
+    gdf_centerlines.to_crs(CRS_UTM).to_file(out_path, driver="GPKG")
     print(f"Saved to: {out_path}")
 else:
     print(f"File already exists, skipping download: {out_path}")
@@ -94,7 +98,7 @@ if not out_path.exists():
         gis=gis_anon,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    gdf_links.to_file(out_path, driver="GPKG")
+    gdf_links.to_crs(CRS_UTM).to_file(out_path, driver="GPKG")
     print(f"Saved to: {out_path}")
 else:
     print(f"File already exists, skipping download: {out_path}")
@@ -111,7 +115,7 @@ if not out_path.exists():
         gis=gis_anon,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    gdf_nodes.to_file(out_path, driver="GPKG")
+    gdf_nodes.to_crs(CRS_UTM).to_file(out_path, driver="GPKG")
     print(f"Saved to: {out_path}")
 else:
     print(f"File already exists, skipping download: {out_path}")

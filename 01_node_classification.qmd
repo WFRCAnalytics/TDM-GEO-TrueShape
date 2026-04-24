@@ -47,8 +47,8 @@ from _src.node_utils import (
 # ── Filepaths ──────────────────────────────────────────────────────────────
 PATHS = {
     "in_centerlines": Path("_data/raw/RCL2TDMnew.gdb.zip"),
-    "in_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
-    "in_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
+    "in_network_links": Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Link.shp"),
+    "in_network_nodes": Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Node.shp"),
     "in_gtfs": Path("_data/raw/uta_gtfs.zip"),
     "out_node_classified": Path("_data/processed/nodes_classified.gpkg"),
     "out_node_snapped": Path("_data/processed/nodes_snapped.gpkg"),
@@ -345,7 +345,7 @@ gdf_nodes[["N", "LinkCount", "node_type", "link_directions", "fw_directions"]].h
 ```{python}
 out_path = PATHS["out_node_classified"]
 out_path.parent.mkdir(parents=True, exist_ok=True)
-gdf_nodes.to_crs(CRS_WGS).to_file(out_path, driver="GPKG")
+gdf_nodes.to_crs(CRS_UTM).to_file(out_path, driver="GPKG")
 print(f"Classified nodes saved to: {out_path}")
 ```
 
@@ -601,7 +601,9 @@ Verify before running any snapping:
 ```{python}
 debug_path = PATHS["out_debug"]
 debug_path.parent.mkdir(parents=True, exist_ok=True)
-gdf_ep_unique.to_crs(CRS_WGS).to_file(debug_path, layer="endpoint_layer", driver="GPKG")  # reproject to WGS84 for export only
+gdf_ep_unique.to_crs(CRS_UTM).to_file(
+    debug_path, layer="endpoint_layer", driver="GPKG"
+)  # reproject to WGS84 for export only
 print(f"Endpoint layer → {debug_path} / layer='endpoint_layer'")
 ```
 
@@ -848,26 +850,30 @@ if len(exceeded_fwy_ic) > 0:
 #| eval: false
 
 # Folium validation map — Freeway + Interchange snapping
-fwy_snapped  = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(FWY_IC_RULES)]
+fwy_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"].isin(FWY_IC_RULES)]
 fwy_original = gdf_nodes.loc[fwy_snapped.index]
 
-fwy_snapped_wgs  = fwy_snapped.to_crs(CRS_WGS)
-fwy_original_wgs = fwy_original.to_crs(CRS_WGS)
+fwy_snapped_wgs = fwy_snapped.to_crs(CRS_UTM)
+fwy_original_wgs = fwy_original.to_crs(CRS_UTM)
 
 connectors = [
-    {"geometry": LineString([fwy_original_wgs.geometry.loc[idx], fwy_snapped_wgs.geometry.loc[idx]]),
-     "N": int(fwy_snapped.loc[idx, "N"]),
-     "dist_m": float(fwy_snapped.loc[idx, "snap_distance_m"])}
+    {
+        "geometry": LineString(
+            [fwy_original_wgs.geometry.loc[idx], fwy_snapped_wgs.geometry.loc[idx]]
+        ),
+        "N": int(fwy_snapped.loc[idx, "N"]),
+        "dist_m": float(fwy_snapped.loc[idx, "snap_distance_m"]),
+    }
     for idx in fwy_snapped.index
     if fwy_original_wgs.geometry.loc[idx].distance(fwy_snapped_wgs.geometry.loc[idx]) > 0
 ]
-gdf_fwy_connectors = gpd.GeoDataFrame(connectors, crs=CRS_WGS)
+gdf_fwy_connectors = gpd.GeoDataFrame(connectors, crs=CRS_UTM)
 
 RULE_COLORS = {
-    "Freeway_Only":    "#1D9E75",
+    "Freeway_Only": "#1D9E75",
     "Freeway_Surface": "#17A5C5",
-    "Freeway_Gore":    "#534AB7",
-    "Interchange_Only":"#EF9F27",
+    "Freeway_Gore": "#534AB7",
+    "Interchange_Only": "#EF9F27",
 }
 
 center = [fwy_original_wgs.geometry.y.mean(), fwy_original_wgs.geometry.x.mean()]
@@ -875,24 +881,38 @@ m = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
 
 conn_layer = folium.FeatureGroup(name="Displacement lines", show=True)
 for _, row in gdf_fwy_connectors.iterrows():
-    folium.PolyLine([(c[1], c[0]) for c in row.geometry.coords],
-                    color="#888780", weight=1, opacity=0.7,
-                    tooltip=f"N: {row['N']} | {row['dist_m']}m").add_to(conn_layer)
+    folium.PolyLine(
+        [(c[1], c[0]) for c in row.geometry.coords],
+        color="#888780",
+        weight=1,
+        opacity=0.7,
+        tooltip=f"N: {row['N']} | {row['dist_m']}m",
+    ).add_to(conn_layer)
 conn_layer.add_to(m)
 
 orig_layer = folium.FeatureGroup(name="Original positions", show=True)
 for idx, row in fwy_original_wgs.iterrows():
-    folium.CircleMarker(location=[row.geometry.y, row.geometry.x], radius=4,
-                        color="#E24B4A", fill=True, fill_opacity=0.8,
-                        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)").add_to(orig_layer)
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x],
+        radius=4,
+        color="#E24B4A",
+        fill=True,
+        fill_opacity=0.8,
+        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)",
+    ).add_to(orig_layer)
 orig_layer.add_to(m)
 
 snap_layer = folium.FeatureGroup(name="Snapped positions", show=True)
 for idx, row in fwy_snapped_wgs.iterrows():
     rule = fwy_snapped.loc[idx, "snap_rule"]
-    folium.CircleMarker(location=[row.geometry.y, row.geometry.x], radius=4,
-                        color=RULE_COLORS.get(rule, "#888780"), fill=True, fill_opacity=0.8,
-                        tooltip=f"N: {int(fwy_snapped.loc[idx, 'N'])} | {rule} | {fwy_snapped.loc[idx, 'snap_distance_m']}m").add_to(snap_layer)
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x],
+        radius=4,
+        color=RULE_COLORS.get(rule, "#888780"),
+        fill=True,
+        fill_opacity=0.8,
+        tooltip=f"N: {int(fwy_snapped.loc[idx, 'N'])} | {rule} | {fwy_snapped.loc[idx, 'snap_distance_m']}m",
+    ).add_to(snap_layer)
 snap_layer.add_to(m)
 
 folium.LayerControl(collapsed=False).add_to(m)
@@ -926,12 +946,20 @@ fwy_unsnapped = gdf_nodes_snapped[
     (is_fwy_node | is_ramp_node) & (gdf_nodes_snapped["snap_rule"] == "exceeded_threshold")
 ].copy()
 
-fwy_snapped.to_crs(CRS_WGS).to_file(debug_path, layer="snapped_positions", driver="GPKG")   # WGS84 for export only
-fwy_original.to_crs(CRS_WGS).to_file(debug_path, layer="original_positions", driver="GPKG") # WGS84 for export only
+fwy_snapped.to_crs(CRS_UTM).to_file(
+    debug_path, layer="snapped_positions", driver="GPKG"
+)  # WGS84 for export only
+fwy_original.to_crs(CRS_UTM).to_file(
+    debug_path, layer="original_positions", driver="GPKG"
+)  # WGS84 for export only
 if not gdf_fwy_lines.empty:
-    gdf_fwy_lines.to_crs(CRS_WGS).to_file(debug_path, layer="displacement_lines", driver="GPKG")  # WGS84 for export only
+    gdf_fwy_lines.to_crs(CRS_UTM).to_file(
+        debug_path, layer="displacement_lines", driver="GPKG"
+    )  # WGS84 for export only
 if not fwy_unsnapped.empty:
-    fwy_unsnapped.to_crs(CRS_WGS).to_file(debug_path, layer="unsnapped_nodes", driver="GPKG")     # WGS84 for export only
+    fwy_unsnapped.to_crs(CRS_UTM).to_file(
+        debug_path, layer="unsnapped_nodes", driver="GPKG"
+    )  # WGS84 for export only
 
 print(f"Debug package → {debug_path}")
 print(f"  snapped_positions:  {len(fwy_snapped):,}")
@@ -998,34 +1026,52 @@ print(f"  50-200m: {((surf_dists >= 50) & (surf_dists <= 200)).sum():,}")
 #| eval: false
 
 # Folium validation map — Surface snapping
-surf_snapped_gdf  = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Surface"]
+surf_snapped_gdf = gdf_nodes_snapped[gdf_nodes_snapped["snap_rule"] == "Surface"]
 surf_original_gdf = gdf_nodes.loc[surf_snapped_gdf.index]
-surf_snapped_wgs  = surf_snapped_gdf.to_crs(CRS_WGS)
-surf_original_wgs = surf_original_gdf.to_crs(CRS_WGS)
+surf_snapped_wgs = surf_snapped_gdf.to_crs(CRS_UTM)
+surf_original_wgs = surf_original_gdf.to_crs(CRS_UTM)
 
 connectors_surf = [
-    {"geometry": LineString([surf_original_wgs.geometry.loc[idx], surf_snapped_wgs.geometry.loc[idx]]),
-     "N": int(surf_snapped_gdf.loc[idx, "N"]),
-     "dist_m": float(surf_snapped_gdf.loc[idx, "snap_distance_m"])}
+    {
+        "geometry": LineString(
+            [surf_original_wgs.geometry.loc[idx], surf_snapped_wgs.geometry.loc[idx]]
+        ),
+        "N": int(surf_snapped_gdf.loc[idx, "N"]),
+        "dist_m": float(surf_snapped_gdf.loc[idx, "snap_distance_m"]),
+    }
     for idx in surf_snapped_gdf.index
     if surf_original_wgs.geometry.loc[idx].distance(surf_snapped_wgs.geometry.loc[idx]) > 0
 ]
-gdf_surf_connectors = gpd.GeoDataFrame(connectors_surf, crs=CRS_WGS)
+gdf_surf_connectors = gpd.GeoDataFrame(connectors_surf, crs=CRS_UTM)
 
 center = [surf_original_wgs.geometry.y.mean(), surf_original_wgs.geometry.x.mean()]
 m_surf = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
 for _, row in gdf_surf_connectors.iterrows():
-    folium.PolyLine([(c[1], c[0]) for c in row.geometry.coords],
-                    color="#888780", weight=1, opacity=0.5,
-                    tooltip=f"N: {row['N']} | {row['dist_m']}m").add_to(m_surf)
+    folium.PolyLine(
+        [(c[1], c[0]) for c in row.geometry.coords],
+        color="#888780",
+        weight=1,
+        opacity=0.5,
+        tooltip=f"N: {row['N']} | {row['dist_m']}m",
+    ).add_to(m_surf)
 for idx, row in surf_original_wgs.iterrows():
-    folium.CircleMarker(location=[row.geometry.y, row.geometry.x], radius=3,
-                        color="#E24B4A", fill=True, fill_opacity=0.7,
-                        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)").add_to(m_surf)
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x],
+        radius=3,
+        color="#E24B4A",
+        fill=True,
+        fill_opacity=0.7,
+        tooltip=f"N: {gdf_nodes.loc[idx, 'N']} (original)",
+    ).add_to(m_surf)
 for idx, row in surf_snapped_wgs.iterrows():
-    folium.CircleMarker(location=[row.geometry.y, row.geometry.x], radius=3,
-                        color="#1D9E75", fill=True, fill_opacity=0.7,
-                        tooltip=f"N: {int(surf_snapped_gdf.loc[idx, 'N'])} | {surf_snapped_gdf.loc[idx, 'snap_distance_m']}m").add_to(m_surf)
+    folium.CircleMarker(
+        location=[row.geometry.y, row.geometry.x],
+        radius=3,
+        color="#1D9E75",
+        fill=True,
+        fill_opacity=0.7,
+        tooltip=f"N: {int(surf_snapped_gdf.loc[idx, 'N'])} | {surf_snapped_gdf.loc[idx, 'snap_distance_m']}m",
+    ).add_to(m_surf)
 folium.LayerControl(collapsed=False).add_to(m_surf)
 m_surf
 ```
@@ -1148,6 +1194,6 @@ plt.show()
 ```{python}
 out_path = PATHS["out_node_snapped"]
 out_path.parent.mkdir(parents=True, exist_ok=True)
-gdf_nodes_snapped.to_crs(CRS_WGS).to_file(out_path, driver="GPKG")
+gdf_nodes_snapped.to_crs(CRS_UTM).to_file(out_path, driver="GPKG")
 print(f"Snapped nodes saved to: {out_path}")
 ```
