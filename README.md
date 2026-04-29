@@ -1,9 +1,9 @@
-# TDM-NET-TrueShape
+# TDM-GEO-TrueShape
 
 > [!WARNING]
 > **Work in Progress:** This project currently contains significant bugs and logic inconsistencies. Proceed with caution!
 
-`TDM-NET-TrueShape` is a working pipeline for converting a travel demand model (TDM) network into a more realistic true-shape network using:
+`TDM-GEO-TrueShape` is a working pipeline for converting a travel demand model (TDM) network into a more realistic true-shape network using:
 
 - UGRC roadway centerlines as the primary geometric reference
 - WFRC MasterNet links and nodes as the source network topology
