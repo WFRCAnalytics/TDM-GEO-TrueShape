@@ -28,6 +28,7 @@ from arcgis.gis import GIS
 # Add project root to path so _src can be imported
 sys.path.insert(0, str(Path.cwd()))
 from _src.arcgis_utils import fetch_feature_layer
+from _src.centerline_utils import rcl_merge, transfer_attributes_by_midpoint
 ```
 
 ### Filepath Configuration
@@ -39,6 +40,7 @@ config_filepath = {
     "out_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
     "out_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
     "out_gtfs": Path("_data/raw/uta_gtfs.zip"),
+    "out_candidate_links": Path("_data/processing/CandidateTDMRoadLinks.gpkg"),
 }
 
 # ── CRS ───────────────────────────────────────────────────────────────────
@@ -133,4 +135,117 @@ if not out_path.exists():
     print(f"Saved to: {out_path}")
 else:
     print(f"File already exists, skipping download: {out_path}")
+```
+
+## Centerline Cleaning
+
+Converts raw UGRC centerlines into a topology-clean `CandidateTDMRoadLinks`
+dataset that the snapping and true-shape pipeline consumes.  The algorithm
+(dissolve → split at junctions → attribute transfer) lives in
+`_src/centerline_utils.py`; only the filter definitions belong here.
+
+### Load and Filter Raw Centerlines
+
+```{python}
+gdf_cl = gpd.read_file(
+    config_filepath["out_centerlines"],
+    where="DOT_RTNAME != 'DupRoute' AND STATUS NOT IN ('Retired', 'Planned')",
+)
+
+# ── Wasatch Front county FIPS codes ───────────────────────────────────────
+WF_COUNTIES = {"49003", "49011", "49035", "49049", "49057", "49045"}
+
+mask_wf = gdf_cl["COUNTY_L"].isin(WF_COUNTIES) | gdf_cl["COUNTY_R"].isin(WF_COUNTIES)
+gdf_wf = gdf_cl[mask_wf].copy()
+
+# Strip leading/trailing whitespace in DOT_FCLASS (known data-quality artifact)
+gdf_wf["DOT_FCLASS"] = gdf_wf["DOT_FCLASS"].str.strip()
+
+print(f"WF centerlines: {len(gdf_wf):,} rows")
+```
+
+### Define Freeway and Surface Filters
+
+```{python}
+# ── Freeway / ramp / CD filter ─────────────────────────────────────────────
+# Matches arcpy: DOT_FCLASS IN ('Interstate','Other Freeway')
+#                OR DOT_RTNAME LIKE '%C%'  (collector-distributor roads)
+#                OR DOT_RTNAME LIKE '%R%'  (ramp roads)
+FWY_FCLASS = {"Interstate", "Other Freeway"}
+mask_fwy = (
+    gdf_wf["DOT_FCLASS"].isin(FWY_FCLASS)
+    | gdf_wf["DOT_RTNAME"].str.contains("C", na=False)
+    | gdf_wf["DOT_RTNAME"].str.contains("R", na=False)
+)
+
+# ── Surface street filter ──────────────────────────────────────────────────
+SURF_FCLASS = {
+    "Local",
+    "Major Collector",
+    "Minor Arterial",
+    "Minor Collector",
+    "Principal Arterial",
+}
+mask_surf = gdf_wf["DOT_FCLASS"].isin(SURF_FCLASS)
+
+# ── Per-vert-level splits ──────────────────────────────────────────────────
+# VERT_LEVEL '0' = at-grade (default); '1','2' = elevated/tunnel structures.
+# Pass an empty GeoDataFrame for levels absent in this dataset; rcl_merge
+# silently skips them.
+_empty = gdf_wf.iloc[0:0].copy()
+
+fwy_levels = {
+    "all":  gdf_wf[mask_fwy],
+    "lvl0": gdf_wf[mask_fwy & (gdf_wf["VERT_LEVEL"] == "0")],
+    "lvl1": gdf_wf[mask_fwy & (gdf_wf["VERT_LEVEL"] == "1")],
+    "lvl2": gdf_wf[mask_fwy & (gdf_wf["VERT_LEVEL"] == "2")],
+    "lvl3": _empty,  # no VERT_LEVEL 3 in this dataset
+}
+
+surf_levels = {
+    "lvl0": gdf_wf[mask_surf & (gdf_wf["VERT_LEVEL"] == "0")],
+    "lvl1": gdf_wf[mask_surf & (gdf_wf["VERT_LEVEL"] == "1")],
+    "lvl2": gdf_wf[mask_surf & (gdf_wf["VERT_LEVEL"] == "2")],
+    "lvl3": _empty,
+}
+
+for k, v in fwy_levels.items():
+    print(f"  fwy {k}: {len(v):,}")
+for k, v in surf_levels.items():
+    print(f"  surf {k}: {len(v):,}")
+```
+
+### Run RCL Merge
+
+```{python}
+out_path = config_filepath["out_candidate_links"]
+
+if not out_path.exists():
+    gdf_candidate = rcl_merge(fwy_levels, surf_levels)
+    print(f"Candidate links (geometry only): {len(gdf_candidate):,} rows")
+
+    # ── Transfer attributes from original centerlines via midpoint join ────
+    # OBJECTID is the persistent physical ID required for GERS lineage.
+    # DOT_FCLASS, POSTTYPE, DOT_RTNAME, FULLNAME drive direction inference
+    # in the snapping pipeline.
+    TRANSFER_COLS = [
+        "OBJECTID",
+        "DOT_FCLASS",
+        "POSTTYPE",
+        "DOT_RTNAME",
+        "DOT_HWYNAM",
+        "FULLNAME",
+        "CARTOCODE",
+        "ONEWAY",
+        "VERT_LEVEL",
+    ]
+    gdf_candidate = transfer_attributes_by_midpoint(
+        gdf_candidate, gdf_wf, TRANSFER_COLS
+    )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    gdf_candidate.to_file(out_path, driver="GPKG")
+    print(f"Saved to: {out_path}")
+else:
+    print(f"File already exists, skipping: {out_path}")
 ```

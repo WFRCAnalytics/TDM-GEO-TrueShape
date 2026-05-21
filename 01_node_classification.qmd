@@ -48,7 +48,7 @@ from _src.node_utils import (
 ```{python}
 # ── Filepaths ──────────────────────────────────────────────────────────────
 PATHS = {
-    "in_centerlines": Path("_data/raw/RCL2TDMnew.gdb.zip"),
+    "in_centerlines": Path("_data/processing/CandidateTDMRoadLinks.gpkg"),
     "in_network_links": Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Link.shp"),
     "in_network_nodes": Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Node.shp"),
     "in_gtfs": Path("_data/raw/uta_gtfs.zip"),
@@ -69,30 +69,10 @@ CRS_WGS = "EPSG:4326"  # WGS84 — required by Folium
 ### Roadway Centerlines
 
 ```{python}
-# 1. Prepare the Path
-# We use .as_posix() to handle slashes correctly regardless of OS
-# gdb_path = f"/vsizip/{PATHS['in_centerlines']}"
-gdb_path = f"/vsizip/{PATHS['in_centerlines'].as_posix()}"
-
-# 2. View the actual layers within the gdb
-gpd.list_layers(gdb_path)
-```
-
-```{python}
-COUNTY_FIPS = ["49003", "49057", "49011", "49035", "49049"]
-county_filter = "(" + ", ".join(f"'{f}'" for f in COUNTY_FIPS) + ")"
-
-gdf_centerlines = gpd.read_file(
-    gdb_path,  # f"/vsizip/{PATHS['in_centerlines']}",
-    layer="RCLWasatchFrontAll",
-    where=f"(DOT_FCLASS IN ('Interstate', 'Local', 'Major Collector', 'Minor Arterial', 'Minor Collector', 'Other Freeway', 'Principal Arterial') OR DOT_RTNAME LIKE '%R%' OR DOT_RTNAME LIKE '%C%') AND CARTOCODE <> '99' AND (COUNTY_L IN {county_filter} OR COUNTY_R IN {county_filter})",
-).to_crs(CRS_UTM)
-
-# Strip trailing whitespace from categorical fields (source-data artefact)
-for col in ["DOT_FCLASS", "CARTOCODE", "STATUS", "ONEWAY", "VERT_LEVEL", "POSTTYPE"]:
-    if col in gdf_centerlines.columns:
-        gdf_centerlines[col] = gdf_centerlines[col].str.strip()
-
+# Cleaned and attributed centerlines produced by 00_data_preparation.qmd.
+# Retired/Planned segments and DupRoute aliases are already excluded.
+# Whitespace in DOT_FCLASS and CARTOCODE is already stripped.
+gdf_centerlines = gpd.read_file(PATHS["in_centerlines"]).to_crs(CRS_UTM)
 print(f"Centerlines: {len(gdf_centerlines):,} features | CRS: {gdf_centerlines.crs}")
 ```
 
@@ -257,11 +237,14 @@ bidirectional roads stored as two directional records (a pseudonode appears 4
 times → LinkCount=4, not 2), while NeighborCount is always 2 for a true shape
 vertex regardless of storage convention.
 
-A node is an `is_pseudo` shape vertex if and only if both conditions hold:
+A node is an `is_pseudo` shape vertex if and only if all three conditions hold:
 1. **NeighborCount == 2** — lies on a single path between two real junctions.
-2. **LinkClassCount == 1** — all connected links share the same functional class.
-   A node where a freeway meets a surface street has NeighborCount=2 but
-   LinkClassCount=2, so it is a real class-transition junction and must be snapped.
+2. **LinkFTCount == 1** — all connected links share the same exact FT code.
+   A node where FT changes (e.g. FT 32→33) has a real physical endpoint in the
+   centerline data and must be sent to snapping.
+3. **LinkLNCount == 1** — all connected links carry the same lane count.
+   A lane-drop or lane-add node must not be dissolved away, as doing so would
+   erase a model attribute boundary that affects TDM impedance.
 
 `assign_node_directions` produces two direction columns (see docstring):
 - `link_directions` — freeway-priority cascade; used in passes (a) and (c).
@@ -289,7 +272,7 @@ gdf_nodes["LinkClassCount"] = gdf_nodes["N"].map(_class_counts).fillna(0).astype
 
 # Count distinct FT codes per node.
 # Stricter than LinkClassCount: nodes where FT changes (e.g. FT=32→33) register
-# LinkFTCount=2 even though both belong to the freeway class.  Used in the future
+# LinkFTCount=2 even though both belong to the freeway class.  Used in the
 # link true-shape dissolution step to preserve model link boundaries where posted
 # speed or facility sub-type changes — dissolving those nodes would corrupt TDM impedance.
 _stacked_ft = pd.concat([
@@ -299,19 +282,30 @@ _stacked_ft = pd.concat([
 _ft_counts = _stacked_ft.groupby("N")[FT_COL].nunique()
 gdf_nodes["LinkFTCount"] = gdf_nodes["N"].map(_ft_counts).fillna(0).astype(int)
 
-# Pseudonode: shape vertex on a single homogeneous path — no physical snap target.
-# Uses LinkFTCount (not LinkClassCount): UGRC/UDOT centerlines are segmented at
-# posted speed limit changes, so a node where FT changes (e.g. FT=32→33) has a
-# real physical endpoint in the centerline data and must be sent to snapping.
-# LinkClassCount would incorrectly skip those nodes (both FT codes map to "freeway"
-# class), causing missed snaps at speed-transition points along freeway mainlines.
-gdf_nodes["is_pseudo"] = (gdf_nodes["NeighborCount"] == 2) & (gdf_nodes["LinkFTCount"] == 1)
+# Count distinct lane counts per node — lane-drop/lane-add nodes must be snapped
+# even when FT is uniform, because dissolving them would erase the lane change.
+_stacked_ln = pd.concat([
+    gdf_links[["A", "LN_2027"]].rename(columns={"A": "N"}),
+    gdf_links[["B", "LN_2027"]].rename(columns={"B": "N"}),
+], ignore_index=True)
+_ln_counts = _stacked_ln.groupby("N")["LN_2027"].nunique()
+gdf_nodes["LinkLNCount"] = gdf_nodes["N"].map(_ln_counts).fillna(0).astype(int)
 
-print(f"Pseudonodes (NeighborCount==2, single class): {gdf_nodes['is_pseudo'].sum():,}")
+# Pseudonode: shape vertex on a single homogeneous path — no physical snap target.
+# Requires uniform FT AND uniform lane count: a lane-drop node has a real physical
+# endpoint in the centerline data and must not be dissolved away.
+gdf_nodes["is_pseudo"] = (
+    (gdf_nodes["NeighborCount"] == 2)
+    & (gdf_nodes["LinkFTCount"] == 1)
+    & (gdf_nodes["LinkLNCount"] == 1)
+)
+
+print(f"Pseudonodes (NeighborCount==2, uniform FT+LN): {gdf_nodes['is_pseudo'].sum():,}")
 print(f"  of which LinkCount==2: {(gdf_nodes['is_pseudo'] & (gdf_nodes['LinkCount'] == 2)).sum():,}")
-print(f"  of which LinkCount> 2: {(gdf_nodes['is_pseudo'] & (gdf_nodes['LinkCount'] > 2)).sum():,}  ← bidirectional road pseudonodes missed by old filter")
+print(f"  of which LinkCount> 2: {(gdf_nodes['is_pseudo'] & (gdf_nodes['LinkCount'] > 2)).sum():,}  ← bidirectional road pseudonodes")
 print(f"Class-transition nodes (NeighborCount==2, multi-class): {((gdf_nodes['NeighborCount'] == 2) & (gdf_nodes['LinkClassCount'] > 1)).sum():,}  ← real junctions, must be snapped")
-print(f"FT-transition nodes now sent to snapping (NeighborCount==2, same class, diff FT): {((gdf_nodes['NeighborCount'] == 2) & (gdf_nodes['LinkClassCount'] == 1) & (gdf_nodes['LinkFTCount'] > 1)).sum():,}")
+print(f"FT-transition nodes sent to snapping (NeighborCount==2, same class, diff FT): {((gdf_nodes['NeighborCount'] == 2) & (gdf_nodes['LinkClassCount'] == 1) & (gdf_nodes['LinkFTCount'] > 1)).sum():,}")
+print(f"LN-transition nodes sent to snapping (NeighborCount==2, uniform FT, diff LN): {((gdf_nodes['NeighborCount'] == 2) & (gdf_nodes['LinkFTCount'] == 1) & (gdf_nodes['LinkLNCount'] > 1)).sum():,}")
 ```
 
 ```{python}
@@ -429,22 +423,22 @@ B4 deduplicate → B5 assign directions → B6 assign ep_type → B7 export.
 ### B1 — Filter to Active Segments
 
 ```{python}
-# Exclude retired / planned segments and segments that fall outside the three
-# mutually exclusive classes (DupRoute routing artifacts, Institutional roads,
-# and records with null/empty DOT_FCLASS that cannot be classified).
-_status_ok  = ~gdf_centerlines["STATUS"].isin(["Retired", "Planned"])
-_not_duprt  = gdf_centerlines["DOT_RTNAME"].fillna("") != "DupRoute"
-_fclass_ok  = (
-    gdf_centerlines["DOT_FCLASS"].notna()
-    & ~gdf_centerlines["DOT_FCLASS"].isin(["Instituitional", ""])  # note: source-data typo
-)
+# Retired/Planned segments and DupRoute aliases were excluded at data-prep time.
+# CARTOCODE '99' marks features excluded from standard cartographic display
+# (tunnels, grade-separated service roads) — exclude from snapping pools.
+_cartocode_ok = gdf_centerlines["CARTOCODE"].fillna("") != "99"
+
 # Ramp/CD segments may have blank DOT_FCLASS but a valid DOT_RTNAME — keep them.
 _is_ramp_seg = (
     gdf_centerlines["DOT_RTNAME"].fillna("").str.contains("R", na=False)
     | gdf_centerlines["DOT_RTNAME"].fillna("").str.contains("C", na=False)
-) & _not_duprt
+)
+_fclass_ok = (
+    gdf_centerlines["DOT_FCLASS"].notna()
+    & ~gdf_centerlines["DOT_FCLASS"].isin(["Instituitional", ""])
+)
 
-active_cl = gdf_centerlines[_status_ok & _not_duprt & (_fclass_ok | _is_ramp_seg)].copy()
+active_cl = gdf_centerlines[_cartocode_ok & (_fclass_ok | _is_ramp_seg)].copy()
 print(f"Active centerlines: {len(active_cl):,} of {len(gdf_centerlines):,}")
 ```
 
@@ -546,10 +540,9 @@ flags forward for direction resolution and deduplication downstream.
 
 ```{python}
 # Explode MultiLineString → LineString so get_point works correctly
+_n_pre_explode = len(active_cl)
 active_cl = active_cl.explode(index_parts=False).reset_index(drop=True)
-print(
-    f"After explode: {len(active_cl):,} segments (was {len(gdf_centerlines[~gdf_centerlines['STATUS'].isin(['Retired', 'Planned'])]):,})"
-)
+print(f"After explode: {len(active_cl):,} segments (was {_n_pre_explode:,} pre-explode)")
 
 starts = shapely.get_point(active_cl.geometry.values, 0)
 ends = shapely.get_point(active_cl.geometry.values, -1)
