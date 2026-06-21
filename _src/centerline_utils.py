@@ -16,7 +16,8 @@ Public API
         VERT_LEVELs — matching arcpy FL_All which includes both classes.
 
     dissolve_and_singlepart(gdf) -> GeoDataFrame
-        Explode MultiLineStrings to singlepart LineStrings.
+        Topologically merge connected lines into maximal chains, then explode
+        to singlepart LineStrings. Must be called per VERT_LEVEL slice only.
 
     split_lines_at_points(lines_gdf, points_gdf, search_radius_m) -> GeoDataFrame
         Split each line wherever a point falls within search_radius_m.
@@ -38,7 +39,7 @@ from __future__ import annotations
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import MultiPoint, Point
-from shapely.ops import snap, split
+from shapely.ops import linemerge, snap, split, unary_union
 
 
 # ---------------------------------------------------------------------------
@@ -93,20 +94,26 @@ def build_junction_split_points(all_segments_gdf: gpd.GeoDataFrame) -> gpd.GeoDa
 
 def dissolve_and_singlepart(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
-    Explode any MultiLineString features to singlepart LineStrings.
+    Topologically merge all connected lines into maximal chains, then explode
+    to singlepart LineStrings.
 
     Equivalent to arcpy Dissolve(MULTI_PART) + MultipartToSinglepart.
-    arcpy's Dissolve with no dissolve fields and MULTI_PART=True groups all
-    input features into one multipart record without changing geometry, then
-    MultipartToSinglepart explodes them back.  The net effect is an identity
-    operation that only flattens MultiLineStrings → LineStrings.
+    arcpy's Dissolve without dissolve fields performs a full topological merge
+    of all touching/connected line segments into maximal chains (not merely a
+    multipart collection), which linemerge(unary_union(...)) replicates exactly.
 
-    NOTE: unary_union is intentionally NOT used here.  unary_union computes
-    the true geometric union (GEOS noding + merging), which collapses interior
-    pseudonodes and reduces the endpoint count by ~50%, breaking the snapping
-    pool.  arcpy's Dissolve makes no such geometric change.
+    IMPORTANT: call this only on a single VERT_LEVEL slice at a time.
+    Applying unary_union across multiple vertical levels would incorrectly merge
+    at-grade roads with elevated structures sharing endpoint coordinates.
+    Per-level isolation is enforced by rcl_merge, which calls this function
+    once per level dict entry.
     """
-    return gdf.explode(index_parts=False).reset_index(drop=True)
+    union = unary_union(gdf.geometry.tolist())
+    # linemerge requires a collection; unary_union may return a bare LineString
+    lines = list(union.geoms) if hasattr(union, "geoms") else [union]
+    merged = linemerge(lines)
+    result = gpd.GeoDataFrame(geometry=[merged], crs=gdf.crs)
+    return result.explode(index_parts=False).reset_index(drop=True)
 
 
 def split_lines_at_points(
