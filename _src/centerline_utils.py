@@ -10,20 +10,21 @@ Design contract
 
 Public API
 ----------
-    build_freeway_split_points(fwy_all_gdf) -> GeoDataFrame
-        Points at freeway branch/junction locations (join_count >= 3).
-        Used as split locations for per-level freeway processing.
+    build_junction_split_points(all_segments_gdf) -> GeoDataFrame
+        Points at branch/junction locations (join_count >= 3).
+        Input must be the COMBINED freeway + surface GeoDataFrame across all
+        VERT_LEVELs — matching arcpy FL_All which includes both classes.
 
     dissolve_and_singlepart(gdf) -> GeoDataFrame
-        Dissolve all features into one geometry, then explode to singlepart
-        LineStrings.
+        Explode MultiLineStrings to singlepart LineStrings.
 
     split_lines_at_points(lines_gdf, points_gdf, search_radius_m) -> GeoDataFrame
         Split each line wherever a point falls within search_radius_m.
 
     rcl_merge(fwy_levels, surf_levels) -> GeoDataFrame
-        Full RCL merge pipeline. Freeway levels are dissolved, split at junction
-        points, then merged with dissolved surface roads.
+        Full RCL merge pipeline. Both freeway and surface levels are dissolved
+        and split at junction points independently, then concatenated.
+        Output includes MIDX, MIDY, and MidPointID columns.
             fwy_levels: dict with keys 'lvl0', 'lvl1', 'lvl2', 'lvl3', 'all'
             surf_levels: dict with keys 'lvl0', 'lvl1', 'lvl2', 'lvl3'
 
@@ -66,19 +67,24 @@ def _extract_endpoints(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 # Public API
 # ---------------------------------------------------------------------------
 
-def build_freeway_split_points(fwy_all_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def build_junction_split_points(all_segments_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
-    Extract both-end vertices from all freeway lines, self-join to count
-    co-located vertices, and return those with join_count >= 3.
+    Extract both-end vertices from all segments (fwy + surface, all levels),
+    self-join with 1 m tolerance, and return points where join_count >= 3.
 
-    These are the branch/junction nodes that force segment boundaries so that
-    each dissolved freeway segment terminates at every interchange or merge.
-    Equivalent to arcpy FeatureVerticesToPoints(BOTH_ENDS) + SpatialJoin(self,
-    intersects, join_count >= 3).
+    The 1-metre buffer-based self-join matches arcpy SpatialJoin(search_radius=
+    "1 Meters"), replacing the prior predicate="intersects" (0 m) that missed
+    endpoints snapped close but not exactly coincident.
+
+    Equivalent to arcpy FeatureVerticesToPoints(BOTH_ENDS) +
+    SpatialJoin(self, search_radius="1 Meters") + filter Join_Count >= 3.
     """
-    vertices = _extract_endpoints(fwy_all_gdf)
+    vertices = _extract_endpoints(all_segments_gdf)
 
-    joined = gpd.sjoin(vertices, vertices, how="left", predicate="intersects")
+    join_buf = gpd.GeoDataFrame(
+        geometry=vertices.geometry.buffer(1.0), crs=vertices.crs
+    )
+    joined = gpd.sjoin(vertices, join_buf, how="left", predicate="within")
     join_counts = joined.groupby(joined.index).size().rename("join_count")
     vertices = vertices.join(join_counts)
 
@@ -158,55 +164,82 @@ def rcl_merge(
     ----------
     fwy_levels : dict
         Keys: 'lvl0', 'lvl1', 'lvl2', 'lvl3' (optional), 'all'
-        Each value is a pre-filtered GeoDataFrame of freeway/ramp/CD lines.
+        'all' must contain ALL freeway/ramp/CD features across every level.
+        Per-level keys hold pre-filtered GeoDataFrames for that level only.
         Levels with an empty GeoDataFrame are silently skipped.
     surf_levels : dict
         Keys: 'lvl0', 'lvl1', 'lvl2', 'lvl3' (optional)
-        Each value is a pre-filtered GeoDataFrame of surface street lines.
-        Levels with an empty GeoDataFrame are silently skipped.
+        Each value is a pre-filtered GeoDataFrame of surface street lines
+        for that level. Levels with an empty GeoDataFrame are silently skipped.
 
     Returns
     -------
     GeoDataFrame
-        Geometry-only (no original attributes) merged and split centerlines
+        Merged and split centerlines with MIDX, MIDY, and MidPointID columns,
         suitable for subsequent attribute transfer and snapping.
+        Matches the arcpy RCL2TDMGeometry output schema.
+
+    Pipeline (mirrors arcpy RCLmerge exactly)
+    ------------------------------------------
+    1. Build junction split-points from the combined fwy + surface pool
+       (all VERT_LEVELs) using a 1 m self-join tolerance.
+    2. Freeway levels: dissolve_and_singlepart -> split_lines_at_points
+       Radii: lvl0=0.1 m, lvl1=1.0 m, lvl2=0.1 m, lvl3=0.1 m
+    3. Surface levels: dissolve_and_singlepart -> split_lines_at_points
+       Radii: lvl0=1.0 m, lvl1=0.1 m, lvl2=0.1 m, lvl3=0.1 m
+    4. Concatenate all split parts.
+    5. Compute MIDX, MIDY, MidPointID on the merged output.
     """
-    split_points = build_freeway_split_points(fwy_levels["all"])
-
-    # Split radii match original arcpy values per level
-    _RADII = {"lvl0": 0.1, "lvl1": 1.0, "lvl2": 0.1, "lvl3": 0.1}
-
-    split_fwy_parts: list[gpd.GeoDataFrame] = []
     base_crs = fwy_levels["all"].crs
 
+    # Build split-points from the combined fwy + surface pool (all levels)
+    all_surf = [v for v in surf_levels.values() if v is not None and not v.empty]
+    all_segments = gpd.GeoDataFrame(
+        pd.concat([fwy_levels["all"]] + all_surf, ignore_index=True),
+        geometry="geometry",
+        crs=base_crs,
+    )
+    split_points = build_junction_split_points(all_segments)
+
+    _FWY_RADII  = {"lvl0": 0.1, "lvl1": 1.0, "lvl2": 0.1, "lvl3": 0.1}
+    _SURF_RADII = {"lvl0": 1.0, "lvl1": 0.1, "lvl2": 0.1, "lvl3": 0.1}
+
+    # Freeway levels: per-level dissolve -> split
+    split_fwy_parts: list[gpd.GeoDataFrame] = []
     for lvl in ("lvl0", "lvl1", "lvl2", "lvl3"):
         gdf = fwy_levels.get(lvl)
         if gdf is None or gdf.empty:
             continue
         singlepart = dissolve_and_singlepart(gdf)
         split_fwy_parts.append(
-            split_lines_at_points(singlepart, split_points, _RADII[lvl])
+            split_lines_at_points(singlepart, split_points, _FWY_RADII[lvl])
         )
 
-    surf_parts: list[gpd.GeoDataFrame] = []
+    # Surface levels: per-level dissolve -> split (not merged before processing)
+    split_surf_parts: list[gpd.GeoDataFrame] = []
     for lvl in ("lvl0", "lvl1", "lvl2", "lvl3"):
         gdf = surf_levels.get(lvl)
-        if gdf is not None and not gdf.empty:
-            surf_parts.append(gdf)
-
-    surface_singlepart = dissolve_and_singlepart(
-        gpd.GeoDataFrame(
-            pd.concat(surf_parts, ignore_index=True),
-            geometry="geometry",
-            crs=surf_parts[0].crs,
+        if gdf is None or gdf.empty:
+            continue
+        singlepart = dissolve_and_singlepart(gdf)
+        split_surf_parts.append(
+            split_lines_at_points(singlepart, split_points, _SURF_RADII[lvl])
         )
+
+    merged = pd.concat(split_fwy_parts + split_surf_parts, ignore_index=True)
+    result = gpd.GeoDataFrame(merged, geometry="geometry", crs=base_crs)
+
+    # Compute midpoint coordinates and MidPointID matching arcpy output
+    midpts = result.geometry.interpolate(0.5, normalized=True)
+    result["MIDX"] = midpts.x
+    result["MIDY"] = midpts.y
+    result["MidPointID"] = (
+        result["MIDX"].astype(int).astype(str)
+        + "|"
+        + result["MIDY"].astype(int).astype(str)
     )
 
-    merged = pd.concat(
-        split_fwy_parts + [surface_singlepart],
-        ignore_index=True,
-    )
-    return gpd.GeoDataFrame(merged, geometry="geometry", crs=base_crs)
+    return result
 
 
 def transfer_attributes_by_midpoint(
@@ -225,7 +258,7 @@ def transfer_attributes_by_midpoint(
     Parameters
     ----------
     cleaned_gdf : GeoDataFrame
-        Output of rcl_merge — geometry only.
+        Output of rcl_merge — geometry + MIDX/MIDY/MidPointID columns.
     original_gdf : GeoDataFrame
         Raw source GeoDataFrame containing cols to transfer.
     cols : list[str]
