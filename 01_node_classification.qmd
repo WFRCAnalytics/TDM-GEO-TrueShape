@@ -48,7 +48,7 @@ from _src.node_utils import (
 ```{python}
 # ── Filepaths ──────────────────────────────────────────────────────────────
 PATHS = {
-    "in_centerlines": Path("_data/processing/CandidateTDMRoadLinks.gpkg"),
+    "in_centerlines": Path("_data/processed/CandidateTDMRoadLinks.gpkg"),
     "in_network_links": Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Link.shp"),
     "in_network_nodes": Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Node.shp"),
     "in_gtfs": Path("_data/raw/uta_gtfs.zip"),

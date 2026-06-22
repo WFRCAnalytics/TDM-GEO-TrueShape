@@ -40,7 +40,7 @@ config_filepath = {
     "out_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
     "out_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
     "out_gtfs": Path("_data/raw/uta_gtfs.zip"),
-    "out_candidate_links": Path("_data/processing/CandidateTDMRoadLinks.gpkg"),
+    "out_candidate_links": Path("_data/processed/CandidateTDMRoadLinks.gpkg"),
 }
 
 # ── CRS ───────────────────────────────────────────────────────────────────
