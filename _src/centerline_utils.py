@@ -36,6 +36,7 @@ Public API
 
 from __future__ import annotations
 
+import warnings
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import MultiPoint, Point
@@ -74,8 +75,9 @@ def build_junction_split_points(all_segments_gdf: gpd.GeoDataFrame) -> gpd.GeoDa
     self-join with 1 m tolerance, and return points where join_count >= 3.
 
     The 1-metre buffer-based self-join matches arcpy SpatialJoin(search_radius=
-    "1 Meters"), replacing the prior predicate="intersects" (0 m) that missed
-    endpoints snapped close but not exactly coincident.
+    "1 Meters"). predicate="intersects" is used (not "within") so that endpoints
+    lying exactly 1 m apart are counted as co-located — matching arcpy's
+    inclusive search radius behaviour.
 
     Equivalent to arcpy FeatureVerticesToPoints(BOTH_ENDS) +
     SpatialJoin(self, search_radius="1 Meters") + filter Join_Count >= 3.
@@ -85,7 +87,7 @@ def build_junction_split_points(all_segments_gdf: gpd.GeoDataFrame) -> gpd.GeoDa
     join_buf = gpd.GeoDataFrame(
         geometry=vertices.geometry.buffer(1.0), crs=vertices.crs
     )
-    joined = gpd.sjoin(vertices, join_buf, how="left", predicate="within")
+    joined = gpd.sjoin(vertices, join_buf, how="left", predicate="intersects")
     join_counts = joined.groupby(joined.index).size().rename("join_count")
     vertices = vertices.join(join_counts)
 
@@ -126,26 +128,35 @@ def split_lines_at_points(
     search_radius_m metres.
 
     Strategy:
-      1. For each line, collect all split-points within the search radius.
-      2. Project each point onto the line to get the nearest on-line location.
+      1. For each line, collect all split-points within the search radius
+         (inclusive — uses intersects on buffer, matching arcpy search_radius).
+      2. Project each point onto the line; deduplicate by on-line position to
+         prevent coincident projected points from breaking shapely split.
       3. Use shapely snap + split to cut the line at those locations.
 
     Equivalent to arcpy SplitLineAtPoint.
     """
     result_geoms: list = []
+    n_failures = 0
 
     for line_geom in lines_gdf.geometry:
         nearby = points_gdf[
-            points_gdf.geometry.within(line_geom.buffer(search_radius_m))
+            points_gdf.geometry.intersects(line_geom.buffer(search_radius_m))
         ].geometry
 
         if nearby.empty:
             result_geoms.append(line_geom)
             continue
 
-        splitter_pts = [
-            line_geom.interpolate(line_geom.project(pt)) for pt in nearby
-        ]
+        # Project onto line and deduplicate by on-line distance (mm precision)
+        seen: set[int] = set()
+        splitter_pts: list[Point] = []
+        for pt in nearby:
+            dist_mm = round(line_geom.project(pt) * 1000)
+            if dist_mm not in seen:
+                seen.add(dist_mm)
+                splitter_pts.append(line_geom.interpolate(line_geom.project(pt)))
+
         splitter = MultiPoint(splitter_pts)
         snapped_line = snap(line_geom, splitter, tolerance=search_radius_m)
 
@@ -153,7 +164,15 @@ def split_lines_at_points(
             pieces = split(snapped_line, splitter)
             result_geoms.extend(list(pieces.geoms))
         except Exception:
+            n_failures += 1
             result_geoms.append(line_geom)
+
+    if n_failures:
+        warnings.warn(
+            f"split_lines_at_points: {n_failures} line(s) could not be split "
+            "and were kept unsplit.",
+            stacklevel=2,
+        )
 
     result = gpd.GeoDataFrame(geometry=result_geoms, crs=lines_gdf.crs)
     return result[~result.is_empty].reset_index(drop=True)
