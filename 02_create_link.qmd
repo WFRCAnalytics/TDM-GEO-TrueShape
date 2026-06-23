@@ -1,7 +1,7 @@
 ---
 title: Create True-Shape Links
-subtitle: Splitting physical centerlines at snapped model nodes to produce true-shape link pieces
-description: Physical centerline geometry is dissolved, merged, and split at every snapped WFRC model node to produce the raw building-block pieces for true-shape link conflation.
+subtitle: Splitting candidate centerlines at snapped model nodes to produce true-shape link pieces
+description: CandidateTDMRoadLinks centerline components (already dissolved and junction-split in 00_data_preparation.qmd) are split at every snapped WFRC model node to produce the raw building-block pieces for true-shape link conflation, carrying OBJECTID and UNIQUE_ID lineage keys through to each piece.
 author:
  - name: Pukar Bhandari
    email: pukar.bhandari@wfrc.utah.gov
@@ -24,7 +24,7 @@ import numpy as np
 from shapely.geometry import Point
 
 sys.path.insert(0, str(Path.cwd()))
-from _src.link_utils import merge_centerlines, resolve_snap_coords, split_at_nodes
+from _src.link_utils import resolve_snap_coords, split_candidate_links
 ```
 
 ### Configuration
@@ -32,10 +32,13 @@ from _src.link_utils import merge_centerlines, resolve_snap_coords, split_at_nod
 ```{python}
 # ── Filepaths ──────────────────────────────────────────────────────────────
 PATHS = {
-    "in_centerlines":  Path("_data/raw/RCL2TDMnew.gdb.zip"),
+    "in_centerlines":  Path("_data/processed/CandidateTDMRoadLinks.gpkg"),
     "in_node_snapped": Path("_data/processed/nodes_snapped.gpkg"),
     "out_link_pieces": Path("_data/processed/link_pieces.gpkg"),
 }
+
+# Lineage keys carried from each centerline component onto its split pieces.
+ID_COLS = ("OBJECTID", "UNIQUE_ID")
 
 # ── CRS ───────────────────────────────────────────────────────────────────
 CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
@@ -45,34 +48,18 @@ CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
 
 ## Load Data
 
-### Roadway Centerlines
+### Candidate Centerlines
 
-Same source, layer, `where=` filter, and whitespace-stripping as `01_node_classification.qmd`
-to ensure the merged geometry is built from the identical feature set used for snapping.
+`CandidateTDMRoadLinks.gpkg` (built in `00_data_preparation.qmd`) is already
+filtered, dissolved into maximal chains, and split at physical junctions —
+each row here is one component bounded only by a junction or a pre-existing
+line endpoint. No further merge/filter is applied; this notebook only splits
+these components further at snapped model-node positions.
 
 ```{python}
-gdb_path = f"/vsizip/{PATHS['in_centerlines'].as_posix()}"
+gdf_centerlines = gpd.read_file(PATHS["in_centerlines"]).to_crs(CRS_UTM)
 
-COUNTY_FIPS = ["49003", "49057", "49011", "49035", "49049"]
-county_filter = "(" + ", ".join(f"'{f}'" for f in COUNTY_FIPS) + ")"
-
-gdf_centerlines = gpd.read_file(
-    gdb_path,
-    layer="RCLWasatchFrontAll",
-    where=(
-        f"(DOT_FCLASS IN ('Interstate', 'Local', 'Major Collector', "
-        f"'Minor Arterial', 'Minor Collector', 'Other Freeway', 'Principal Arterial') "
-        f"OR DOT_RTNAME LIKE '%R%' OR DOT_RTNAME LIKE '%C%') "
-        f"AND CARTOCODE <> '99' "
-        f"AND (COUNTY_L IN {county_filter} OR COUNTY_R IN {county_filter})"
-    ),
-).to_crs(CRS_UTM)
-
-for col in ["DOT_FCLASS", "CARTOCODE", "STATUS", "ONEWAY", "VERT_LEVEL", "POSTTYPE"]:
-    if col in gdf_centerlines.columns:
-        gdf_centerlines[col] = gdf_centerlines[col].str.strip()
-
-print(f"Centerlines: {len(gdf_centerlines):,} features | CRS: {gdf_centerlines.crs}")
+print(f"Candidate components: {len(gdf_centerlines):,} | CRS: {gdf_centerlines.crs}")
 ```
 
 ### Snapped Nodes
@@ -144,39 +131,19 @@ print(f"Split points prepared: {len(snap_points_exact):,}")
 
 ---
 
-## Part B — Merge Centerlines
+## Part B — Split at Snapped Nodes
 
-Fuse consecutive segments at degree-2 vertices via `linemerge`. Real intersections
-(3+ roads meeting) remain as line endpoints and are not merged.
-
-```{python}
-print("Merging centerlines …")
-cl_merged = merge_centerlines(gdf_centerlines)
-
-if cl_merged.geom_type == "MultiLineString":
-    n_components = len(cl_merged.geoms)
-elif cl_merged.geom_type == "LineString":
-    n_components = 1
-else:
-    n_components = sum(1 for g in cl_merged.geoms if g.geom_type == "LineString")
-
-total_length_km = sum(
-    g.length for g in (cl_merged.geoms if hasattr(cl_merged, "geoms") else [cl_merged])
-) / 1000
-print(f"Merged: {n_components:,} components | total length: {total_length_km:,.1f} km")
-```
-
----
-
-## Part C — Split at Snapped Nodes
-
-Split the merged geometry at every model-node snap point and every CC attachment
-snap point. Points that project to within 0.1 mm of a line's existing endpoint
-are skipped (already a boundary). After all splits, each resulting piece is
-bounded exclusively by:
+Each candidate component is split independently at every model-node snap point
+and every CC attachment snap point — no merge step runs first, so components
+from different VERT_LEVELs are never combined. Points that project to within
+0.1 mm of a component's existing endpoint are skipped (already a boundary).
+After all splits, each resulting piece is bounded exclusively by:
 - a snapped model node position,
 - a snapped CC attachment node position, or
-- a physical road intersection preserved by linemerge.
+- a junction/endpoint already present in CandidateTDMRoadLinks.
+
+`OBJECTID` and `UNIQUE_ID` — the GERS lineage keys identified in the project
+roadmap — are copied from each parent component onto every sub-piece it produces.
 
 ```{python}
 cc_resolved = gdf_cc_snapped[gdf_cc_snapped["snap_resolved"]]
@@ -194,26 +161,28 @@ print(
 ```
 
 ```{python}
-print(f"Splitting {n_components:,} line components at {len(all_snap_points):,} points …")
-pieces = split_at_nodes(cl_merged, all_snap_points)
-print(f"Pieces after split: {len(pieces):,}")
+print(f"Splitting {len(gdf_centerlines):,} candidate components at {len(all_snap_points):,} points …")
+gdf_pieces_split = split_candidate_links(gdf_centerlines, all_snap_points, id_cols=ID_COLS)
+print(f"Pieces after split: {len(gdf_pieces_split):,}")
 ```
 
 ---
 
-## Part D — Build Pieces Layer and Export
+## Part C — Build Pieces Layer and Export
 
 Extract start/end endpoint coordinates for each piece (rounded to 2 dp for
 matching against `snapped_x_round / snapped_y_round` in the next stage), then
-export as `link_pieces.gpkg`.
+export as `link_pieces.gpkg` with the inherited lineage-key columns.
 
 ```{python}
+pieces = gdf_pieces_split.geometry.tolist()
 start_coords = np.array([p.coords[0] for p in pieces])
 end_coords   = np.array([p.coords[-1] for p in pieces])
 
 gdf_pieces = gpd.GeoDataFrame(
     {
         "piece_id": np.arange(len(pieces)),
+        **{col: gdf_pieces_split[col].values for col in ID_COLS},
         "x_start":  np.round(start_coords[:, 0], 2),
         "y_start":  np.round(start_coords[:, 1], 2),
         "x_end":    np.round(end_coords[:, 0], 2),
@@ -241,7 +210,7 @@ print(f"  Median: {lengths.median():.1f}")
 print(f"  P90:    {lengths.quantile(0.90):.1f}")
 print(f"  Max:    {lengths.max():.1f}")
 print()
-print(f"Input:  {len(gdf_centerlines):,} centerline segments")
+print(f"Input:  {len(gdf_centerlines):,} candidate components")
 print(f"        {n_road_snapped:,} snapped road nodes ({n_resolved:,} coordinate-resolved)")
 print(f"        {len(gdf_cc_snapped):,} CC attachment nodes snapped")
 print(f"Output: {len(gdf_pieces):,} pieces → {PATHS['out_link_pieces'].name}")

@@ -396,7 +396,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup-environment"><span class="header-section-number">1</span> Setup Environment</h2>
 <section id="import-libraries" class="level3">
 <h3 class="anchored" data-anchor-id="import-libraries">Import Libraries</h3>
-<div id="7c50b692" class="cell" data-execution_count="1">
+<div id="a5eed57a" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -417,7 +417,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="filepath-configuration" class="level3">
 <h3 class="anchored" data-anchor-id="filepath-configuration">Filepath Configuration</h3>
-<div id="6e27d364" class="cell" data-execution_count="2">
+<div id="1120af64" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -426,7 +426,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_network_links"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet - Link.gpkg"</span>),</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_network_nodes"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet - Node.gpkg"</span>),</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_gtfs"</span>: Path(<span class="st">"_data/raw/uta_gtfs.zip"</span>),</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_candidate_links"</span>: Path(<span class="st">"_data/processing/CandidateTDMRoadLinks.gpkg"</span>),</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_candidate_links"</span>: Path(<span class="st">"_data/processed/CandidateTDMRoadLinks.gpkg"</span>),</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
@@ -437,7 +437,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="arcgis-connections" class="level3">
 <h3 class="anchored" data-anchor-id="arcgis-connections">ArcGIS Connections</h3>
-<div id="de4e3c40" class="cell" data-execution_count="3">
+<div id="a2fdf9e7" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Anonymous connection for public layers</span></span>
@@ -450,7 +450,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="2" class="anchored" data-anchor-id="download-and-store-data"><span class="header-section-number">2</span> Download and Store Data</h2>
 <section id="roadway-centerlines" class="level3">
 <h3 class="anchored" data-anchor-id="roadway-centerlines">Roadway Centerlines</h3>
-<div id="629d1c42" class="cell" data-execution_count="5">
+<div id="e4c5b400" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="op">=</span> config_filepath[<span class="st">"out_centerlines"</span>]</span>
@@ -473,7 +473,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="network-links" class="level3">
 <h3 class="anchored" data-anchor-id="network-links">Network Links</h3>
-<div id="febcd889" class="cell" data-execution_count="6">
+<div id="254fbd5e" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="op">=</span> config_filepath[<span class="st">"out_network_links"</span>]</span>
@@ -496,7 +496,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="network-nodes" class="level3">
 <h3 class="anchored" data-anchor-id="network-nodes">Network Nodes</h3>
-<div id="cf2c7407" class="cell" data-execution_count="7">
+<div id="b5c88ac3" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="op">=</span> config_filepath[<span class="st">"out_network_nodes"</span>]</span>
@@ -519,7 +519,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="uta-gtfs" class="level3">
 <h3 class="anchored" data-anchor-id="uta-gtfs">UTA GTFS</h3>
-<div id="610b3624" class="cell" data-execution_count="8">
+<div id="5305b27c" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>GTFS_URL <span class="op">=</span> <span class="st">"https://gtfsfeed.rideuta.com/GTFS.zip"</span></span>
@@ -543,12 +543,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Converts raw UGRC centerlines into a topology-clean <code>CandidateTDMRoadLinks</code> dataset that the snapping and true-shape pipeline consumes. The algorithm (dissolve → split at junctions → attribute transfer) lives in <code>_src/centerline_utils.py</code>; only the filter definitions belong here.</p>
 <section id="load-and-filter-raw-centerlines" class="level3">
 <h3 class="anchored" data-anchor-id="load-and-filter-raw-centerlines">Load and Filter Raw Centerlines</h3>
-<div id="0bc63a19" class="cell" data-execution_count="9">
+<div id="258f4bd4" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>gdf_cl <span class="op">=</span> gpd.read_file(</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    config_filepath[<span class="st">"out_centerlines"</span>],</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    where<span class="op">=</span><span class="st">"DOT_RTNAME != 'DupRoute' AND STATUS NOT IN ('Retired', 'Planned')"</span>,</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    where<span class="op">=</span><span class="st">"DOT_RTNAME NOT IN ('DupRoute', 'Dupe') AND STATUS NOT IN ('Retired', 'Planned')"</span>,</span>
 <span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Wasatch Front county FIPS codes ───────────────────────────────────────</span></span>
@@ -563,13 +563,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"WF centerlines: </span><span class="sc">{</span><span class="bu">len</span>(gdf_wf)<span class="sc">:,}</span><span class="ss"> rows"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>WF centerlines: 168,323 rows</code></pre>
+<pre><code>WF centerlines: 168,118 rows</code></pre>
 </div>
 </div>
 </section>
 <section id="define-freeway-and-surface-filters" class="level3">
 <h3 class="anchored" data-anchor-id="define-freeway-and-surface-filters">Define Freeway and Surface Filters</h3>
-<div id="c06e0c34" class="cell" data-execution_count="10">
+<div id="bfc96628" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Freeway / ramp / CD filter ─────────────────────────────────────────────</span></span>
@@ -625,7 +625,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   fwy lvl1: 595
   fwy lvl2: 21
   fwy lvl3: 0
-  surf lvl0: 22,492
+  surf lvl0: 22,490
   surf lvl1: 184
   surf lvl2: 9
   surf lvl3: 0</code></pre>
@@ -634,7 +634,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="run-rcl-merge" class="level3">
 <h3 class="anchored" data-anchor-id="run-rcl-merge">Run RCL Merge</h3>
-<div id="3c3ef852" class="cell" data-execution_count="11">
+<div id="63b57e82" class="cell" data-execution_count="11">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="op">=</span> config_filepath[<span class="st">"out_candidate_links"</span>]</span>
@@ -649,28 +649,29 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># in the snapping pipeline.</span></span>
 <span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    TRANSFER_COLS <span class="op">=</span> [</span>
 <span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>        <span class="st">"OBJECTID"</span>,</span>
-<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_FCLASS"</span>,</span>
-<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>        <span class="st">"POSTTYPE"</span>,</span>
-<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_RTNAME"</span>,</span>
-<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_HWYNAM"</span>,</span>
-<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>        <span class="st">"FULLNAME"</span>,</span>
-<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>        <span class="st">"CARTOCODE"</span>,</span>
-<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ONEWAY"</span>,</span>
-<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>        <span class="st">"VERT_LEVEL"</span>,</span>
-<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>    ]</span>
-<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>    gdf_candidate <span class="op">=</span> transfer_attributes_by_midpoint(</span>
-<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>        gdf_candidate, gdf_wf, TRANSFER_COLS</span>
-<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>    out_path.parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>    gdf_candidate.to_file(out_path, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
-<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span>:</span>
-<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"File already exists, skipping: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>        <span class="st">"UNIQUE_ID"</span>,</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_FCLASS"</span>,</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>        <span class="st">"POSTTYPE"</span>,</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_RTNAME"</span>,</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_HWYNAM"</span>,</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>        <span class="st">"FULLNAME"</span>,</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>        <span class="st">"CARTOCODE"</span>,</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ONEWAY"</span>,</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>        <span class="st">"VERT_LEVEL"</span>,</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">"SPEED_LMT"</span>,</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>    gdf_candidate <span class="op">=</span> transfer_attributes_by_midpoint(</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>        gdf_candidate, gdf_wf, TRANSFER_COLS</span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>    out_path.parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>    gdf_candidate.to_file(out_path, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span>:</span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"File already exists, skipping: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Candidate links (geometry only): 7,688 rows
-Saved to: _data\processing\CandidateTDMRoadLinks.gpkg</code></pre>
+<pre><code>File already exists, skipping: _data\processed\CandidateTDMRoadLinks.gpkg</code></pre>
 </div>
 </div>
 
@@ -1187,7 +1188,7 @@ Saved to: _data\processing\CandidateTDMRoadLinks.gpkg</code></pre>
 <span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_network_links"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet - Link.gpkg"</span>),</span>
 <span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_network_nodes"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet - Node.gpkg"</span>),</span>
 <span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_gtfs"</span>: Path(<span class="st">"_data/raw/uta_gtfs.zip"</span>),</span>
-<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_candidate_links"</span>: Path(<span class="st">"_data/processing/CandidateTDMRoadLinks.gpkg"</span>),</span>
+<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_candidate_links"</span>: Path(<span class="st">"_data/processed/CandidateTDMRoadLinks.gpkg"</span>),</span>
 <span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
@@ -1296,7 +1297,7 @@ Saved to: _data\processing\CandidateTDMRoadLinks.gpkg</code></pre>
 <span id="cb18-167"><a href="#cb18-167" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
 <span id="cb18-168"><a href="#cb18-168" aria-hidden="true" tabindex="-1"></a>gdf_cl <span class="op">=</span> gpd.read_file(</span>
 <span id="cb18-169"><a href="#cb18-169" aria-hidden="true" tabindex="-1"></a>    config_filepath[<span class="st">"out_centerlines"</span>],</span>
-<span id="cb18-170"><a href="#cb18-170" aria-hidden="true" tabindex="-1"></a>    where<span class="op">=</span><span class="st">"DOT_RTNAME != 'DupRoute' AND STATUS NOT IN ('Retired', 'Planned')"</span>,</span>
+<span id="cb18-170"><a href="#cb18-170" aria-hidden="true" tabindex="-1"></a>    where<span class="op">=</span><span class="st">"DOT_RTNAME NOT IN ('DupRoute', 'Dupe') AND STATUS NOT IN ('Retired', 'Planned')"</span>,</span>
 <span id="cb18-171"><a href="#cb18-171" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb18-172"><a href="#cb18-172" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb18-173"><a href="#cb18-173" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Wasatch Front county FIPS codes ───────────────────────────────────────</span></span>
@@ -1377,25 +1378,27 @@ Saved to: _data\processing\CandidateTDMRoadLinks.gpkg</code></pre>
 <span id="cb18-252"><a href="#cb18-252" aria-hidden="true" tabindex="-1"></a>    <span class="co"># in the snapping pipeline.</span></span>
 <span id="cb18-253"><a href="#cb18-253" aria-hidden="true" tabindex="-1"></a>    TRANSFER_COLS <span class="op">=</span> [</span>
 <span id="cb18-254"><a href="#cb18-254" aria-hidden="true" tabindex="-1"></a>        <span class="st">"OBJECTID"</span>,</span>
-<span id="cb18-255"><a href="#cb18-255" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_FCLASS"</span>,</span>
-<span id="cb18-256"><a href="#cb18-256" aria-hidden="true" tabindex="-1"></a>        <span class="st">"POSTTYPE"</span>,</span>
-<span id="cb18-257"><a href="#cb18-257" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_RTNAME"</span>,</span>
-<span id="cb18-258"><a href="#cb18-258" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_HWYNAM"</span>,</span>
-<span id="cb18-259"><a href="#cb18-259" aria-hidden="true" tabindex="-1"></a>        <span class="st">"FULLNAME"</span>,</span>
-<span id="cb18-260"><a href="#cb18-260" aria-hidden="true" tabindex="-1"></a>        <span class="st">"CARTOCODE"</span>,</span>
-<span id="cb18-261"><a href="#cb18-261" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ONEWAY"</span>,</span>
-<span id="cb18-262"><a href="#cb18-262" aria-hidden="true" tabindex="-1"></a>        <span class="st">"VERT_LEVEL"</span>,</span>
-<span id="cb18-263"><a href="#cb18-263" aria-hidden="true" tabindex="-1"></a>    ]</span>
-<span id="cb18-264"><a href="#cb18-264" aria-hidden="true" tabindex="-1"></a>    gdf_candidate <span class="op">=</span> transfer_attributes_by_midpoint(</span>
-<span id="cb18-265"><a href="#cb18-265" aria-hidden="true" tabindex="-1"></a>        gdf_candidate, gdf_wf, TRANSFER_COLS</span>
-<span id="cb18-266"><a href="#cb18-266" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb18-267"><a href="#cb18-267" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-268"><a href="#cb18-268" aria-hidden="true" tabindex="-1"></a>    out_path.parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb18-269"><a href="#cb18-269" aria-hidden="true" tabindex="-1"></a>    gdf_candidate.to_file(out_path, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
-<span id="cb18-270"><a href="#cb18-270" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb18-271"><a href="#cb18-271" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span>:</span>
-<span id="cb18-272"><a href="#cb18-272" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"File already exists, skipping: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb18-273"><a href="#cb18-273" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-255"><a href="#cb18-255" aria-hidden="true" tabindex="-1"></a>        <span class="st">"UNIQUE_ID"</span>,</span>
+<span id="cb18-256"><a href="#cb18-256" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_FCLASS"</span>,</span>
+<span id="cb18-257"><a href="#cb18-257" aria-hidden="true" tabindex="-1"></a>        <span class="st">"POSTTYPE"</span>,</span>
+<span id="cb18-258"><a href="#cb18-258" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_RTNAME"</span>,</span>
+<span id="cb18-259"><a href="#cb18-259" aria-hidden="true" tabindex="-1"></a>        <span class="st">"DOT_HWYNAM"</span>,</span>
+<span id="cb18-260"><a href="#cb18-260" aria-hidden="true" tabindex="-1"></a>        <span class="st">"FULLNAME"</span>,</span>
+<span id="cb18-261"><a href="#cb18-261" aria-hidden="true" tabindex="-1"></a>        <span class="st">"CARTOCODE"</span>,</span>
+<span id="cb18-262"><a href="#cb18-262" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ONEWAY"</span>,</span>
+<span id="cb18-263"><a href="#cb18-263" aria-hidden="true" tabindex="-1"></a>        <span class="st">"VERT_LEVEL"</span>,</span>
+<span id="cb18-264"><a href="#cb18-264" aria-hidden="true" tabindex="-1"></a>        <span class="st">"SPEED_LMT"</span>,</span>
+<span id="cb18-265"><a href="#cb18-265" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb18-266"><a href="#cb18-266" aria-hidden="true" tabindex="-1"></a>    gdf_candidate <span class="op">=</span> transfer_attributes_by_midpoint(</span>
+<span id="cb18-267"><a href="#cb18-267" aria-hidden="true" tabindex="-1"></a>        gdf_candidate, gdf_wf, TRANSFER_COLS</span>
+<span id="cb18-268"><a href="#cb18-268" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb18-269"><a href="#cb18-269" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-270"><a href="#cb18-270" aria-hidden="true" tabindex="-1"></a>    out_path.parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb18-271"><a href="#cb18-271" aria-hidden="true" tabindex="-1"></a>    gdf_candidate.to_file(out_path, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
+<span id="cb18-272"><a href="#cb18-272" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb18-273"><a href="#cb18-273" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span>:</span>
+<span id="cb18-274"><a href="#cb18-274" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"File already exists, skipping: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb18-275"><a href="#cb18-275" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->

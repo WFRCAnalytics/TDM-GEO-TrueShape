@@ -149,7 +149,7 @@ dataset that the snapping and true-shape pipeline consumes.  The algorithm
 ```{python}
 gdf_cl = gpd.read_file(
     config_filepath["out_centerlines"],
-    where="DOT_RTNAME != 'DupRoute' AND STATUS NOT IN ('Retired', 'Planned')",
+    where="DOT_RTNAME NOT IN ('DupRoute', 'Dupe') AND STATUS NOT IN ('Retired', 'Planned')",
 )
 
 # ── Wasatch Front county FIPS codes ───────────────────────────────────────
@@ -230,6 +230,7 @@ if not out_path.exists():
     # in the snapping pipeline.
     TRANSFER_COLS = [
         "OBJECTID",
+        "UNIQUE_ID",
         "DOT_FCLASS",
         "POSTTYPE",
         "DOT_RTNAME",
@@ -238,6 +239,7 @@ if not out_path.exists():
         "CARTOCODE",
         "ONEWAY",
         "VERT_LEVEL",
+        "SPEED_LMT",
     ]
     gdf_candidate = transfer_attributes_by_midpoint(
         gdf_candidate, gdf_wf, TRANSFER_COLS

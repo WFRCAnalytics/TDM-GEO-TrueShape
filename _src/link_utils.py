@@ -17,15 +17,14 @@ Stage 2 — Public API
         exact centerline vertex coordinate using STRtree nearest-vertex lookup.
         Adds x_exact, y_exact, snap_resolved columns.
 
-    merge_centerlines(gdf_centerlines)
-        Merge all centerline geometries into a single combined geometry via
-        linemerge on the raw segments. Segments touching at degree-2 vertices
-        are fused; intersections and flyover crossings are preserved as-is.
-
-    split_at_nodes(cl_merged, snap_points_exact)
-        Split the merged centerline geometry at all snapped node positions.
-        Uses M-value projection + substring to handle multiple split points per
-        line in one pass. Returns a list of LineString pieces.
+    split_candidate_links(gdf_components, snap_points_exact, id_cols)
+        Split each pre-dissolved centerline component (e.g. CandidateTDMRoadLinks
+        rows) at all snapped node positions. Each row is treated independently —
+        no linemerge/unary_union is applied — so components from different
+        VERT_LEVELs are never combined. Uses M-value projection + substring to
+        handle multiple split points per line in one pass. id_cols values are
+        copied from each parent component onto its resulting sub-pieces.
+        Returns a GeoDataFrame of id_cols + geometry, one row per piece.
 
 Stage 3 — Public API
 --------------------
@@ -53,8 +52,8 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import shapely
-from shapely.geometry import LineString, MultiLineString, Point
-from shapely.ops import linemerge, substring
+from shapely.geometry import LineString, Point
+from shapely.ops import substring
 from shapely.strtree import STRtree
 
 # =============================================================================
@@ -150,75 +149,47 @@ def resolve_snap_coords(
     return result
 
 
-def merge_centerlines(gdf_centerlines: gpd.GeoDataFrame) -> MultiLineString | LineString:
-    """
-    Merge all centerline geometries into a single combined geometry.
-
-    Passes the raw segment collection directly to linemerge (no unary_union).
-    linemerge only joins lines at pre-existing shared endpoints — it never
-    inserts new vertices at interior crossings. This means:
-    - Flyovers/underpasses that cross geometrically but share no endpoint are
-      left as independent components (no false split points).
-    - Ramps that physically connect to another road at a shared endpoint are
-      still merged through that point regardless of vertical level.
-
-    Real intersections (degree >= 3, where 3+ segments share an endpoint)
-    remain as component boundaries and are not merged.
-
-    Parameters
-    ----------
-    gdf_centerlines : GeoDataFrame
-        Centerline layer. All rows are merged; apply any FT/class filtering in
-        the notebook before calling.
-
-    Returns
-    -------
-    MultiLineString or LineString
-        Combined geometry. Iterate over .geoms for individual components.
-    """
-    # Flatten any MultiLineStrings to simple LineStrings before merging;
-    # linemerge requires simple geometries (it accesses .coords on each element).
-    parts = shapely.get_parts(gdf_centerlines.geometry.values)
-    return linemerge(parts.tolist())
-
-
-def split_at_nodes(
-    cl_merged: MultiLineString | LineString,
+def split_candidate_links(
+    gdf_components: gpd.GeoDataFrame,
     snap_points_exact: list[Point],
-) -> list[LineString]:
+    id_cols: tuple[str, ...] = ("OBJECTID", "UNIQUE_ID"),
+) -> gpd.GeoDataFrame:
     """
-    Split the merged centerline geometry at all snapped node positions.
+    Split each pre-dissolved centerline component at all snapped node positions.
 
-    For each component LineString in cl_merged, finds all snap points that lie
-    on it (within 1 cm tolerance), projects them to M-values, and uses
-    shapely.ops.substring to extract the sub-segments between consecutive
-    cut points. Points at or beyond a line's endpoints (M ≈ 0 or M ≈ total
-    length) are silently skipped — those lines are already bounded there.
+    Each row of gdf_components (e.g. CandidateTDMRoadLinks) is already a
+    maximal-chain component bounded only by physical junctions — see
+    centerline_utils.rcl_merge. This function treats rows independently and
+    applies no linemerge/unary_union, so components from different VERT_LEVELs
+    are never combined.
+
+    For each component, finds all snap points that lie on it (within 1 cm
+    tolerance), projects them to M-values, and uses shapely.ops.substring to
+    extract the sub-segments between consecutive cut points. Points at or
+    beyond a line's endpoints (M ≈ 0 or M ≈ total length) are silently
+    skipped — those lines are already bounded there.
 
     Parameters
     ----------
-    cl_merged : MultiLineString or LineString
-        Output of merge_centerlines(). Must be in the same CRS as snap points.
+    gdf_components : GeoDataFrame
+        One row per maximal-chain centerline component. Must include geometry
+        and every column named in id_cols.
     snap_points_exact : list[Point]
         Exact-coordinate snap points, one per snapped node (from x_exact/y_exact
         columns of resolve_snap_coords output). Points that do not lie on any
-        line are silently ignored.
+        component are silently ignored.
+    id_cols : tuple[str, ...]
+        Columns to copy from each parent component onto its resulting
+        sub-pieces (lineage keys — see CLAUDE.md GERS roadmap).
 
     Returns
     -------
-    list[LineString]
-        Flat list of LineString pieces. Every piece's endpoints are either a
-        snapped node position or a physical intersection preserved by linemerge.
+    GeoDataFrame
+        One row per output piece: id_cols + geometry. Every piece's endpoints
+        are either a snapped node position or a component boundary inherited
+        from gdf_components.
     """
-    # ── Flatten to list of component LineStrings ─────────────────────────────
-    if cl_merged.geom_type == "LineString":
-        components = [cl_merged]
-    elif cl_merged.geom_type == "MultiLineString":
-        components = list(cl_merged.geoms)
-    else:
-        # GeometryCollection fallback — extract any LineStrings present
-        components = [g for g in cl_merged.geoms if g.geom_type == "LineString"]
-
+    components = gdf_components.geometry.tolist()
     n_components = len(components)
 
     # ── Assign each snap point to the component(s) it lies on ────────────────
@@ -227,7 +198,6 @@ def split_at_nodes(
     tree = STRtree(components)
 
     piece_to_pts: defaultdict[int, list[Point]] = defaultdict(list)
-    n_assigned = 0
     for pt in snap_points_exact:
         if pt is None:
             continue
@@ -235,19 +205,21 @@ def split_at_nodes(
         for idx in candidate_idxs:
             if idx < n_components and components[idx].distance(pt) <= _QUERY_TOL:
                 piece_to_pts[idx].append(pt)
-                n_assigned += 1
-                break  # a point lies on at most one component after linemerge
+                break  # a point lies on at most one component (rows don't overlap)
 
-    # ── Split each component at its assigned points ───────────────────────────
-    result: list[LineString] = []
+    # ── Split each component at its assigned points, carrying id_cols ────────
+    id_values = gdf_components[list(id_cols)].to_numpy()
+
+    result_rows: list[dict] = []
     for i, line in enumerate(components):
         pts = piece_to_pts.get(i)
-        if not pts:
-            result.append(line)
-        else:
-            result.extend(_split_line_at_points(line, pts))
+        sub_geoms = _split_line_at_points(line, pts) if pts else [line]
+        for geom in sub_geoms:
+            row = {col: id_values[i, j] for j, col in enumerate(id_cols)}
+            row["geometry"] = geom
+            result_rows.append(row)
 
-    return result
+    return gpd.GeoDataFrame(result_rows, geometry="geometry", crs=gdf_components.crs)
 
 
 # =============================================================================

@@ -307,6 +307,14 @@ def transfer_attributes_by_midpoint(
         distance_col="_join_dist_m",
     )
     # sjoin_nearest can produce duplicates when equidistant; keep the first
+    n_ties = int(joined.index.duplicated(keep="first").sum())
+    if n_ties:
+        warnings.warn(
+            f"transfer_attributes_by_midpoint: {n_ties} midpoint(s) had an exact "
+            "distance tie between two source features; kept the first match "
+            "arbitrarily.",
+            stacklevel=2,
+        )
     joined = joined[~joined.index.duplicated(keep="first")]
 
     result = cleaned_gdf.copy()
