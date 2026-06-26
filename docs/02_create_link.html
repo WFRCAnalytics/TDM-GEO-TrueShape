@@ -391,7 +391,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="imports" class="level3">
 <h3 class="anchored" data-anchor-id="imports">Imports</h3>
-<div id="983eb527" class="cell" data-execution_count="1">
+<div id="c5793ad0" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -408,7 +408,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="configuration" class="level3">
 <h3 class="anchored" data-anchor-id="configuration">Configuration</h3>
-<div id="6b08cf1c" class="cell" data-execution_count="2">
+<div id="895eec21" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -433,7 +433,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="candidate-centerlines" class="level3">
 <h3 class="anchored" data-anchor-id="candidate-centerlines">Candidate Centerlines</h3>
 <p><code>CandidateTDMRoadLinks.gpkg</code> (built in <code>00_data_preparation.qmd</code>) is already filtered, dissolved into maximal chains, and split at physical junctions — each row here is one component bounded only by a junction or a pre-existing line endpoint. No further merge/filter is applied; this notebook only splits these components further at snapped model-node positions.</p>
-<div id="2411a386" class="cell" data-execution_count="3">
+<div id="4550c62b" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>gdf_centerlines <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_centerlines"</span>]).to_crs(CRS_UTM)</span>
@@ -441,13 +441,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Candidate components: </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> | CRS: </span><span class="sc">{</span>gdf_centerlines<span class="sc">.</span>crs<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Candidate components: 7,684 | CRS: EPSG:26912</code></pre>
+<pre><code>Candidate components: 15,566 | CRS: EPSG:26912</code></pre>
 </div>
 </div>
 </section>
 <section id="snapped-nodes" class="level3">
 <h3 class="anchored" data-anchor-id="snapped-nodes">Snapped Nodes</h3>
-<div id="f5c23a45" class="cell" data-execution_count="4">
+<div id="cd912e66" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
@@ -459,11 +459,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"CC attachment nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Nodes: 21,921 total | 3,475 snapped (15.9%)
-CC attachment nodes: 6,531</code></pre>
+<pre><code>Nodes: 21,953 total | 3,670 snapped (16.7%)
+CC attachment nodes: 6,539</code></pre>
 </div>
 </div>
-<div id="317784a7" class="cell" data-execution_count="5">
+<div id="f8bc4778" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>]].explore()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -476,7 +476,7 @@ CC attachment nodes: 6,531</code></pre>
 <h2 data-number="3" class="anchored" data-anchor-id="part-a-resolve-snap-coordinates"><span class="header-section-number">3</span> Part A — Resolve Snap Coordinates</h2>
 <p><code>nodes_snapped.gpkg</code> stores <code>snapped_x_round / snapped_y_round</code> rounded to 2 decimal places (cm precision). Splitting and M-value operations require coordinates that exactly match a vertex stored in the centerline geometry. For each snapped node, this step finds the nearest unique centerline vertex within 5 cm and records its full-precision coordinate.</p>
 <p>FixedTransit_Rail nodes are excluded — they snap to GTFS rail infrastructure (CRT stations, LRT midpoints), not to road centerlines, so they are never road centerline split points.</p>
-<div id="5d5a8ecb" class="cell" data-execution_count="6">
+<div id="f299c2d1" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_road <span class="op">=</span> gdf_nodes_snapped[</span>
@@ -494,10 +494,10 @@ CC attachment nodes: 6,531</code></pre>
 <span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Coordinate resolution: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> resolved | </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss"> unresolved"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Coordinate resolution: 3,406 resolved | 0 unresolved</code></pre>
+<pre><code>Coordinate resolution: 3,600 resolved | 0 unresolved</code></pre>
 </div>
 </div>
-<div id="4c2b4af0" class="cell" data-execution_count="7">
+<div id="c3c6cb44" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_unresolved <span class="op">&gt;</span> <span class="dv">0</span>:</span>
@@ -509,7 +509,7 @@ CC attachment nodes: 6,531</code></pre>
 </details>
 </div>
 <p>Build the list of exact-coordinate Points used as split locations.</p>
-<div id="cc0014eb" class="cell" data-execution_count="8">
+<div id="cdf2dde8" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>resolved_mask <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
@@ -520,7 +520,7 @@ CC attachment nodes: 6,531</code></pre>
 <span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Split points prepared: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Split points prepared: 3,406</code></pre>
+<pre><code>Split points prepared: 3,600</code></pre>
 </div>
 </div>
 <hr>
@@ -529,7 +529,7 @@ CC attachment nodes: 6,531</code></pre>
 <h2 data-number="4" class="anchored" data-anchor-id="part-b-split-at-snapped-nodes"><span class="header-section-number">4</span> Part B — Split at Snapped Nodes</h2>
 <p>Each candidate component is split independently at every model-node snap point and every CC attachment snap point — no merge step runs first, so components from different VERT_LEVELs are never combined. Points that project to within 0.1 mm of a component’s existing endpoint are skipped (already a boundary). After all splits, each resulting piece is bounded exclusively by: - a snapped model node position, - a snapped CC attachment node position, or - a junction/endpoint already present in CandidateTDMRoadLinks.</p>
 <p><code>OBJECTID</code> and <code>UNIQUE_ID</code> — the GERS lineage keys identified in the project roadmap — are copied from each parent component onto every sub-piece it produces.</p>
-<div id="359267e8" class="cell" data-execution_count="9">
+<div id="28577fb4" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>cc_resolved <span class="op">=</span> gdf_cc_snapped[gdf_cc_snapped[<span class="st">"snap_resolved"</span>]]</span>
@@ -546,10 +546,10 @@ CC attachment nodes: 6,531</code></pre>
 <span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Split points: 3,406 (model nodes) + 5,942 (CC attachment, 589 unresolved excluded) = 9,348 total</code></pre>
+<pre><code>Split points: 3,600 (model nodes) + 5,948 (CC attachment, 591 unresolved excluded) = 9,548 total</code></pre>
 </div>
 </div>
-<div id="ecca6c3d" class="cell" data-execution_count="10">
+<div id="bda625c3" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
@@ -557,8 +557,8 @@ CC attachment nodes: 6,531</code></pre>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces after split: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces_split)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Splitting 7,684 candidate components at 9,348 points …
-Pieces after split: 12,385</code></pre>
+<pre><code>Splitting 15,566 candidate components at 9,548 points …
+Pieces after split: 19,424</code></pre>
 </div>
 </div>
 <hr>
@@ -566,7 +566,7 @@ Pieces after split: 12,385</code></pre>
 <section id="part-c-build-pieces-layer-and-export" class="level2" data-number="5">
 <h2 data-number="5" class="anchored" data-anchor-id="part-c-build-pieces-layer-and-export"><span class="header-section-number">5</span> Part C — Build Pieces Layer and Export</h2>
 <p>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for matching against <code>snapped_x_round / snapped_y_round</code> in the next stage), then export as <code>link_pieces.gpkg</code> with the inherited lineage-key columns.</p>
-<div id="0c3ca10c" class="cell" data-execution_count="11">
+<div id="58d3e54c" class="cell" data-execution_count="11">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
@@ -592,14 +592,14 @@ Pieces after split: 12,385</code></pre>
 <span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exported </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Exported 12,385 pieces → _data\processed\link_pieces.gpkg</code></pre>
+<pre><code>Exported 19,424 pieces → _data\processed\link_pieces.gpkg</code></pre>
 </div>
 </div>
 <hr>
 </section>
 <section id="summary" class="level2" data-number="6">
 <h2 data-number="6" class="anchored" data-anchor-id="summary"><span class="header-section-number">6</span> Summary</h2>
-<div id="b31018c1" class="cell" data-execution_count="12">
+<div id="d681cfc1" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
@@ -618,18 +618,18 @@ Pieces after split: 12,385</code></pre>
 <div class="cell-output cell-output-stdout">
 <pre><code>Piece length distribution (m):
   Min:    0.0
-  Median: 373.9
-  P90:    901.1
-  Max:    49599.9
+  Median: 171.0
+  P90:    684.6
+  Max:    48924.3
 
-Input:  7,684 candidate components
-        3,406 snapped road nodes (3,406 coordinate-resolved)
-        6,531 CC attachment nodes snapped
-Output: 12,385 pieces → link_pieces.gpkg
-        6,531 CC attachment nodes → nodes_snapped.gpkg (layer: cc_nodes_snapped)</code></pre>
+Input:  15,566 candidate components
+        3,600 snapped road nodes (3,600 coordinate-resolved)
+        6,539 CC attachment nodes snapped
+Output: 19,424 pieces → link_pieces.gpkg
+        6,539 CC attachment nodes → nodes_snapped.gpkg (layer: cc_nodes_snapped)</code></pre>
 </div>
 </div>
-<div id="de9b6b1b" class="cell" data-execution_count="13">
+<div id="2a8897fe" class="cell" data-execution_count="13">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>gdf_pieces.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
