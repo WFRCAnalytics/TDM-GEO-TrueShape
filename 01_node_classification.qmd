@@ -31,6 +31,7 @@ from shapely.geometry import LineString
 from shapely.strtree import STRtree
 
 sys.path.insert(0, str(Path.cwd()))
+from _src.crs_utils import PROJ_UTM12N
 from _src.node_utils import (
     nodes_on,
     count_links,
@@ -49,8 +50,8 @@ from _src.node_utils import (
 # ── Filepaths ──────────────────────────────────────────────────────────────
 PATHS = {
     "in_centerlines": Path("_data/processed/CandidateTDMRoadLinks.gpkg"),
-    "in_network_links": Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Link.shp"),
-    "in_network_nodes": Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Node.shp"),
+    "in_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
+    "in_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
     "in_gtfs": Path("_data/raw/uta_gtfs.zip"),
     "out_node_classified": Path("_data/processed/nodes_classified.gpkg"),
     "out_node_snapped": Path("_data/processed/nodes_snapped.gpkg"),
@@ -111,9 +112,9 @@ Filter GTFS stops to Light Rail (TRAX, route_type 0) and Commuter Rail
 ```{python}
 feed = gk.read_feed(PATHS["in_gtfs"], dist_units="km")
 
-gdf_stops  = gk.get_stops(feed,  as_gdf=True).to_crs(CRS_UTM)
-gdf_shapes = gk.get_shapes(feed, as_gdf=True).to_crs(CRS_UTM)
-gdf_routes = gk.get_routes(feed, as_gdf=True).to_crs(CRS_UTM)
+gdf_stops  = gk.get_stops(feed,  as_gdf=True).to_crs(PROJ_UTM12N)
+gdf_shapes = gk.get_shapes(feed, as_gdf=True).to_crs(PROJ_UTM12N)
+gdf_routes = gk.get_routes(feed, as_gdf=True).to_crs(PROJ_UTM12N)
 
 RAIL_ROUTE_TYPES = {0, 2}   # 0 = Light Rail (TRAX), 2 = Commuter Rail (FrontRunner)
 

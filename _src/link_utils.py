@@ -28,10 +28,14 @@ Stage 2 — Public API
 
 Stage 3 — Public API
 --------------------
-    dissolve_pseudonodes(gdf_links, pseudo_node_ids)
+    dissolve_pseudonodes(gdf_links, pseudo_node_ids, invariant_cols=("FT_2027", "LN_2027"))
         Collapse chains of model links connected through pseudonodes into single
-        dissolved links spanning from one real node to another.
-        Returns a DataFrame with A, B, FT_2027, LN_2027, DIRECTION, ONEWAY,
+        dissolved links spanning from one real node to another. Every gdf_links
+        column (besides A, B, geometry) rides along, taken from each chain's
+        first constituent link; non-invariant columns are checked for
+        constituent agreement and disagreements are tallied in
+        result.attrs["disagreement_counts"].
+        Returns a DataFrame with A, B, <every other gdf_links column>,
         n_constituents, constituent_ab_pairs.
 
     build_piece_graph(gdf_pieces, gdf_nodes_snapped)
@@ -41,6 +45,12 @@ Stage 3 — Public API
     assemble_chain(piece_graph, a_coord, b_coord)
         Constrained BFS from a_coord to b_coord through non-real-junction nodes.
         Returns an ordered list of LineString pieces forming the path.
+
+    assemble_chain_relaxed(piece_graph, a_coord, b_coord)
+        Fallback for when assemble_chain finds no path: Dijkstra-by-length_m
+        with no real_junction restriction. Used only when the only physical
+        route between A and B passes through a real junction belonging to
+        another dissolved link (most often an ordinary cross-street).
 """
 
 import json
@@ -269,31 +279,49 @@ def _split_line_at_points(line: LineString, points: list[Point]) -> list[LineStr
 def dissolve_pseudonodes(
     gdf_links: gpd.GeoDataFrame,
     pseudo_node_ids: set,
+    invariant_cols: tuple[str, ...] = ("FT_2027", "LN_2027"),
 ) -> pd.DataFrame:
     """
     Collapse chains of model links connected through pseudonodes into dissolved links.
 
     A pseudonode is a degree-2 node lying in the interior of what should be a
-    single logical link (all connected links share the same FT). This function
-    merges consecutive links into a single dissolved link spanning from one real
-    node (is_pseudo=False) to another.
+    single logical link (all connected links share the same FT and lane count
+    -- see 01_node_classification.qmd). This function merges consecutive links
+    into a single dissolved link spanning from one real node (is_pseudo=False)
+    to another.
+
+    Every column in gdf_links other than A, B, and geometry rides along onto
+    the dissolved output, taken from the chain's first constituent link.
+    `invariant_cols` names columns the upstream pseudonode classification
+    already guarantees are uniform across every constituent in a chain (no
+    check performed there). Every other column is checked for agreement
+    across constituents -- but only in multi-constituent chains, since a
+    single-constituent chain trivially agrees with itself. Disagreements are
+    tallied per column and surfaced via one aggregate warning plus
+    `result.attrs["disagreement_counts"]`.
 
     Parameters
     ----------
     gdf_links : GeoDataFrame
-        Filtered model links to dissolve. Must have columns A, B, FT_2027,
-        LN_2027, DIRECTION, ONEWAY.
+        Filtered model links to dissolve. Must have columns A, B.
     pseudo_node_ids : set
         Set of node N-values that are pseudonodes (is_pseudo=True).
+    invariant_cols : tuple[str, ...]
+        Columns already known to be uniform across every constituent of a
+        pseudonode chain -- skips the disagreement check for these.
 
     Returns
     -------
     DataFrame with one row per dissolved link:
-        A, B               : int  — real start/end node N-values
-        FT_2027, LN_2027   : int  — from first constituent link in chain
-        DIRECTION, ONEWAY  : str/int — from first constituent link
-        n_constituents     : int  — number of original links collapsed
-        constituent_ab_pairs : str — JSON list of [A, B] pairs in traversal order
+        A, B                  : int  — real start/end node N-values
+        <every other gdf_links column, minus geometry> — taken from the
+            chain's first constituent link
+        n_constituents        : int  — number of original links collapsed
+        constituent_ab_pairs  : str  — JSON list of [A, B] pairs in traversal order
+
+        result.attrs["disagreement_counts"] : dict[str, int] — for each
+        non-invariant column, the number of multi-constituent chains where at
+        least one constituent's value differed from the chain's first.
 
     Notes
     -----
@@ -301,22 +329,21 @@ def dissolve_pseudonodes(
     on the same road segment produce two separate chains (A→B and B→A) rather
     than collapsing into a single self-loop.
     """
+    transfer_cols = [c for c in gdf_links.columns if c not in ("A", "B", "geometry")]
+    col_pos = {c: i for i, c in enumerate(transfer_cols)}
+    values = gdf_links[transfer_cols].to_numpy(dtype=object)
+    invariant_set = set(invariant_cols)
+
     G: nx.MultiDiGraph = nx.MultiDiGraph()
-    for _, row in gdf_links.iterrows():
+    for row_idx, (_, row) in enumerate(gdf_links.iterrows()):
         a, b = int(row["A"]), int(row["B"])
-        G.add_edge(
-            a, b,
-            orig_A=a,
-            orig_B=b,
-            FT_2027=int(row["FT_2027"]),
-            LN_2027=int(row["LN_2027"]),
-            DIRECTION=str(row["DIRECTION"]),
-            ONEWAY=int(row["ONEWAY"]),
-        )
+        G.add_edge(a, b, orig_A=a, orig_B=b, row_idx=row_idx)
 
     real_nodes = set(G.nodes()) - pseudo_node_ids
     dissolved: list[dict] = []
     visited_edges: set[tuple] = set()
+    disagreement_counts: dict[str, int] = defaultdict(int)
+    n_affected_chains = 0
 
     for start in sorted(real_nodes):
         # out_edges: only edges leaving `start` (directed)
@@ -327,7 +354,7 @@ def dissolve_pseudonodes(
             visited_edges.add(ek)
 
             chain_pairs: list[list[int]] = [[edata["orig_A"], edata["orig_B"]]]
-            first_edata = edata
+            chain_row_idxs: list[int] = [edata["row_idx"]]
             curr = nbr
 
             while curr in pseudo_node_ids:
@@ -352,22 +379,51 @@ def dissolve_pseudonodes(
                 next_nbr, next_edata, next_ek = next_found
                 visited_edges.add(next_ek)
                 chain_pairs.append([next_edata["orig_A"], next_edata["orig_B"]])
+                chain_row_idxs.append(next_edata["row_idx"])
                 curr = next_nbr
 
-            dissolved.append(
-                {
-                    "A": start,
-                    "B": curr,
-                    "FT_2027": first_edata["FT_2027"],
-                    "LN_2027": first_edata["LN_2027"],
-                    "DIRECTION": first_edata["DIRECTION"],
-                    "ONEWAY": first_edata["ONEWAY"],
-                    "n_constituents": len(chain_pairs),
-                    "constituent_ab_pairs": json.dumps(chain_pairs),
-                }
-            )
+            first_vals = values[chain_row_idxs[0]]
+            row_out: dict = {"A": start, "B": curr}
+            for col in transfer_cols:
+                row_out[col] = first_vals[col_pos[col]]
 
-    return pd.DataFrame(dissolved)
+            if len(chain_row_idxs) > 1:
+                chain_disagreed = False
+                for col in transfer_cols:
+                    if col in invariant_set:
+                        continue
+                    pos = col_pos[col]
+                    fv = first_vals[pos]
+                    fv_na = pd.isna(fv)
+                    for idx in chain_row_idxs[1:]:
+                        v = values[idx, pos]
+                        if fv_na and pd.isna(v):
+                            continue
+                        if v != fv:
+                            disagreement_counts[col] += 1
+                            chain_disagreed = True
+                            break
+                if chain_disagreed:
+                    n_affected_chains += 1
+
+            row_out["n_constituents"] = len(chain_pairs)
+            row_out["constituent_ab_pairs"] = json.dumps(chain_pairs)
+            dissolved.append(row_out)
+
+    result = pd.DataFrame(dissolved)
+    result.attrs["disagreement_counts"] = dict(disagreement_counts)
+
+    if disagreement_counts:
+        warnings.warn(
+            f"dissolve_pseudonodes: {n_affected_chains} multi-constituent chain(s) "
+            f"had at least one non-uniform attribute column across "
+            f"{len(disagreement_counts)} column(s); each chain's first constituent "
+            "value was kept. See result.attrs['disagreement_counts'] for a "
+            "per-column breakdown.",
+            stacklevel=2,
+        )
+
+    return result
 
 
 def build_piece_graph(
@@ -500,6 +556,52 @@ def assemble_chain(
             queue.append(nbr)
 
     return None
+
+
+def assemble_chain_relaxed(
+    piece_graph: nx.Graph,
+    a_coord: tuple,
+    b_coord: tuple,
+) -> list[LineString] | None:
+    """
+    Fallback for when assemble_chain finds no path under the real-junction
+    constraint.
+
+    Some dissolved links have no route between A and B that avoids every
+    other real junction — most often an ordinary cross-street the dissolved
+    link legitimately passes through. This retry drops the real-junction
+    restriction entirely and finds the physically shortest path (by
+    length_m via Dijkstra) instead of an unweighted BFS, so that once
+    junctions are unblocked the result still favours the shortest physical
+    route rather than an arbitrary longer detour through the wider network.
+
+    Parameters
+    ----------
+    piece_graph : networkx.Graph
+        Output of build_piece_graph.
+    a_coord : tuple
+        (x_round, y_round) of start node.
+    b_coord : tuple
+        (x_round, y_round) of end node.
+
+    Returns
+    -------
+    list[LineString] or None
+        Ordered list of piece geometries forming the path from A to B.
+        Empty list if a_coord == b_coord.
+        None if A and B are not in the same connected component.
+    """
+    if a_coord not in piece_graph or b_coord not in piece_graph:
+        return None
+    if a_coord == b_coord:
+        return _assemble_loop(piece_graph, a_coord)
+
+    try:
+        path_nodes = nx.shortest_path(piece_graph, a_coord, b_coord, weight="length_m")
+    except nx.NetworkXNoPath:
+        return None
+
+    return [piece_graph[u][v]["geometry"] for u, v in zip(path_nodes[:-1], path_nodes[1:])]
 
 
 def _assemble_loop(piece_graph: nx.Graph, a_coord: tuple) -> list[LineString] | None:

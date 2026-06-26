@@ -17,7 +17,6 @@ website:
 
 execute:
    eval: true
-jupyter: python3
 
 format:
   html:

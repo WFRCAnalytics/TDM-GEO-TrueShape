@@ -26,7 +26,12 @@ from shapely.geometry import LineString
 from shapely.ops import linemerge
 
 sys.path.insert(0, str(Path.cwd()))
-from _src.link_utils import assemble_chain, build_piece_graph, dissolve_pseudonodes
+from _src.link_utils import (
+    assemble_chain,
+    assemble_chain_relaxed,
+    build_piece_graph,
+    dissolve_pseudonodes,
+)
 ```
 
 ### Configuration
@@ -34,7 +39,7 @@ from _src.link_utils import assemble_chain, build_piece_graph, dissolve_pseudono
 ```{python}
 # ── Filepaths ──────────────────────────────────────────────────────────────
 PATHS = {
-    "in_network_links":    Path("_data/raw/WFv1000_MasterNet/WFv1000_MasterNet_20250821 - Link.shp"),
+    "in_network_links":    Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
     "in_nodes_classified": Path("_data/processed/nodes_classified.gpkg"),
     "in_node_snapped":     Path("_data/processed/nodes_snapped.gpkg"),
     "in_link_pieces":      Path("_data/processed/link_pieces.gpkg"),
@@ -118,8 +123,15 @@ print(f"Link pieces: {len(gdf_pieces):,} | CRS: {gdf_pieces.crs}")
 
 Collapse chains of model links connected through pseudonodes. Each dissolved link
 spans from one real node to another; pseudonodes along the way are absorbed.
+Every model link attribute column (besides `A`, `B`, geometry) rides along onto
+the dissolved output, taken from each chain's first constituent link.
 
 Links whose both endpoints are already real nodes appear as single-constituent chains.
+
+`FT_2027`/`LN_2027` are the only columns pseudonode classification (Stage 1)
+guarantees are uniform across a chain's constituents. Every other column is
+checked for agreement in multi-constituent chains; disagreements are tallied
+per column rather than silently dropped — see the breakdown below.
 
 ```{python}
 print("Dissolving pseudonodes …")
@@ -133,6 +145,16 @@ print(gdf_dissolved["n_constituents"].value_counts().sort_index().head(10).to_st
 print()
 multi = (gdf_dissolved["n_constituents"] > 1).sum()
 print(f"Multi-constituent chains: {multi:,} ({multi/len(gdf_dissolved):.1%})")
+```
+
+```{python}
+disagreement_counts = gdf_dissolved.attrs.get("disagreement_counts", {})
+if disagreement_counts:
+    print(f"Columns with constituent disagreement in multi-constituent chains ({len(disagreement_counts)}):")
+    for col, cnt in sorted(disagreement_counts.items(), key=lambda kv: -kv[1]):
+        print(f"  {col:15s}: {cnt:,} chain(s)")
+else:
+    print("No constituent disagreements found in any multi-constituent chain.")
 ```
 
 ---
@@ -169,6 +191,15 @@ from A's snap coordinate to B's snap coordinate. The BFS cannot traverse through
 `real_junction` nodes other than B — this ensures the path stays within the
 physical bounds of a single dissolved link.
 
+Some dissolved links have no route between A and B that avoids every other
+real junction — typically an ordinary cross-street the link legitimately
+passes through, not a bleed into an adjacent dissolved link. When the
+constrained BFS fails, `assemble_chain_relaxed` retries with the real-junction
+restriction dropped, using shortest-path-by-length instead of unweighted BFS
+so the recovered route still follows the physically shortest path. Links
+recovered this way are tagged `dissolved_relaxed` rather than `dissolved` so
+they remain distinguishable for QA.
+
 ```{python}
 print(f"Assembling {len(gdf_dissolved):,} dissolved links …")
 
@@ -176,6 +207,7 @@ trueshape_geometries: list = []
 trueshape_methods: list[str] = []
 n_unresolved = 0
 n_no_path = 0
+n_relaxed = 0
 
 for i, (_, row) in enumerate(gdf_dissolved.iterrows()):
     if i > 0 and i % 2000 == 0:
@@ -195,6 +227,10 @@ for i, (_, row) in enumerate(gdf_dissolved.iterrows()):
         continue
 
     pieces = assemble_chain(piece_graph, a_coord, b_coord)
+    used_relaxed = False
+    if pieces is None:
+        pieces = assemble_chain_relaxed(piece_graph, a_coord, b_coord)
+        used_relaxed = pieces is not None
 
     if pieces is None:
         n_no_path += 1
@@ -206,12 +242,15 @@ for i, (_, row) in enumerate(gdf_dissolved.iterrows()):
     else:
         merged = linemerge(pieces) if len(pieces) > 1 else (pieces[0] if pieces else None)
         trueshape_geometries.append(merged)
-        trueshape_methods.append("dissolved")
+        trueshape_methods.append("dissolved_relaxed" if used_relaxed else "dissolved")
+        if used_relaxed:
+            n_relaxed += 1
 
 n_dissolved = trueshape_methods.count("dissolved")
-print(f"\nDissolved (true-shape):  {n_dissolved:,} ({n_dissolved/len(gdf_dissolved):.1%})")
-print(f"Unresolved (no snap):    {n_unresolved:,}")
-print(f"Unresolved (no path):    {n_no_path:,}")
+print(f"\nDissolved (true-shape):       {n_dissolved:,} ({n_dissolved/len(gdf_dissolved):.1%})")
+print(f"Dissolved (relaxed fallback): {n_relaxed:,} ({n_relaxed/len(gdf_dissolved):.1%})")
+print(f"Unresolved (no snap):         {n_unresolved:,}")
+print(f"Unresolved (no path):         {n_no_path:,}")
 ```
 
 ---
@@ -244,8 +283,8 @@ print()
 print("Method breakdown:")
 print(gdf_trueshape["trueshape_method"].value_counts().to_string())
 print()
-print("Geometry type breakdown (dissolved only):")
-dissolved_mask = gdf_trueshape["trueshape_method"] == "dissolved"
+print("Geometry type breakdown (dissolved + dissolved_relaxed):")
+dissolved_mask = gdf_trueshape["trueshape_method"].isin(["dissolved", "dissolved_relaxed"])
 print(gdf_trueshape.loc[dissolved_mask, "geometry"].geom_type.value_counts().to_string())
 print()
 print("Constituent count (all links):")
@@ -254,7 +293,7 @@ print(gdf_trueshape["n_constituents"].describe().round(1).to_string())
 
 ```{python}
 #| eval: false
-gdf_trueshape[gdf_trueshape["trueshape_method"] == "dissolved"].explore(
+gdf_trueshape[gdf_trueshape["trueshape_method"].isin(["dissolved", "dissolved_relaxed"])].explore(
     column="FT_2027", tooltip=["A", "B", "FT_2027", "n_constituents", "trueshape_method"]
 )
 ```
