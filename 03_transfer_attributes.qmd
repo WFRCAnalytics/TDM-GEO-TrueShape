@@ -1,7 +1,7 @@
 ---
 title: Transfer Model Attributes to True-Shape Links
-subtitle: Pseudonode dissolution → piece graph traversal → true-shape geometry assembly
-description: Model links are dissolved across pseudonode chains, then each dissolved link's geometry is assembled by traversing the physical piece graph from A's snap position to B's snap position. Model attributes are transferred to the resulting true-shape LineStrings.
+subtitle: Pass-through chain dissolution → direct coordinate-join match → nearest-constituent attribute resolution
+description: Model links are dissolved across pass-through (unsnapped) node chains, then each physical link piece from 02_create_link.qmd is matched to its dissolved chain via a direct, direction-sensitive (A,B) coordinate join — no graph traversal or synthetic geometry involved. Every piece's real geometry is retained regardless of match outcome; attributes are resolved via nearest-constituent-to-centroid distance and left blank when unmatched.
 author:
  - name: Pukar Bhandari
    email: pukar.bhandari@wfrc.utah.gov
@@ -16,22 +16,19 @@ date: "2026-05-15"
 ### Imports
 
 ```{python}
+import json
 import sys
 from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import shapely
 from shapely.geometry import LineString
 from shapely.ops import linemerge
 
 sys.path.insert(0, str(Path.cwd()))
-from _src.link_utils import (
-    assemble_chain,
-    assemble_chain_relaxed,
-    build_piece_graph,
-    dissolve_pseudonodes,
-)
+from _src.link_utils import dissolve_pseudonodes
 ```
 
 ### Configuration
@@ -40,7 +37,6 @@ from _src.link_utils import (
 # ── Filepaths ──────────────────────────────────────────────────────────────
 PATHS = {
     "in_network_links":    Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
-    "in_nodes_classified": Path("_data/processed/nodes_classified.gpkg"),
     "in_node_snapped":     Path("_data/processed/nodes_snapped.gpkg"),
     "in_link_pieces":      Path("_data/processed/link_pieces.gpkg"),
     "out_links_trueshape": Path("_data/processed/links_trueshape.gpkg"),
@@ -73,27 +69,29 @@ print(f"Model links (filtered): {len(gdf_links):,} | CRS: {gdf_links.crs}")
 print(f"FT_2027 distribution:\n{gdf_links['FT_2027'].value_counts().sort_index().to_string()}")
 ```
 
-### Node Classification
-
-```{python}
-gdf_nodes_classified = gpd.read_file(PATHS["in_nodes_classified"])
-pseudo_node_ids = set(
-    gdf_nodes_classified.loc[gdf_nodes_classified["is_pseudo"].fillna(False), "N"].astype(int)
-)
-real_node_ids = set(
-    gdf_nodes_classified.loc[~gdf_nodes_classified["is_pseudo"].fillna(False), "N"].astype(int)
-)
-print(f"Pseudonodes: {len(pseudo_node_ids):,} | Real nodes: {len(real_node_ids):,}")
-```
-
 ### Snapped Nodes
+
+`nodes_classified.gpkg`/`is_pseudo` is no longer the relevant concept for this
+notebook — Stage 2 now guarantees every `link_pieces.gpkg` boundary is already
+a snap point, so the only thing Stage 3 needs from node classification is
+*which* nodes are snapped (split points) versus not (pass-through, absorbed
+into a multi-hop chain in Part A).
+
+`FixedTransit_Rail`-snapped nodes are excluded from `snapped_node_ids` — they
+attach to GTFS rail infrastructure, not road centerlines, so they were never
+road-piece split points in Stage 2 either (`02_create_link.qmd` applies the
+same exclusion).
 
 ```{python}
 gdf_nodes_snapped = gpd.read_file(PATHS["in_node_snapped"], layer="nodes_snapped").to_crs(CRS_UTM)
 
-snapped_mask = gdf_nodes_snapped["snapped"].fillna(False).astype(bool)
-n_snapped = snapped_mask.sum()
-print(f"Nodes: {len(gdf_nodes_snapped):,} total | {n_snapped:,} snapped ({n_snapped/len(gdf_nodes_snapped):.1%})")
+snapped_mask = (
+    gdf_nodes_snapped["snapped"].fillna(False).astype(bool)
+    & (gdf_nodes_snapped["snap_rule"] != "FixedTransit_Rail")
+)
+snapped_node_ids = set(gdf_nodes_snapped.loc[snapped_mask, "N"].astype(int))
+n_snapped = len(snapped_node_ids)
+print(f"Nodes: {len(gdf_nodes_snapped):,} total | {n_snapped:,} snapped (road, non-rail) ({n_snapped/len(gdf_nodes_snapped):.1%})")
 
 # Snap coordinate lookup: N → (x_round, y_round)
 node_coord_lookup: dict[int, tuple[float, float]] = {
@@ -101,13 +99,21 @@ node_coord_lookup: dict[int, tuple[float, float]] = {
     for _, row in gdf_nodes_snapped[snapped_mask].iterrows()
 }
 
-# Model node geometry lookup: N → Point (UTM) — used for unresolved fallback
-node_geom_lookup: dict[int, object] = {
-    int(row["N"]): row["geometry"]
-    for _, row in gdf_nodes_snapped.iterrows()
-}
+# Reverse lookup: (x_round, y_round) → N — used to identify each piece's endpoints.
+coord_to_node: dict[tuple[float, float], int] = {v: k for k, v in node_coord_lookup.items()}
 
 print(f"Snap coord lookup: {len(node_coord_lookup):,} entries")
+print(f"Reverse coord→node lookup: {len(coord_to_node):,} entries")
+```
+
+```{python}
+# Spot-check: round-trip a handful of known snapped nodes through both lookups.
+import random
+sample_ns = random.sample(sorted(snapped_node_ids), 3)
+for n in sample_ns:
+    coord = node_coord_lookup[n]
+    back = coord_to_node.get(coord)
+    print(f"N={n} -> {coord} -> N={back}  {'OK' if back == n else 'MISMATCH'}")
 ```
 
 ### Link Pieces
@@ -119,23 +125,39 @@ print(f"Link pieces: {len(gdf_pieces):,} | CRS: {gdf_pieces.crs}")
 
 ---
 
-## Part A — Pseudonode Dissolve
+## Part A — Pass-Through Chain Dissolve
 
-Collapse chains of model links connected through pseudonodes. Each dissolved link
-spans from one real node to another; pseudonodes along the way are absorbed.
-Every model link attribute column (besides `A`, `B`, geometry) rides along onto
-the dissolved output, taken from each chain's first constituent link.
+Collapse chains of model links connected through **pass-through nodes** — every
+node that is not itself a snap point (`pass_through_ids = all A/B node ids in
+gdf_links - snapped_node_ids`). This generalizes the old topological-pseudonode
+concept (`is_pseudo`) to a strict superset: snapping coverage is currently
+sparse (~16% of nodes), so many ordinary "real" nodes are unsnapped too, and
+must be treated the same way — absorbed into a multi-hop chain — since Stage 2
+never split a physical piece at their position either.
 
-Links whose both endpoints are already real nodes appear as single-constituent chains.
+Each dissolved chain spans from one snapped node to another; pass-through
+nodes along the way are absorbed. Every model link attribute column (besides
+`A`, `B`, geometry) rides along onto the dissolved output, taken from each
+chain's first constituent link — this default is only provisional here; Part
+C replaces it with a nearest-centroid resolution for multi-constituent chains.
 
-`FT_2027`/`LN_2027` are the only columns pseudonode classification (Stage 1)
-guarantees are uniform across a chain's constituents. Every other column is
-checked for agreement in multi-constituent chains; disagreements are tallied
-per column rather than silently dropped — see the breakdown below.
+Links whose both endpoints are already snapped appear as single-constituent
+chains. Unlike strict `is_pseudo` chains, `FT_2027`/`LN_2027` uniformity is
+**not** guaranteed across a broadened pass-through chain's constituents (an
+unsnapped-but-real node can have an FT/LN change), so `invariant_cols=()` —
+every column is checked for agreement, and disagreements are expected and
+informative rather than a bug.
 
 ```{python}
-print("Dissolving pseudonodes …")
-gdf_dissolved = dissolve_pseudonodes(gdf_links, pseudo_node_ids)
+node_ids_in_links = set(gdf_links["A"].astype(int)) | set(gdf_links["B"].astype(int))
+pass_through_ids = node_ids_in_links - snapped_node_ids
+print(f"Node ids in gdf_links: {len(node_ids_in_links):,}")
+print(f"Pass-through (unsnapped) ids: {len(pass_through_ids):,}")
+```
+
+```{python}
+print("Dissolving pass-through chains …")
+gdf_dissolved = dissolve_pseudonodes(gdf_links, pass_through_ids, invariant_cols=())
 
 print(f"Original links:   {len(gdf_links):,}")
 print(f"Dissolved links:  {len(gdf_dissolved):,}  ({len(gdf_links)-len(gdf_dissolved):,} fewer)")
@@ -159,114 +181,254 @@ else:
 
 ---
 
-## Part B — Build Piece Graph
+## Part B — Piece-to-Chain Match
 
-Build a networkx Graph from the physical link pieces. Each node is labelled
-`real_junction`, `pseudonode`, or `internal` based on whether it coincides
-with a snapped model node and whether that node is a pseudonode.
+Stage 2 guarantees every `link_pieces.gpkg` boundary is already a snap point,
+so matching a piece to the dissolved chain it belongs to no longer needs any
+graph search — it's a direct coordinate lookup followed by a vectorized
+`(A,B)` join:
+
+1. Look up each piece's `A_piece`/`B_piece` node id from its rounded start/end
+   coordinate via `coord_to_node` (built in Part A's node-loading section).
+   A piece with an unsnapped endpoint (e.g. a network-boundary edge) simply
+   gets a null on that side — that's expected, not an error.
+2. `merge1` matches pieces drawn in the *same* direction as a dissolved chain
+   (`A_piece,B_piece == A,B` — "forward"). `merge2` matches pieces drawn in
+   the *opposite* direction (`B_piece,A_piece == A,B` — "reverse"). Both can
+   legitimately match the same physical piece: a typical two-way street is
+   coded as two separate model-link rows (one per direction), each dissolving
+   to its own `A,B` chain, so one physical piece produces **two** output rows
+   — one per direction. A one-way road (e.g. a freeway, already digitized as
+   a separate line per direction) matches only one side, producing one row.
 
 ```{python}
-print("Building piece graph …")
-piece_graph = build_piece_graph(gdf_pieces, gdf_nodes_snapped)
+gdf_pieces["A_piece"] = pd.Series(
+    list(zip(gdf_pieces["x_start"], gdf_pieces["y_start"])), index=gdf_pieces.index
+).map(coord_to_node).astype("Int64")
+gdf_pieces["B_piece"] = pd.Series(
+    list(zip(gdf_pieces["x_end"], gdf_pieces["y_end"])), index=gdf_pieces.index
+).map(coord_to_node).astype("Int64")
 
-n_nodes = piece_graph.number_of_nodes()
-n_edges = piece_graph.number_of_edges()
-type_counts = {}
-for _, attrs in piece_graph.nodes(data=True):
-    t = attrs.get("node_type", "internal")
-    type_counts[t] = type_counts.get(t, 0) + 1
+n_a = gdf_pieces["A_piece"].notna().sum()
+n_b = gdf_pieces["B_piece"].notna().sum()
+n_both = (gdf_pieces["A_piece"].notna() & gdf_pieces["B_piece"].notna()).sum()
+print(f"Pieces with snapped A endpoint:     {n_a:,} / {len(gdf_pieces):,}")
+print(f"Pieces with snapped B endpoint:     {n_b:,} / {len(gdf_pieces):,}")
+print(f"Pieces with both endpoints snapped: {n_both:,} / {len(gdf_pieces):,}")
 
-print(f"Piece graph: {n_nodes:,} nodes | {n_edges:,} edges")
-print(f"Node types:")
-for t, cnt in sorted(type_counts.items()):
-    print(f"  {t:20s}: {cnt:,}")
+# Endpoint-status QA column — carried through to the final export regardless
+# of match outcome, so an unattributed piece's geometry is still explainable.
+gdf_pieces["endpoint_status"] = np.select(
+    [
+        gdf_pieces["A_piece"].notna() & gdf_pieces["B_piece"].notna(),
+        gdf_pieces["A_piece"].notna() & gdf_pieces["B_piece"].isna(),
+        gdf_pieces["A_piece"].isna() & gdf_pieces["B_piece"].notna(),
+    ],
+    ["both_snapped", "a_only", "b_only"],
+    default="neither",
+)
+print(gdf_pieces["endpoint_status"].value_counts().to_string())
+```
+
+```{python}
+# Only both-snapped pieces can possibly match an (A,B) chain — gdf_dissolved's
+# A/B are never null. Filtering first (rather than merging on a nullable Int64
+# key directly) sidesteps a pandas merge/factorize incompatibility with pd.NA.
+both_snapped = gdf_pieces[gdf_pieces["A_piece"].notna() & gdf_pieces["B_piece"].notna()].copy()
+both_snapped["A_piece"] = both_snapped["A_piece"].astype("int64")
+both_snapped["B_piece"] = both_snapped["B_piece"].astype("int64")
+
+merge1 = both_snapped.merge(
+    gdf_dissolved,
+    left_on=["A_piece", "B_piece"], right_on=["A", "B"],
+    how="inner", suffixes=("_piece", "_link"),
+)
+merge1["piece_direction"] = "forward"
+
+merge2 = both_snapped.merge(
+    gdf_dissolved,
+    left_on=["B_piece", "A_piece"], right_on=["A", "B"],
+    how="inner", suffixes=("_piece", "_link"),
+)
+merge2["piece_direction"] = "reverse"
+
+matched = pd.concat([merge1, merge2], ignore_index=True)
+n_matched_pieces = matched["piece_id"].nunique()
+n_dual = matched["piece_id"].value_counts().eq(2).sum()
+print(f"Matched rows: {len(matched):,}  (forward {len(merge1):,} + reverse {len(merge2):,})")
+print(f"Distinct pieces matched: {n_matched_pieces:,} / {len(gdf_pieces):,}")
+print(f"Pieces matched in both directions (two-way streets): {n_dual:,}")
+```
+
+```{python}
+# Spot-check: a piece matched in both directions should show opposite A/B per row.
+if n_dual > 0:
+    dual_piece_id = matched["piece_id"].value_counts().eq(2).idxmax()
+    print(matched.loc[matched["piece_id"] == dual_piece_id, ["piece_id", "A_piece", "B_piece", "A", "B", "piece_direction"]].to_string(index=False))
 ```
 
 ---
 
-## Part C — Assemble True-Shape Chains
+## Part C — Nearest-Constituent Attribute Resolution
 
-For each dissolved link A→B, perform a constrained BFS through the piece graph
-from A's snap coordinate to B's snap coordinate. The BFS cannot traverse through
-`real_junction` nodes other than B — this ensures the path stays within the
-physical bounds of a single dissolved link.
-
-Some dissolved links have no route between A and B that avoids every other
-real junction — typically an ordinary cross-street the link legitimately
-passes through, not a bleed into an adjacent dissolved link. When the
-constrained BFS fails, `assemble_chain_relaxed` retries with the real-junction
-restriction dropped, using shortest-path-by-length instead of unweighted BFS
-so the recovered route still follows the physically shortest path. Links
-recovered this way are tagged `dissolved_relaxed` rather than `dissolved` so
-they remain distinguishable for QA.
-
-```{python}
-print(f"Assembling {len(gdf_dissolved):,} dissolved links …")
-
-trueshape_geometries: list = []
-trueshape_methods: list[str] = []
-n_unresolved = 0
-n_no_path = 0
-n_relaxed = 0
-
-for i, (_, row) in enumerate(gdf_dissolved.iterrows()):
-    if i > 0 and i % 2000 == 0:
-        print(f"  {i:,} / {len(gdf_dissolved):,} …")
-
-    a_n, b_n = int(row["A"]), int(row["B"])
-    a_coord = node_coord_lookup.get(a_n)
-    b_coord = node_coord_lookup.get(b_n)
-
-    if a_coord is None or b_coord is None:
-        n_unresolved += 1
-        a_pt = node_geom_lookup.get(a_n)
-        b_pt = node_geom_lookup.get(b_n)
-        fallback = LineString([a_pt, b_pt]) if (a_pt and b_pt) else None
-        trueshape_geometries.append(fallback)
-        trueshape_methods.append("unresolved_no_snap")
-        continue
-
-    pieces = assemble_chain(piece_graph, a_coord, b_coord)
-    used_relaxed = False
-    if pieces is None:
-        pieces = assemble_chain_relaxed(piece_graph, a_coord, b_coord)
-        used_relaxed = pieces is not None
-
-    if pieces is None:
-        n_no_path += 1
-        a_pt = node_geom_lookup.get(a_n)
-        b_pt = node_geom_lookup.get(b_n)
-        fallback = LineString([a_pt, b_pt]) if (a_pt and b_pt) else None
-        trueshape_geometries.append(fallback)
-        trueshape_methods.append("unresolved_no_path")
-    else:
-        merged = linemerge(pieces) if len(pieces) > 1 else (pieces[0] if pieces else None)
-        trueshape_geometries.append(merged)
-        trueshape_methods.append("dissolved_relaxed" if used_relaxed else "dissolved")
-        if used_relaxed:
-            n_relaxed += 1
-
-n_dissolved = trueshape_methods.count("dissolved")
-print(f"\nDissolved (true-shape):       {n_dissolved:,} ({n_dissolved/len(gdf_dissolved):.1%})")
-print(f"Dissolved (relaxed fallback): {n_relaxed:,} ({n_relaxed/len(gdf_dissolved):.1%})")
-print(f"Unresolved (no snap):         {n_unresolved:,}")
-print(f"Unresolved (no path):         {n_no_path:,}")
-```
-
----
-
-## Part D — Build Output and Export
+`matched` can legitimately contain more than one candidate chain for the same
+`(piece_id, piece_direction)` — not only because a chain's own
+`constituent_ab_pairs` may span multiple original hops, but because
+`gdf_dissolved` itself can contain multiple distinct chains sharing the same
+`(A,B)`: self-loop branches (different loop roads that both start and end at
+the same real node) and genuine parallel paths (a direct link and a separate
+multi-hop alternate between the same two snapped nodes) both produce this.
+Node ids alone can't disambiguate either case — only geometry can. A single
+rule handles both: explode every candidate chain's constituent hops, join
+each hop to `gdf_links` for its attributes and geometry, measure distance
+from the piece's centroid to each hop, and keep the global nearest hop per
+`(piece_id, piece_direction)` group. This simultaneously selects the correct
+candidate chain *and* the correct constituent's attributes within it — a
+single-constituent, single-candidate group has exactly one hop and trivially
+"wins" regardless of distance.
 
 ```{python}
-gdf_trueshape = gpd.GeoDataFrame(
-    gdf_dissolved.assign(trueshape_method=trueshape_methods),
-    geometry=trueshape_geometries,
-    crs=CRS_UTM,
+matched = matched.reset_index(drop=True)
+matched["match_id"] = matched.index
+matched["_pairs"] = matched["constituent_ab_pairs"].apply(json.loads)
+matched["_piece_centroid"] = matched.geometry.centroid
+
+exploded = matched[["match_id", "piece_id", "piece_direction", "_pairs"]].explode(
+    "_pairs", ignore_index=True
+)
+exploded["hop_A"] = exploded["_pairs"].str[0].astype("int64")
+exploded["hop_B"] = exploded["_pairs"].str[1].astype("int64")
+exploded = exploded.drop(columns="_pairs")
+
+# Safe as an exact-key join: gdf_links has zero duplicate directed (A,B) pairs.
+gdf_links_idx = gdf_links.set_index(["A", "B"])
+exploded = exploded.join(gdf_links_idx, on=["hop_A", "hop_B"])
+
+centroid_lookup = matched.set_index("match_id")["_piece_centroid"]
+exploded["piece_centroid"] = exploded["match_id"].map(centroid_lookup)
+
+exploded["dist_to_centroid"] = shapely.distance(
+    exploded["geometry"].to_numpy(), exploded["piece_centroid"].to_numpy()
 )
 
-PATHS["out_links_trueshape"].parent.mkdir(parents=True, exist_ok=True)
-gdf_trueshape.to_file(PATHS["out_links_trueshape"], driver="GPKG")
-print(f"Exported {len(gdf_trueshape):,} links → {PATHS['out_links_trueshape']}")
+print(
+    f"Exploded constituent-hop candidates: {len(exploded):,} "
+    f"(from {matched['match_id'].nunique():,} matched chain rows, "
+    f"{matched[['piece_id','piece_direction']].drop_duplicates().shape[0]:,} distinct piece/direction groups)"
+)
+```
+
+```{python}
+group_sizes = exploded.groupby(["piece_id", "piece_direction"]).size()
+n_ambiguous = (group_sizes > 1).sum()
+print(f"(piece_id, piece_direction) groups with >1 candidate hop/chain: {n_ambiguous:,} / {len(group_sizes):,}")
+
+best_idx = exploded.groupby(["piece_id", "piece_direction"])["dist_to_centroid"].idxmin()
+resolved_attrs = exploded.loc[best_idx].copy()
+print(f"Resolved rows: {len(resolved_attrs):,} (one per piece/direction group, as expected)")
+assert len(resolved_attrs) == len(group_sizes)
+```
+
+```{python}
+# Solo-candidate groups (no ambiguity) must always keep their only hop.
+solo_groups = group_sizes[group_sizes == 1].index
+solo_mask = exploded.set_index(["piece_id", "piece_direction"]).index.isin(solo_groups)
+solo_rows = exploded[solo_mask]
+print(f"Solo-candidate groups: {len(solo_rows):,}")
+print(f"  all present unchanged in resolved_attrs: {solo_rows.index.isin(best_idx).all()}")
+```
+
+```{python}
+# Spot-check the 4 pieces identified during T7 verification as having >2 raw
+# matches (self-loop / parallel-path duplicates) — each should now resolve to
+# exactly one row per direction.
+for pid in [1443, 336, 11353, 1264]:
+    sub = resolved_attrs[resolved_attrs["piece_id"] == pid]
+    raw_n = (matched["piece_id"] == pid).sum()
+    hops = ", ".join(f"{d}:({a},{b})" for d, a, b in zip(sub["piece_direction"], sub["hop_A"], sub["hop_B"]))
+    print(f"piece_id={pid}: {raw_n} raw candidate rows -> {len(sub)} resolved row(s) [{hops}]")
+```
+
+```{python}
+# Attach piece geometry/lineage + chain-level bookkeeping back onto the
+# resolved attribute rows. The piece's own geometry (not the hop geometry,
+# already spent computing dist_to_centroid) and UGRC-sourced attributes win
+# any name collision with the TDM model attributes carried from gdf_links
+# (e.g. both have a differently-sourced ONEWAY column) via explicit suffixes.
+piece_base = gdf_pieces.set_index("piece_id")
+
+chain_meta = matched.set_index("match_id")[["A", "B", "n_constituents", "constituent_ab_pairs"]]
+
+gdf_matched_resolved = (
+    resolved_attrs.drop(columns="geometry")
+    .set_index(["piece_id", "piece_direction"])
+    .join(piece_base, on="piece_id", lsuffix="_tdm", rsuffix="_ugrc")
+    .join(chain_meta, on="match_id")
+    .reset_index()
+)
+gdf_matched_resolved["trueshape_method"] = "matched"
+gdf_matched_resolved = gpd.GeoDataFrame(gdf_matched_resolved, geometry="geometry", crs=CRS_UTM)
+
+print(f"gdf_matched_resolved: {len(gdf_matched_resolved):,} rows | null geometries: {gdf_matched_resolved.geometry.isna().sum()}")
+```
+
+---
+
+## Part D — Assemble Final Output and Export
+
+Every piece's geometry is retained regardless of match outcome — pieces with
+no matching chain (unsnapped endpoint, or a snapped endpoint pair with no
+corresponding model-link chain) keep exactly one row with blank attribute
+columns and `trueshape_method="unattributed"`. **No synthetic/straight-line
+geometry is ever generated** — this was the old BFS mechanism's failure mode
+and the entire reason for this rewrite.
+
+```{python}
+# Drop T8's internal computation-only columns before export.
+gdf_matched_final = gdf_matched_resolved.drop(
+    columns=["match_id", "hop_A", "hop_B", "piece_centroid", "dist_to_centroid"]
+)
+
+matched_piece_ids = set(gdf_matched_resolved["piece_id"])
+gdf_unmatched = gdf_pieces[~gdf_pieces["piece_id"].isin(matched_piece_ids)].copy()
+gdf_unmatched = gdf_unmatched.rename(columns={"ONEWAY": "ONEWAY_ugrc"})
+gdf_unmatched["piece_direction"] = pd.NA
+gdf_unmatched["A"] = pd.NA
+gdf_unmatched["B"] = pd.NA
+gdf_unmatched["n_constituents"] = pd.NA
+gdf_unmatched["constituent_ab_pairs"] = pd.NA
+gdf_unmatched["trueshape_method"] = "unattributed"
+
+# Blank TDM attribute columns (ONEWAY_tdm, FT_2027, etc.) — present in the
+# matched table, absent here since no chain claimed these pieces.
+tdm_only_cols = [c for c in gdf_matched_final.columns if c not in gdf_unmatched.columns]
+for col in tdm_only_cols:
+    gdf_unmatched[col] = pd.NA
+gdf_unmatched = gdf_unmatched[gdf_matched_final.columns]
+
+print(f"Matched pieces:   {len(matched_piece_ids):,} / {len(gdf_pieces):,}")
+print(f"Unmatched pieces: {len(gdf_unmatched):,} / {len(gdf_pieces):,}")
+```
+
+```{python}
+gdf_trueshape = pd.concat([gdf_matched_final, gdf_unmatched], ignore_index=True)
+gdf_trueshape = gpd.GeoDataFrame(gdf_trueshape, geometry="geometry", crs=CRS_UTM)
+for col in ("A", "B", "n_constituents"):
+    gdf_trueshape[col] = gdf_trueshape[col].astype("Int64")
+
+print(f"gdf_trueshape: {len(gdf_trueshape):,} rows")
+print(f"  = {len(gdf_matched_final):,} matched + {len(gdf_unmatched):,} unmatched")
+print(f"  vs. {len(gdf_pieces):,} pieces + {len(gdf_matched_final) - len(matched_piece_ids):,} dual-direction extras")
+print(f"Null geometries: {gdf_trueshape.geometry.isna().sum()}")
+assert len(gdf_trueshape) == len(gdf_pieces) + (len(gdf_matched_final) - len(matched_piece_ids))
+assert gdf_trueshape.geometry.isna().sum() == 0
+```
+
+```{python}
+out_path = PATHS["out_links_trueshape"]
+out_path.parent.mkdir(parents=True, exist_ok=True)
+gdf_trueshape.to_file(out_path, driver="GPKG")
+print(f"Saved to: {out_path}")
 ```
 
 ---
@@ -277,23 +439,32 @@ print(f"Exported {len(gdf_trueshape):,} links → {PATHS['out_links_trueshape']}
 print("=== Stage 3 Summary ===")
 print()
 print(f"Input:  {len(gdf_links):,} model links (FT_2027 not in 1,37,38,39; LN_2027 > 0)")
-print(f"        {len(pseudo_node_ids):,} pseudonodes dissolved")
-print(f"Output: {len(gdf_trueshape):,} dissolved links → {PATHS['out_links_trueshape'].name}")
+print(f"        {len(pass_through_ids):,} pass-through (unsnapped) node ids absorbed into chains")
+print(f"        {len(gdf_dissolved):,} dissolved chains")
+print(f"        {len(gdf_pieces):,} physical link pieces (link_pieces.gpkg)")
+print(f"Output: {len(gdf_trueshape):,} rows → {out_path.name}")
 print()
 print("Method breakdown:")
 print(gdf_trueshape["trueshape_method"].value_counts().to_string())
 print()
-print("Geometry type breakdown (dissolved + dissolved_relaxed):")
-dissolved_mask = gdf_trueshape["trueshape_method"].isin(["dissolved", "dissolved_relaxed"])
-print(gdf_trueshape.loc[dissolved_mask, "geometry"].geom_type.value_counts().to_string())
+print("Endpoint-status breakdown (all pieces, regardless of match outcome):")
+print(gdf_trueshape["endpoint_status"].value_counts().to_string())
 print()
-print("Constituent count (all links):")
-print(gdf_trueshape["n_constituents"].describe().round(1).to_string())
+matched_mask = gdf_trueshape["trueshape_method"] == "matched"
+total_len = gdf_trueshape["length_m"].sum()
+matched_len = gdf_trueshape.loc[matched_mask, "length_m"].sum()
+print(f"Coverage by length: {matched_len:,.0f} m matched / {total_len:,.0f} m total ({matched_len/total_len:.1%})")
+print()
+print("Constituent count (matched rows only):")
+print(gdf_trueshape.loc[matched_mask, "n_constituents"].describe().round(1).to_string())
+print()
+disagreement_counts = gdf_dissolved.attrs.get("disagreement_counts", {})
+print(f"dissolve_pseudonodes disagreement_counts: {len(disagreement_counts)} column(s) affected (informational only — not used for final attributes, see Part C)")
 ```
 
 ```{python}
 #| eval: false
-gdf_trueshape[gdf_trueshape["trueshape_method"].isin(["dissolved", "dissolved_relaxed"])].explore(
-    column="FT_2027", tooltip=["A", "B", "FT_2027", "n_constituents", "trueshape_method"]
+gdf_trueshape[gdf_trueshape["trueshape_method"] == "matched"].explore(
+    column="FT_2027", tooltip=["A", "B", "FT_2027", "n_constituents", "trueshape_method", "piece_direction"]
 )
 ```

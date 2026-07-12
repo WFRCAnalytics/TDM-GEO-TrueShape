@@ -180,3 +180,183 @@ awareness.
 3. Open `links_trueshape.gpkg` in QGIS (or `.explore()` in the notebook) and visually confirm
    full gapless coverage of the road network, with attributed vs. unattributed pieces
    distinguishable by `trueshape_method`.
+
+## Implementation Tasks
+
+Ordered so each task is independently runnable/checkable before starting the next.
+Stage 2 (T1-T4) must land before Stage 3 (T5-T9) since T5+ reads `link_pieces.gpkg`.
+
+- [x] **T1 — Full network redissolve per `VERT_LEVEL`** (`02_create_link.qmd`)
+  Loop over `VERT_LEVEL` values in `CandidateTDMRoadLinks`, call `dissolve_and_singlepart`
+  per level across all rows (fwy+surface combined), concat → `gdf_fulldissolve`.
+  *Verify:* print row count per level before/after; assert total `length_m` of
+  `gdf_fulldissolve` ≈ total length of `CandidateTDMRoadLinks` (dissolve only merges, never
+  adds/drops length); confirm no cross-VERT_LEVEL merging occurred.
+  **Verified:** 15,566 candidate rows → 6,586 (lvl0) + 526 (lvl1) + 25 (lvl2) = 7,137
+  dissolved chains; total length before/after both 6,420,888.7 m (diff 0.000 m). Fixed an
+  unrelated pre-existing bug blocking notebook execution: `_src/link_utils.py` used PEP 604
+  `X | None` annotations without `from __future__ import annotations`, which the
+  `wftdm-docs` kernel's Python couldn't evaluate at import time — added the import
+  (mirrors `_src/centerline_utils.py`).
+
+- [x] **T2 — Re-point snap resolution + split onto the redissolved layer** (`02_create_link.qmd`)
+  Change `resolve_snap_coords` and `split_candidate_links` to target `gdf_fulldissolve`
+  instead of `CandidateTDMRoadLinks`; pass `id_cols=()`.
+  *Verify:* split runs without error; print new piece count vs. today's 19,424 (expect
+  fewer/longer pieces); spot-check a sample of pieces for valid, non-zero-length geometry.
+  **Verified:** 7,137 chains split at 9,548 points (3,600 model-node + 5,948 CC) → 12,252
+  pieces (down from 19,424, as expected). `link_pieces.gpkg` round-trip: 0 null/invalid
+  geometries; one piece at ~8 micron length (float split artifact, negligible).
+
+- [x] **T3 — Reattach lineage attributes via midpoint join** (`02_create_link.qmd`)
+  Call `transfer_attributes_by_midpoint(gdf_pieces, gdf_centerlines, TRANSFER_COLS)` after
+  building the piece geometry table.
+  *Verify:* null-count check on `OBJECTID`/`UNIQUE_ID`/`DOT_FCLASS`/etc. post-join — should
+  be near-zero, consistent with `CandidateTDMRoadLinks`'s own null rates.
+  **Verified:** 1,390/12,252 pieces (11.3%) have a null transferred attribute vs.
+  1,516/15,566 (9.7%) any-null rate in `CandidateTDMRoadLinks` itself — consistent, driven
+  almost entirely by `DOT_FCLASS`'s inherent 9.6% null rate, not a join defect.
+
+- [x] **T4 — Export `link_pieces.gpkg` + update notebook prose** (`02_create_link.qmd`)
+  Update title/description/markdown to describe the new methodology; refresh the summary
+  stats section.
+  *Verify:* file round-trips via `gpd.read_file` with expected columns; full notebook
+  renders end-to-end without error.
+  **Verified:** frontmatter, Load Data, and Part A/C/D prose rewritten to describe the
+  redissolve-then-split methodology (A/B/C/D heading numbering fixed, was duplicated).
+  `link_pieces.gpkg` round-trips with 12,252 rows and all `TRANSFER_COLS` + geometry
+  columns present; full notebook renders end-to-end without error.
+
+- [x] **T5 — Snapped-node lookup, drop `nodes_classified.gpkg`** (`03_transfer_attributes.qmd`)
+  Remove the `nodes_classified.gpkg` load. Build `snapped_node_ids` (`snapped==True` and
+  `snap_rule != "FixedTransit_Rail"`) and the reverse `coord_to_node` dict from
+  `nodes_snapped.gpkg`.
+  *Verify:* print `len(snapped_node_ids)` (~3,600, i.e. 3,670 minus rail-snapped count);
+  spot-check 2-3 known `(x,y) → N` lookups by hand against `nodes_snapped.gpkg`.
+  **Verified:** 3,670 total snapped − 70 rail-snapped = 3,600 road-snapped nodes exactly as
+  predicted; `coord_to_node` also has 3,600 entries (no rounding collisions); 3 random
+  round-trip spot-checks all OK. Notebook renders cleanly through this section; next cell
+  (old pseudonode dissolve, deferred to T6) fails on `pseudo_node_ids` as expected.
+
+- [x] **T6 — Generalized pass-through chain dissolve** (`_src/link_utils.py`, `03_transfer_attributes.qmd`)
+  Rename `dissolve_pseudonodes`'s `pseudo_node_ids` param to `pass_through_ids` (docstring
+  update only, no logic change). In the notebook, build
+  `pass_through_ids = (A∪B node ids in gdf_links) - snapped_node_ids` and call
+  `dissolve_pseudonodes(gdf_links, pass_through_ids, invariant_cols=())`.
+  *Verify:* print `len(gdf_dissolved)`, `n_constituents` distribution, and
+  `disagreement_counts`; sanity-check counts are plausible against `len(gdf_links)`.
+  **Verified:** 28,101 links -> 10,447 dissolved chains (17,654 fewer); 9,569/13,169 node
+  ids are pass-through (unsnapped); 72.3% multi-constituent chains, consistent with ~16%
+  snap coverage. `FT_2027`/`LN_2027` disagreements now surfaced (303/197 chains) instead of
+  hidden by the old `invariant_cols` default — confirms the design rationale.
+
+- [x] **T7 — Vectorized forward/reverse piece-to-chain match** (`03_transfer_attributes.qmd`)
+  Compute `A_piece`/`B_piece` via `coord_to_node` map on `link_pieces.gpkg`; build `merge1`
+  (forward, `(A_piece,B_piece)==(A,B)`) and `merge2` (reverse, `(B_piece,A_piece)==(A,B)`)
+  against `gdf_dissolved`.
+  *Verify:* print matched vs. total piece counts; find one known two-way street's `piece_id`
+  and confirm it appears in both `merge1` and `merge2` with opposite `A`/`B`.
+  **Verified:** 8,653/12,252 pieces matched (7,148 single-direction + 1,505 dual-direction =
+  10,158 matched rows). Spot-check on piece_id 7951 confirmed correct forward/reverse dual-row
+  behavior for a two-way street. Investigated an anomaly found during verification: a handful
+  of pieces (4) had >2 matches (up to 8). Root-caused via standalone diagnostic
+  (`gdf_dissolved.duplicated(subset=['A','B'], keep=False)`): 2,085/10,447 dissolved chains
+  share an `(A,B)` pair with at least one other chain — 2,041 of those (865 unique node ids)
+  are **self-loop** chains (multiple distinct loop/branch roads that both start and end at the
+  same real snapped node), and 44 (22 unique pairs) are **genuine parallel paths** between the
+  same two snapped nodes (e.g. a direct 1-hop link coexisting with a separate multi-hop
+  alternate route between the same `A,B`). All 4 offending pieces are self-loop pieces
+  (`A_piece==B_piece`) or the one parallel-path case — confirmed benign, real topology, not a
+  join bug. Node-IDs alone can't disambiguate which candidate chain such a piece belongs to;
+  this is deferred to T8, which already plans a nearest-geometry resolution step — broadened
+  below to resolve across candidate *chains* (not just within one chain's constituents).
+
+- [ ] **T8 — Nearest-centroid resolution across candidate chains and constituents** (`03_transfer_attributes.qmd`)
+  T7 confirmed `matched` can legitimately contain more than one candidate chain for a single
+  `(piece_id, piece_direction)` (duplicate `(A,B)` chains from self-loops or parallel paths,
+  not just multi-hop `constituent_ab_pairs` within one chain) — so resolution must pick the
+  best candidate **across all matched rows for a (piece_id, piece_direction), not just within
+  one already-chosen chain**. Explode every matched row's `constituent_ab_pairs` into one row
+  per constituent hop (carrying its parent chain's match-row identity), join back to
+  `gdf_links` on exact `(A,B)` for geometry + attributes, compute distance from the piece's
+  centroid to each candidate hop, then group by `(piece_id, piece_direction)` and keep the
+  global `idxmin` — this single rule simultaneously selects the correct chain among
+  duplicates *and* the correct constituent's attributes within it.
+  *Verify:* filter to `n_constituents > 1` matches and manually confirm the chosen
+  constituent is geometrically nearest for a handful of cases; confirm `n_constituents==1`
+  rows pass through unchanged; specifically re-check the 4 pieces identified in T7
+  (piece_id 1443, 336, 11353, 1264) now resolve to exactly one row each per direction.
+  **Verified:** 2,760 raw matched rows -> 3,933 exploded constituent-hop candidates ->
+  resolved to 2,742 unique `(piece_id, piece_direction)` groups (matches distinct-pair count
+  exactly, one row each). 878/2,742 groups were genuinely ambiguous (>1 candidate hop/chain);
+  the other 1,864 solo-candidate groups all passed through unchanged (verified via index
+  membership). All 4 pieces flagged in T7 (1443, 336, 11353, 1264) now resolve to exactly 2
+  rows each (forward + reverse), e.g. piece 1264 (the genuine-parallel-path case) correctly
+  picks the direct 1-hop `(20800,20777)`/`(20777,20800)` chain over the 15-hop alternate,
+  ~2.5m from centroid vs. far more for the alternate. Of 1,865 single-hop-chain
+  `(piece,direction)` groups, only 1 was actually contested against a competing chain — this
+  correctly matches the "22 unique parallel-path pairs" finding from T7 (most are theoretical
+  network topology that doesn't happen to have a matched piece touching them). Final
+  `gdf_matched_resolved`: 2,742 rows, 0 null geometries, 208 columns. Fixed a column-name
+  collision surfaced mid-implementation: `gdf_links` (TDM) and `gdf_pieces` (UGRC) both carry
+  a differently-sourced `ONEWAY` column, plus the hop geometry vs. piece geometry both named
+  `geometry` — resolved by dropping the spent hop geometry before the final join and adding
+  explicit `_tdm`/`_ugrc` suffixes.
+
+- [x] **T9 — Assemble final output + export `links_trueshape.gpkg`** (`03_transfer_attributes.qmd`)
+  Concat attributed matches + blank-attribute unmatched pieces; add `trueshape_method`,
+  `piece_direction`, and endpoint-status QA columns.
+  *Verify:* row count == piece count + dual-direction extra rows; zero null geometries;
+  grep the codebase to confirm no straight-line-fallback code path remains anywhere.
+  **Verified:** full end-to-end render succeeded (22/22 cells). `gdf_trueshape`: 13,327 rows =
+  12,252 pieces + 1,075 dual-direction extras exactly, 0 null geometries (assertions passed).
+  Method breakdown: 2,742 `matched` + 10,585 `unattributed` (all with real retained geometry —
+  no synthetic/straight-line path exists anywhere in the new notebook). Endpoint-status
+  cross-check confirms design integrity: piece-level `both_snapped`=2,009 vs. row-level
+  `both_snapped`=3,084 in the final output, and 2,009+1,075=3,084 exactly — i.e. every one of
+  the 1,075 extra dual-direction rows originates from an originally both-snapped piece, as it
+  must. `a_only`/`b_only`/`neither` counts (3,526/3,503/3,214) identical piece-level vs.
+  row-level, confirming those pieces (which can never match) are never duplicated. Coverage by
+  length: 19.2% (1,315,433 m / 6,864,949 m) — low but expected and not a bug, directly tracking
+  today's sparse ~16.4% node-snap coverage; will rise as snapping coverage improves in later
+  pipeline iterations. Added an `endpoint_status` QA column (`both_snapped`/`a_only`/`b_only`/
+  `neither`) to `gdf_pieces` in Part B, carried through to the final export.
+
+- [x] **T10 — Remove dead BFS/piece-graph code** (`_src/link_utils.py`)
+  Delete `build_piece_graph`, `assemble_chain`, `assemble_chain_relaxed`, `_assemble_loop`;
+  update the module docstring's Stage 3 Public API section.
+  *Verify:* `grep -r` confirms zero remaining references anywhere in the repo;
+  `python -c "import _src.link_utils"` succeeds.
+  **Verified:** all 4 functions deleted (file trimmed 659 -> 427 lines); module docstring's
+  Stage 3 section rewritten to describe the direct coordinate-join match instead of graph
+  traversal; removed the now-unused `deque` import (`LineString`/`Point`/`nx` all still used
+  elsewhere, kept). `python -c "import _src.link_utils"` succeeds; repo-wide grep for all 4
+  function names finds zero remaining references outside this plan file's historical notes
+  and the generated `docs/search.json` index.
+
+- [x] **T11 — Update `CLAUDE.md` roadmap note**
+  Correct the "Link Routing" bullet — no longer shortest-path routing, now a direct
+  chain/coordinate join.
+  *Verify:* diff review, single paragraph, no other content touched.
+  **Verified:** `git diff CLAUDE.md` shows exactly one line changed (the "Link Routing"
+  bullet), rewritten to describe the redissolve-then-split + direct `(A,B)` coordinate-join
+  match, explicitly noting no BFS/pathfinding is involved and geometry is never fabricated.
+
+- [x] **T12 — End-to-end run + visual verification**
+  Run `02_create_link.qmd` then `03_transfer_attributes.qmd` fully. Open
+  `links_trueshape.gpkg` in QGIS or `.explore()`.
+  *Verify:* full gapless coverage of the road network; attributed vs. unattributed pieces
+  visually distinguishable by `trueshape_method`; matches the plan's Verification section.
+  **Verified:** both notebooks rendered fully from a clean state after all T1-T11 edits
+  (including T10's dead-code removal), zero errors. Also fixed `03_transfer_attributes.qmd`'s
+  stale frontmatter (title/subtitle/description still described the old pseudonode/BFS/piece-
+  graph method) to accurately describe the new pass-through-dissolve + coordinate-join
+  design. Final `links_trueshape.gpkg`: 13,327 rows, 0 null/empty/invalid/zero-length
+  geometries, 100% `LineString` geom_type, 2,742 `matched` (1,315 km) + 10,585 `unattributed`
+  (5,550 km) by `trueshape_method`. Static map render (matched=red, unattributed=gray) over
+  the full Wasatch Front confirms gapless coverage — red pieces connect seamlessly into gray
+  with no visible gaps and no anomalous straight-line/synthetic-geometry artifacts; matched
+  coverage concentrates in denser already-snapped areas (SLC downtown grid, Ogden, Provo), as
+  expected given today's ~16% node-snap coverage.
+
+**All 12 tasks complete. Plan fully implemented and verified.**

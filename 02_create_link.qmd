@@ -1,7 +1,7 @@
 ---
 title: Create True-Shape Links
-subtitle: Splitting candidate centerlines at snapped model nodes to produce true-shape link pieces
-description: CandidateTDMRoadLinks centerline components (already dissolved and junction-split in 00_data_preparation.qmd) are split at every snapped WFRC model node to produce the raw building-block pieces for true-shape link conflation, carrying OBJECTID and UNIQUE_ID lineage keys through to each piece.
+subtitle: Redissolving candidate centerlines and splitting only at snapped model nodes to produce true-shape link pieces
+description: CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC model-node and CC-attachment positions to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.
 author:
  - name: Pukar Bhandari
    email: pukar.bhandari@wfrc.utah.gov
@@ -21,10 +21,12 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 from shapely.geometry import Point
 
 sys.path.insert(0, str(Path.cwd()))
 from _src.link_utils import resolve_snap_coords, split_candidate_links
+from _src.centerline_utils import dissolve_and_singlepart, transfer_attributes_by_midpoint
 ```
 
 ### Configuration
@@ -37,8 +39,22 @@ PATHS = {
     "out_link_pieces": Path("_data/processed/link_pieces.gpkg"),
 }
 
-# Lineage keys carried from each centerline component onto its split pieces.
-ID_COLS = ("OBJECTID", "UNIQUE_ID")
+# Lineage/display attributes reattached onto final pieces via midpoint join
+# (see Part D) — same column list 00_data_preparation.qmd uses for the
+# original CandidateTDMRoadLinks midpoint transfer.
+TRANSFER_COLS = [
+    "OBJECTID",
+    "UNIQUE_ID",
+    "DOT_FCLASS",
+    "POSTTYPE",
+    "DOT_RTNAME",
+    "DOT_HWYNAM",
+    "FULLNAME",
+    "CARTOCODE",
+    "ONEWAY",
+    "VERT_LEVEL",
+    "SPEED_LMT",
+]
 
 # ── CRS ───────────────────────────────────────────────────────────────────
 CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
@@ -51,10 +67,12 @@ CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
 ### Candidate Centerlines
 
 `CandidateTDMRoadLinks.gpkg` (built in `00_data_preparation.qmd`) is already
-filtered, dissolved into maximal chains, and split at physical junctions —
-each row here is one component bounded only by a junction or a pre-existing
-line endpoint. No further merge/filter is applied; this notebook only splits
-these components further at snapped model-node positions.
+filtered and dissolved, but it is also pre-cut at arcpy-style junction
+points — including incidental boundaries between freeway/ramp/CD rows and
+surface-street rows wherever they merely touch, not just at genuine
+multi-way branches. Part A below re-dissolves these rows into maximal
+chains so that every split point in the final pieces (Part C) comes only
+from snapping, not from `CandidateTDMRoadLinks`'s own pre-existing cuts.
 
 ```{python}
 gdf_centerlines = gpd.read_file(PATHS["in_centerlines"]).to_crs(CRS_UTM)
@@ -81,7 +99,59 @@ gdf_nodes_snapped[gdf_nodes_snapped["snapped"]].explore()
 
 ---
 
-## Part A — Resolve Snap Coordinates
+## Part A — Full Network Redissolve
+
+`CandidateTDMRoadLinks` is already pre-cut at arcpy-style junction points
+(see `00_data_preparation.qmd`'s `rcl_merge`), including boundaries between
+freeway/ramp/CD rows and surface-street rows wherever they merely touch —
+not just at genuine multi-way branches. To make the final true-shape split
+points come **only** from snapped model nodes, every row is re-dissolved
+into maximal topological chains first, per `VERT_LEVEL` (freeway and
+surface rows combined within a level — genuine branch points, where 3+
+lines share an endpoint, still remain hard boundaries after dissolve;
+only incidental class-boundary splits are undone).
+
+VERT_LEVEL isolation is preserved deliberately: dissolving across levels
+would incorrectly fuse an elevated/tunnel structure with an at-grade road
+sharing the same XY footprint (see `dissolve_and_singlepart` docstring).
+
+```{python}
+vert_levels = sorted(gdf_centerlines["VERT_LEVEL"].dropna().unique())
+print(f"VERT_LEVELs present: {vert_levels}")
+
+fulldissolve_parts = []
+for lvl in vert_levels:
+    subset = gdf_centerlines[gdf_centerlines["VERT_LEVEL"] == lvl]
+    if subset.empty:
+        continue
+    dissolved = dissolve_and_singlepart(subset)
+    print(f"  VERT_LEVEL {lvl}: {len(subset):,} rows -> {len(dissolved):,} dissolved chains")
+    fulldissolve_parts.append(dissolved)
+
+gdf_fulldissolve = gpd.GeoDataFrame(
+    pd.concat(fulldissolve_parts, ignore_index=True),
+    geometry="geometry",
+    crs=gdf_centerlines.crs,
+)
+print(f"\nTotal: {len(gdf_centerlines):,} candidate rows -> {len(gdf_fulldissolve):,} redissolved chains")
+```
+
+Sanity check: dissolve only merges touching lines into longer chains — it
+never adds or removes length. Total length before and after must match.
+
+```{python}
+len_before = gdf_centerlines.geometry.length.sum()
+len_after = gdf_fulldissolve.geometry.length.sum()
+diff_m = abs(len_before - len_after)
+print(f"Total length before: {len_before:,.1f} m")
+print(f"Total length after:  {len_after:,.1f} m")
+print(f"Difference:          {diff_m:.3f} m")
+assert diff_m < 1.0, "Redissolve changed total network length — investigate before proceeding."
+```
+
+---
+
+## Part B — Resolve Snap Coordinates
 
 `nodes_snapped.gpkg` stores `snapped_x_round / snapped_y_round` rounded to 2 decimal
 places (cm precision). Splitting and M-value operations require coordinates that
@@ -99,7 +169,7 @@ gdf_nodes_road = gdf_nodes_snapped[
 ]
 gdf_nodes_resolved = resolve_snap_coords(
     gdf_nodes_road,
-    gdf_centerlines,
+    gdf_fulldissolve,
     tolerance=0.05,
 )
 
@@ -131,19 +201,21 @@ print(f"Split points prepared: {len(snap_points_exact):,}")
 
 ---
 
-## Part B — Split at Snapped Nodes
+## Part C — Split at Snapped Nodes
 
-Each candidate component is split independently at every model-node snap point
-and every CC attachment snap point — no merge step runs first, so components
-from different VERT_LEVELs are never combined. Points that project to within
-0.1 mm of a component's existing endpoint are skipped (already a boundary).
-After all splits, each resulting piece is bounded exclusively by:
+`gdf_fulldissolve` (Part A) — not the original `CandidateTDMRoadLinks` rows —
+is split at every model-node snap point and every CC attachment snap point,
+so piece boundaries come only from snapping, never from incidental
+arcpy junction cuts. Points that project to within 0.1 mm of a component's
+existing endpoint are skipped (already a boundary). After all splits, each
+resulting piece is bounded exclusively by:
 - a snapped model node position,
 - a snapped CC attachment node position, or
-- a junction/endpoint already present in CandidateTDMRoadLinks.
+- a genuine branch point already present in `gdf_fulldissolve`.
 
-`OBJECTID` and `UNIQUE_ID` — the GERS lineage keys identified in the project
-roadmap — are copied from each parent component onto every sub-piece it produces.
+No lineage keys are carried through this split (`id_cols=()`) — a redissolved
+row no longer maps 1:1 to a single original `OBJECTID`. Lineage/display
+attributes are reattached afterward via midpoint join (Part D).
 
 ```{python}
 cc_resolved = gdf_cc_snapped[gdf_cc_snapped["snap_resolved"]]
@@ -161,18 +233,23 @@ print(
 ```
 
 ```{python}
-print(f"Splitting {len(gdf_centerlines):,} candidate components at {len(all_snap_points):,} points …")
-gdf_pieces_split = split_candidate_links(gdf_centerlines, all_snap_points, id_cols=ID_COLS)
+print(f"Splitting {len(gdf_fulldissolve):,} redissolved chains at {len(all_snap_points):,} points …")
+gdf_pieces_split = split_candidate_links(gdf_fulldissolve, all_snap_points, id_cols=())
 print(f"Pieces after split: {len(gdf_pieces_split):,}")
 ```
 
 ---
 
-## Part C — Build Pieces Layer and Export
+## Part D — Build Pieces Layer, Reattach Lineage, and Export
 
 Extract start/end endpoint coordinates for each piece (rounded to 2 dp for
-matching against `snapped_x_round / snapped_y_round` in the next stage), then
-export as `link_pieces.gpkg` with the inherited lineage-key columns.
+matching against `snapped_x_round / snapped_y_round` in the next stage). Since
+splitting now runs against the redissolved `gdf_fulldissolve` layer, a piece
+no longer maps 1:1 to a single original `CandidateTDMRoadLinks` `OBJECTID` —
+lineage/display attributes (`TRANSFER_COLS`) are reattached via the same
+midpoint-nearest-join approach `00_data_preparation.qmd` uses to transfer
+attributes from raw centerlines onto `CandidateTDMRoadLinks` in the first
+place, this time from `CandidateTDMRoadLinks` onto each piece.
 
 ```{python}
 pieces = gdf_pieces_split.geometry.tolist()
@@ -182,7 +259,6 @@ end_coords   = np.array([p.coords[-1] for p in pieces])
 gdf_pieces = gpd.GeoDataFrame(
     {
         "piece_id": np.arange(len(pieces)),
-        **{col: gdf_pieces_split[col].values for col in ID_COLS},
         "x_start":  np.round(start_coords[:, 0], 2),
         "y_start":  np.round(start_coords[:, 1], 2),
         "x_end":    np.round(end_coords[:, 0], 2),
@@ -192,6 +268,11 @@ gdf_pieces = gpd.GeoDataFrame(
     },
     crs=CRS_UTM,
 )
+
+gdf_pieces = transfer_attributes_by_midpoint(gdf_pieces, gdf_centerlines, TRANSFER_COLS)
+
+n_null = gdf_pieces[TRANSFER_COLS].isna().any(axis=1).sum()
+print(f"Pieces with a null transferred attribute: {n_null:,} / {len(gdf_pieces):,}")
 
 PATHS["out_link_pieces"].parent.mkdir(parents=True, exist_ok=True)
 gdf_pieces.to_file(PATHS["out_link_pieces"], driver="GPKG")

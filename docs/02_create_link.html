@@ -8,7 +8,7 @@
 
 <meta name="author" content="Pukar Bhandari">
 <meta name="dcterms.date" content="2026-05-14">
-<meta name="description" content="CandidateTDMRoadLinks centerline components (already dissolved and junction-split in 00_data_preparation.qmd) are split at every snapped WFRC model node to produce the raw building-block pieces for true-shape link conflation, carrying OBJECTID and UNIQUE_ID lineage keys through to each piece.">
+<meta name="description" content="CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC model-node and CC-attachment positions to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.">
 
 <title>Create True-Shape Links – True Shape Network</title>
 <style>
@@ -315,10 +315,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="quarto-title-banner page-columns page-full">
     <div class="quarto-title column-body">
       <div class="quarto-title-block"><div><h1 class="title">Create True-Shape Links</h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
-            <p class="subtitle lead">Splitting candidate centerlines at snapped model nodes to produce true-shape link pieces</p>
+            <p class="subtitle lead">Redissolving candidate centerlines and splitting only at snapped model nodes to produce true-shape link pieces</p>
                   <div>
         <div class="description">
-          CandidateTDMRoadLinks centerline components (already dissolved and junction-split in 00_data_preparation.qmd) are split at every snapped WFRC model node to produce the raw building-block pieces for true-shape link conflation, carrying OBJECTID and UNIQUE_ID lineage keys through to each piece.
+          CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC model-node and CC-attachment positions to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.
         </div>
       </div>
                 </div>
@@ -372,10 +372,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#candidate-centerlines" id="toc-candidate-centerlines" class="nav-link" data-scroll-target="#candidate-centerlines">Candidate Centerlines</a></li>
   <li><a href="#snapped-nodes" id="toc-snapped-nodes" class="nav-link" data-scroll-target="#snapped-nodes">Snapped Nodes</a></li>
   </ul></li>
-  <li><a href="#part-a-resolve-snap-coordinates" id="toc-part-a-resolve-snap-coordinates" class="nav-link" data-scroll-target="#part-a-resolve-snap-coordinates"><span class="header-section-number">3</span> Part A — Resolve Snap Coordinates</a></li>
-  <li><a href="#part-b-split-at-snapped-nodes" id="toc-part-b-split-at-snapped-nodes" class="nav-link" data-scroll-target="#part-b-split-at-snapped-nodes"><span class="header-section-number">4</span> Part B — Split at Snapped Nodes</a></li>
-  <li><a href="#part-c-build-pieces-layer-and-export" id="toc-part-c-build-pieces-layer-and-export" class="nav-link" data-scroll-target="#part-c-build-pieces-layer-and-export"><span class="header-section-number">5</span> Part C — Build Pieces Layer and Export</a></li>
-  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">6</span> Summary</a></li>
+  <li><a href="#part-a-full-network-redissolve" id="toc-part-a-full-network-redissolve" class="nav-link" data-scroll-target="#part-a-full-network-redissolve"><span class="header-section-number">3</span> Part A — Full Network Redissolve</a></li>
+  <li><a href="#part-b-resolve-snap-coordinates" id="toc-part-b-resolve-snap-coordinates" class="nav-link" data-scroll-target="#part-b-resolve-snap-coordinates"><span class="header-section-number">4</span> Part B — Resolve Snap Coordinates</a></li>
+  <li><a href="#part-c-split-at-snapped-nodes" id="toc-part-c-split-at-snapped-nodes" class="nav-link" data-scroll-target="#part-c-split-at-snapped-nodes"><span class="header-section-number">5</span> Part C — Split at Snapped Nodes</a></li>
+  <li><a href="#part-d-build-pieces-layer-reattach-lineage-and-export" id="toc-part-d-build-pieces-layer-reattach-lineage-and-export" class="nav-link" data-scroll-target="#part-d-build-pieces-layer-reattach-lineage-and-export"><span class="header-section-number">6</span> Part D — Build Pieces Layer, Reattach Lineage, and Export</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">7</span> Summary</a></li>
   </ul>
 </nav>
     </div>
@@ -391,7 +392,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="imports" class="level3">
 <h3 class="anchored" data-anchor-id="imports">Imports</h3>
-<div id="c5793ad0" class="cell" data-execution_count="1">
+<div id="3f223f84" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -399,16 +400,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> geopandas <span class="im">as</span> gpd</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> shapely.geometry <span class="im">import</span> Point</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>sys.path.insert(<span class="dv">0</span>, <span class="bu">str</span>(Path.cwd()))</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.link_utils <span class="im">import</span> resolve_snap_coords, split_candidate_links</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> shapely.geometry <span class="im">import</span> Point</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>sys.path.insert(<span class="dv">0</span>, <span class="bu">str</span>(Path.cwd()))</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.link_utils <span class="im">import</span> resolve_snap_coords, split_candidate_links</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.centerline_utils <span class="im">import</span> dissolve_and_singlepart, transfer_attributes_by_midpoint</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
 <section id="configuration" class="level3">
 <h3 class="anchored" data-anchor-id="configuration">Configuration</h3>
-<div id="895eec21" class="cell" data-execution_count="2">
+<div id="9aed6f90" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -418,11 +421,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link_pieces"</span>: Path(<span class="st">"_data/processed/link_pieces.gpkg"</span>),</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Lineage keys carried from each centerline component onto its split pieces.</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>ID_COLS <span class="op">=</span> (<span class="st">"OBJECTID"</span>, <span class="st">"UNIQUE_ID"</span>)</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>CRS_UTM <span class="op">=</span> <span class="st">"EPSG:26912"</span>  <span class="co"># NAD83 UTM Zone 12N — Utah (metric)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Lineage/display attributes reattached onto final pieces via midpoint join</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co"># (see Part D) — same column list 00_data_preparation.qmd uses for the</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># original CandidateTDMRoadLinks midpoint transfer.</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>TRANSFER_COLS <span class="op">=</span> [</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"OBJECTID"</span>,</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="st">"UNIQUE_ID"</span>,</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"DOT_FCLASS"</span>,</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"POSTTYPE"</span>,</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">"DOT_RTNAME"</span>,</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="st">"DOT_HWYNAM"</span>,</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="st">"FULLNAME"</span>,</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="st">"CARTOCODE"</span>,</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ONEWAY"</span>,</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    <span class="st">"VERT_LEVEL"</span>,</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="st">"SPEED_LMT"</span>,</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>CRS_UTM <span class="op">=</span> <span class="st">"EPSG:26912"</span>  <span class="co"># NAD83 UTM Zone 12N — Utah (metric)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 <hr>
@@ -432,8 +449,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="2" class="anchored" data-anchor-id="load-data"><span class="header-section-number">2</span> Load Data</h2>
 <section id="candidate-centerlines" class="level3">
 <h3 class="anchored" data-anchor-id="candidate-centerlines">Candidate Centerlines</h3>
-<p><code>CandidateTDMRoadLinks.gpkg</code> (built in <code>00_data_preparation.qmd</code>) is already filtered, dissolved into maximal chains, and split at physical junctions — each row here is one component bounded only by a junction or a pre-existing line endpoint. No further merge/filter is applied; this notebook only splits these components further at snapped model-node positions.</p>
-<div id="4550c62b" class="cell" data-execution_count="3">
+<p><code>CandidateTDMRoadLinks.gpkg</code> (built in <code>00_data_preparation.qmd</code>) is already filtered and dissolved, but it is also pre-cut at arcpy-style junction points — including incidental boundaries between freeway/ramp/CD rows and surface-street rows wherever they merely touch, not just at genuine multi-way branches. Part A below re-dissolves these rows into maximal chains so that every split point in the final pieces (Part C) comes only from snapping, not from <code>CandidateTDMRoadLinks</code>’s own pre-existing cuts.</p>
+<div id="959fb0d6" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>gdf_centerlines <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_centerlines"</span>]).to_crs(CRS_UTM)</span>
@@ -447,7 +464,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="snapped-nodes" class="level3">
 <h3 class="anchored" data-anchor-id="snapped-nodes">Snapped Nodes</h3>
-<div id="cd912e66" class="cell" data-execution_count="4">
+<div id="72cd282e" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
@@ -463,7 +480,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 CC attachment nodes: 6,539</code></pre>
 </div>
 </div>
-<div id="f8bc4778" class="cell" data-execution_count="5">
+<div id="d55ef11e" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>]].explore()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -472,52 +489,107 @@ CC attachment nodes: 6,539</code></pre>
 <hr>
 </section>
 </section>
-<section id="part-a-resolve-snap-coordinates" class="level2" data-number="3">
-<h2 data-number="3" class="anchored" data-anchor-id="part-a-resolve-snap-coordinates"><span class="header-section-number">3</span> Part A — Resolve Snap Coordinates</h2>
-<p><code>nodes_snapped.gpkg</code> stores <code>snapped_x_round / snapped_y_round</code> rounded to 2 decimal places (cm precision). Splitting and M-value operations require coordinates that exactly match a vertex stored in the centerline geometry. For each snapped node, this step finds the nearest unique centerline vertex within 5 cm and records its full-precision coordinate.</p>
-<p>FixedTransit_Rail nodes are excluded — they snap to GTFS rail infrastructure (CRT stations, LRT midpoints), not to road centerlines, so they are never road centerline split points.</p>
-<div id="f299c2d1" class="cell" data-execution_count="6">
+<section id="part-a-full-network-redissolve" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="part-a-full-network-redissolve"><span class="header-section-number">3</span> Part A — Full Network Redissolve</h2>
+<p><code>CandidateTDMRoadLinks</code> is already pre-cut at arcpy-style junction points (see <code>00_data_preparation.qmd</code>’s <code>rcl_merge</code>), including boundaries between freeway/ramp/CD rows and surface-street rows wherever they merely touch — not just at genuine multi-way branches. To make the final true-shape split points come <strong>only</strong> from snapped model nodes, every row is re-dissolved into maximal topological chains first, per <code>VERT_LEVEL</code> (freeway and surface rows combined within a level — genuine branch points, where 3+ lines share an endpoint, still remain hard boundaries after dissolve; only incidental class-boundary splits are undone).</p>
+<p>VERT_LEVEL isolation is preserved deliberately: dissolving across levels would incorrectly fuse an elevated/tunnel structure with an at-grade road sharing the same XY footprint (see <code>dissolve_and_singlepart</code> docstring).</p>
+<div id="a09b3516" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_road <span class="op">=</span> gdf_nodes_snapped[</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_snapped[<span class="st">"snap_rule"</span>] <span class="op">!=</span> <span class="st">"FixedTransit_Rail"</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved <span class="op">=</span> resolve_snap_coords(</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_road,</span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    gdf_centerlines,</span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    tolerance<span class="op">=</span><span class="fl">0.05</span>,</span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>n_road_snapped <span class="op">=</span> gdf_nodes_road[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>).<span class="bu">sum</span>()</span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>n_resolved     <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>n_unresolved   <span class="op">=</span> n_road_snapped <span class="op">-</span> n_resolved</span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Coordinate resolution: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> resolved | </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss"> unresolved"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>vert_levels <span class="op">=</span> <span class="bu">sorted</span>(gdf_centerlines[<span class="st">"VERT_LEVEL"</span>].dropna().unique())</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"VERT_LEVELs present: </span><span class="sc">{</span>vert_levels<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>fulldissolve_parts <span class="op">=</span> []</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> lvl <span class="kw">in</span> vert_levels:</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    subset <span class="op">=</span> gdf_centerlines[gdf_centerlines[<span class="st">"VERT_LEVEL"</span>] <span class="op">==</span> lvl]</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> subset.empty:</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">continue</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    dissolved <span class="op">=</span> dissolve_and_singlepart(subset)</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  VERT_LEVEL </span><span class="sc">{</span>lvl<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span><span class="bu">len</span>(subset)<span class="sc">:,}</span><span class="ss"> rows -&gt; </span><span class="sc">{</span><span class="bu">len</span>(dissolved)<span class="sc">:,}</span><span class="ss"> dissolved chains"</span>)</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    fulldissolve_parts.append(dissolved)</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>gdf_fulldissolve <span class="op">=</span> gpd.GeoDataFrame(</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>    pd.concat(fulldissolve_parts, ignore_index<span class="op">=</span><span class="va">True</span>),</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    geometry<span class="op">=</span><span class="st">"geometry"</span>,</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    crs<span class="op">=</span>gdf_centerlines.crs,</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Total: </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate rows -&gt; </span><span class="sc">{</span><span class="bu">len</span>(gdf_fulldissolve)<span class="sc">:,}</span><span class="ss"> redissolved chains"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>VERT_LEVELs present: ['0', '1', '2']
+  VERT_LEVEL 0: 14,814 rows -&gt; 6,586 dissolved chains
+  VERT_LEVEL 1: 724 rows -&gt; 526 dissolved chains
+  VERT_LEVEL 2: 28 rows -&gt; 25 dissolved chains
+
+Total: 15,566 candidate rows -&gt; 7,137 redissolved chains</code></pre>
+</div>
+</div>
+<p>Sanity check: dissolve only merges touching lines into longer chains — it never adds or removes length. Total length before and after must match.</p>
+<div id="f8a511c0" class="cell" data-execution_count="7">
+<details class="code-fold">
+<summary>Show the code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>len_before <span class="op">=</span> gdf_centerlines.geometry.length.<span class="bu">sum</span>()</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>len_after <span class="op">=</span> gdf_fulldissolve.geometry.length.<span class="bu">sum</span>()</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>diff_m <span class="op">=</span> <span class="bu">abs</span>(len_before <span class="op">-</span> len_after)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Total length before: </span><span class="sc">{</span>len_before<span class="sc">:,.1f}</span><span class="ss"> m"</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Total length after:  </span><span class="sc">{</span>len_after<span class="sc">:,.1f}</span><span class="ss"> m"</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Difference:          </span><span class="sc">{</span>diff_m<span class="sc">:.3f}</span><span class="ss"> m"</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> diff_m <span class="op">&lt;</span> <span class="fl">1.0</span>, <span class="st">"Redissolve changed total network length — investigate before proceeding."</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Total length before: 6,420,888.7 m
+Total length after:  6,420,888.7 m
+Difference:          0.000 m</code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-b-resolve-snap-coordinates" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="part-b-resolve-snap-coordinates"><span class="header-section-number">4</span> Part B — Resolve Snap Coordinates</h2>
+<p><code>nodes_snapped.gpkg</code> stores <code>snapped_x_round / snapped_y_round</code> rounded to 2 decimal places (cm precision). Splitting and M-value operations require coordinates that exactly match a vertex stored in the centerline geometry. For each snapped node, this step finds the nearest unique centerline vertex within 5 cm and records its full-precision coordinate.</p>
+<p>FixedTransit_Rail nodes are excluded — they snap to GTFS rail infrastructure (CRT stations, LRT midpoints), not to road centerlines, so they are never road centerline split points.</p>
+<div id="d15652ba" class="cell" data-execution_count="8">
+<details class="code-fold">
+<summary>Show the code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_road <span class="op">=</span> gdf_nodes_snapped[</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_snapped[<span class="st">"snap_rule"</span>] <span class="op">!=</span> <span class="st">"FixedTransit_Rail"</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved <span class="op">=</span> resolve_snap_coords(</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_road,</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    gdf_fulldissolve,</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    tolerance<span class="op">=</span><span class="fl">0.05</span>,</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>n_road_snapped <span class="op">=</span> gdf_nodes_road[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>).<span class="bu">sum</span>()</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>n_resolved     <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>n_unresolved   <span class="op">=</span> n_road_snapped <span class="op">-</span> n_resolved</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Coordinate resolution: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> resolved | </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss"> unresolved"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>Coordinate resolution: 3,600 resolved | 0 unresolved</code></pre>
 </div>
 </div>
-<div id="c3c6cb44" class="cell" data-execution_count="7">
+<div id="87aea1c7" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_unresolved <span class="op">&gt;</span> <span class="dv">0</span>:</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    unresolved <span class="op">=</span> gdf_nodes_resolved[</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>        gdf_nodes_resolved[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>) <span class="op">&amp;</span> <span class="op">~</span>gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    ]</span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Unresolved node sample (check snap quality):"</span>)</span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(unresolved[[<span class="st">"N"</span>, <span class="st">"snap_rule"</span>, <span class="st">"snapped_x_round"</span>, <span class="st">"snapped_y_round"</span>]].head(<span class="dv">10</span>).to_string())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_unresolved <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    unresolved <span class="op">=</span> gdf_nodes_resolved[</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>        gdf_nodes_resolved[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>) <span class="op">&amp;</span> <span class="op">~</span>gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Unresolved node sample (check snap quality):"</span>)</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(unresolved[[<span class="st">"N"</span>, <span class="st">"snap_rule"</span>, <span class="st">"snapped_x_round"</span>, <span class="st">"snapped_y_round"</span>]].head(<span class="dv">10</span>).to_string())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 <p>Build the list of exact-coordinate Points used as split locations.</p>
-<div id="cdf2dde8" class="cell" data-execution_count="8">
+<div id="77a53843" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>resolved_mask <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>snap_points_exact <span class="op">=</span> [</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_exact"</span>], row[<span class="st">"y_exact"</span>])</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> gdf_nodes_resolved[resolved_mask].iterrows()</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Split points prepared: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>resolved_mask <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>snap_points_exact <span class="op">=</span> [</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_exact"</span>], row[<span class="st">"y_exact"</span>])</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> gdf_nodes_resolved[resolved_mask].iterrows()</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Split points prepared: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>Split points prepared: 3,600</code></pre>
@@ -525,114 +597,119 @@ CC attachment nodes: 6,539</code></pre>
 </div>
 <hr>
 </section>
-<section id="part-b-split-at-snapped-nodes" class="level2" data-number="4">
-<h2 data-number="4" class="anchored" data-anchor-id="part-b-split-at-snapped-nodes"><span class="header-section-number">4</span> Part B — Split at Snapped Nodes</h2>
-<p>Each candidate component is split independently at every model-node snap point and every CC attachment snap point — no merge step runs first, so components from different VERT_LEVELs are never combined. Points that project to within 0.1 mm of a component’s existing endpoint are skipped (already a boundary). After all splits, each resulting piece is bounded exclusively by: - a snapped model node position, - a snapped CC attachment node position, or - a junction/endpoint already present in CandidateTDMRoadLinks.</p>
-<p><code>OBJECTID</code> and <code>UNIQUE_ID</code> — the GERS lineage keys identified in the project roadmap — are copied from each parent component onto every sub-piece it produces.</p>
-<div id="28577fb4" class="cell" data-execution_count="9">
+<section id="part-c-split-at-snapped-nodes" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="part-c-split-at-snapped-nodes"><span class="header-section-number">5</span> Part C — Split at Snapped Nodes</h2>
+<p><code>gdf_fulldissolve</code> (Part A) — not the original <code>CandidateTDMRoadLinks</code> rows — is split at every model-node snap point and every CC attachment snap point, so piece boundaries come only from snapping, never from incidental arcpy junction cuts. Points that project to within 0.1 mm of a component’s existing endpoint are skipped (already a boundary). After all splits, each resulting piece is bounded exclusively by: - a snapped model node position, - a snapped CC attachment node position, or - a genuine branch point already present in <code>gdf_fulldissolve</code>.</p>
+<p>No lineage keys are carried through this split (<code>id_cols=()</code>) — a redissolved row no longer maps 1:1 to a single original <code>OBJECTID</code>. Lineage/display attributes are reattached afterward via midpoint join (Part D).</p>
+<div id="7256dac3" class="cell" data-execution_count="11">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>cc_resolved <span class="op">=</span> gdf_cc_snapped[gdf_cc_snapped[<span class="st">"snap_resolved"</span>]]</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>cc_snap_points <span class="op">=</span> [</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_snap"</span>], row[<span class="st">"y_snap"</span>])</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> cc_resolved.iterrows()</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact <span class="op">+</span> cc_snap_points</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>n_cc_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_cc_snapped) <span class="op">-</span> <span class="bu">len</span>(cc_resolved)</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Split points: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss"> (model nodes) + "</span></span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(cc_snap_points)<span class="sc">:,}</span><span class="ss"> (CC attachment, </span><span class="sc">{</span>n_cc_unresolved<span class="sc">:,}</span><span class="ss"> unresolved excluded) "</span></span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"= </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> total"</span></span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>cc_resolved <span class="op">=</span> gdf_cc_snapped[gdf_cc_snapped[<span class="st">"snap_resolved"</span>]]</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>cc_snap_points <span class="op">=</span> [</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_snap"</span>], row[<span class="st">"y_snap"</span>])</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> cc_resolved.iterrows()</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact <span class="op">+</span> cc_snap_points</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>n_cc_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_cc_snapped) <span class="op">-</span> <span class="bu">len</span>(cc_resolved)</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Split points: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss"> (model nodes) + "</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(cc_snap_points)<span class="sc">:,}</span><span class="ss"> (CC attachment, </span><span class="sc">{</span>n_cc_unresolved<span class="sc">:,}</span><span class="ss"> unresolved excluded) "</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"= </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> total"</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>Split points: 3,600 (model nodes) + 5,948 (CC attachment, 591 unresolved excluded) = 9,548 total</code></pre>
 </div>
 </div>
-<div id="bda625c3" class="cell" data-execution_count="10">
+<div id="fbe0b89a" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>gdf_pieces_split <span class="op">=</span> split_candidate_links(gdf_centerlines, all_snap_points, id_cols<span class="op">=</span>ID_COLS)</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces after split: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces_split)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_fulldissolve)<span class="sc">:,}</span><span class="ss"> redissolved chains at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>gdf_pieces_split <span class="op">=</span> split_candidate_links(gdf_fulldissolve, all_snap_points, id_cols<span class="op">=</span>())</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces after split: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces_split)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Splitting 15,566 candidate components at 9,548 points …
-Pieces after split: 19,424</code></pre>
+<pre><code>Splitting 7,137 redissolved chains at 9,548 points …
+Pieces after split: 12,252</code></pre>
 </div>
 </div>
 <hr>
 </section>
-<section id="part-c-build-pieces-layer-and-export" class="level2" data-number="5">
-<h2 data-number="5" class="anchored" data-anchor-id="part-c-build-pieces-layer-and-export"><span class="header-section-number">5</span> Part C — Build Pieces Layer and Export</h2>
-<p>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for matching against <code>snapped_x_round / snapped_y_round</code> in the next stage), then export as <code>link_pieces.gpkg</code> with the inherited lineage-key columns.</p>
-<div id="58d3e54c" class="cell" data-execution_count="11">
+<section id="part-d-build-pieces-layer-reattach-lineage-and-export" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="part-d-build-pieces-layer-reattach-lineage-and-export"><span class="header-section-number">6</span> Part D — Build Pieces Layer, Reattach Lineage, and Export</h2>
+<p>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for matching against <code>snapped_x_round / snapped_y_round</code> in the next stage). Since splitting now runs against the redissolved <code>gdf_fulldissolve</code> layer, a piece no longer maps 1:1 to a single original <code>CandidateTDMRoadLinks</code> <code>OBJECTID</code> — lineage/display attributes (<code>TRANSFER_COLS</code>) are reattached via the same midpoint-nearest-join approach <code>00_data_preparation.qmd</code> uses to transfer attributes from raw centerlines onto <code>CandidateTDMRoadLinks</code> in the first place, this time from <code>CandidateTDMRoadLinks</code> onto each piece.</p>
+<div id="77ca8e10" class="cell" data-execution_count="13">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>start_coords <span class="op">=</span> np.array([p.coords[<span class="dv">0</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>end_coords   <span class="op">=</span> np.array([p.coords[<span class="op">-</span><span class="dv">1</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gpd.GeoDataFrame(</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    {</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"piece_id"</span>: np.arange(<span class="bu">len</span>(pieces)),</span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>        <span class="op">**</span>{col: gdf_pieces_split[col].values <span class="cf">for</span> col <span class="kw">in</span> ID_COLS},</span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
-<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>        <span class="st">"length_m"</span>: np.array([p.length <span class="cf">for</span> p <span class="kw">in</span> pieces]),</span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>        <span class="st">"geometry"</span>: pieces,</span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>    crs<span class="op">=</span>CRS_UTM,</span>
-<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>PATHS[<span class="st">"out_link_pieces"</span>].parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>gdf_pieces.to_file(PATHS[<span class="st">"out_link_pieces"</span>], driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
-<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exported </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>start_coords <span class="op">=</span> np.array([p.coords[<span class="dv">0</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>end_coords   <span class="op">=</span> np.array([p.coords[<span class="op">-</span><span class="dv">1</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gpd.GeoDataFrame(</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"piece_id"</span>: np.arange(<span class="bu">len</span>(pieces)),</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>        <span class="st">"length_m"</span>: np.array([p.length <span class="cf">for</span> p <span class="kw">in</span> pieces]),</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>        <span class="st">"geometry"</span>: pieces,</span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    crs<span class="op">=</span>CRS_UTM,</span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> transfer_attributes_by_midpoint(gdf_pieces, gdf_centerlines, TRANSFER_COLS)</span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>n_null <span class="op">=</span> gdf_pieces[TRANSFER_COLS].isna().<span class="bu">any</span>(axis<span class="op">=</span><span class="dv">1</span>).<span class="bu">sum</span>()</span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces with a null transferred attribute: </span><span class="sc">{</span>n_null<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>PATHS[<span class="st">"out_link_pieces"</span>].parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>gdf_pieces.to_file(PATHS[<span class="st">"out_link_pieces"</span>], driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exported </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Exported 19,424 pieces → _data\processed\link_pieces.gpkg</code></pre>
+<pre><code>Pieces with a null transferred attribute: 1,390 / 12,252
+Exported 12,252 pieces → _data\processed\link_pieces.gpkg</code></pre>
 </div>
 </div>
 <hr>
 </section>
-<section id="summary" class="level2" data-number="6">
-<h2 data-number="6" class="anchored" data-anchor-id="summary"><span class="header-section-number">6</span> Summary</h2>
-<div id="d681cfc1" class="cell" data-execution_count="12">
+<section id="summary" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="summary"><span class="header-section-number">7</span> Summary</h2>
+<div id="c1b02e7d" class="cell" data-execution_count="14">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Piece length distribution (m):"</span>)</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Min:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">min</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Median: </span><span class="sc">{</span>lengths<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  P90:    </span><span class="sc">{</span>lengths<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Max:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Input:  </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components"</span>)</span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span>n_road_snapped<span class="sc">:,}</span><span class="ss"> snapped road nodes (</span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> coordinate-resolved)"</span>)</span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes snapped"</span>)</span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Output: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes → </span><span class="sc">{</span>PATHS[<span class="st">'in_node_snapped'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss"> (layer: cc_nodes_snapped)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Piece length distribution (m):"</span>)</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Min:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">min</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Median: </span><span class="sc">{</span>lengths<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  P90:    </span><span class="sc">{</span>lengths<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Max:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Input:  </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components"</span>)</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span>n_road_snapped<span class="sc">:,}</span><span class="ss"> snapped road nodes (</span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> coordinate-resolved)"</span>)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes snapped"</span>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Output: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes → </span><span class="sc">{</span>PATHS[<span class="st">'in_node_snapped'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss"> (layer: cc_nodes_snapped)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>Piece length distribution (m):
   Min:    0.0
-  Median: 171.0
-  P90:    684.6
+  Median: 365.3
+  P90:    910.5
   Max:    48924.3
 
 Input:  15,566 candidate components
         3,600 snapped road nodes (3,600 coordinate-resolved)
         6,539 CC attachment nodes snapped
-Output: 19,424 pieces → link_pieces.gpkg
+Output: 12,252 pieces → link_pieces.gpkg
         6,539 CC attachment nodes → nodes_snapped.gpkg (layer: cc_nodes_snapped)</code></pre>
 </div>
 </div>
-<div id="2a8897fe" class="cell" data-execution_count="13">
+<div id="0d4aba1c" class="cell" data-execution_count="15">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>gdf_pieces.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>gdf_pieces.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 
@@ -1106,229 +1183,310 @@ Output: 19,424 pieces → link_pieces.gpkg
     }
   });
   </script><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> Create True-Shape Links</span></span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> Splitting candidate centerlines at snapped model nodes to produce true-shape link pieces</span></span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="an">description:</span><span class="co"> CandidateTDMRoadLinks centerline components (already dissolved and junction-split in 00_data_preparation.qmd) are split at every snapped WFRC model node to produce the raw building-block pieces for true-shape link conflation, carrying OBJECTID and UNIQUE_ID lineage keys through to each piece.</span></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="an">author:</span></span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="co"> - name: Pukar Bhandari</span></span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="co">   email: pukar.bhandari@wfrc.utah.gov</span></span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="co">   affiliation:</span></span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="co">     - name: Wasatch Front Regional Council</span></span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="co">       url: "https://wfrc.utah.gov/"</span></span>
-<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="an">date:</span><span class="co"> "2026-05-14"</span></span>
-<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
-<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a><span class="fu">## Setup</span></span>
-<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a><span class="fu">### Imports</span></span>
-<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
-<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
-<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> geopandas <span class="im">as</span> gpd</span>
-<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> shapely.geometry <span class="im">import</span> Point</span>
-<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>sys.path.insert(<span class="dv">0</span>, <span class="bu">str</span>(Path.cwd()))</span>
-<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.link_utils <span class="im">import</span> resolve_snap_coords, split_candidate_links</span>
-<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a><span class="fu">### Configuration</span></span>
-<span id="cb22-33"><a href="#cb22-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-36"><a href="#cb22-36" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-37"><a href="#cb22-37" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
-<span id="cb22-38"><a href="#cb22-38" aria-hidden="true" tabindex="-1"></a>PATHS <span class="op">=</span> {</span>
-<span id="cb22-39"><a href="#cb22-39" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_centerlines"</span>:  Path(<span class="st">"_data/processed/CandidateTDMRoadLinks.gpkg"</span>),</span>
-<span id="cb22-40"><a href="#cb22-40" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_node_snapped"</span>: Path(<span class="st">"_data/processed/nodes_snapped.gpkg"</span>),</span>
-<span id="cb22-41"><a href="#cb22-41" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link_pieces"</span>: Path(<span class="st">"_data/processed/link_pieces.gpkg"</span>),</span>
-<span id="cb22-42"><a href="#cb22-42" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb22-43"><a href="#cb22-43" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-44"><a href="#cb22-44" aria-hidden="true" tabindex="-1"></a><span class="co"># Lineage keys carried from each centerline component onto its split pieces.</span></span>
-<span id="cb22-45"><a href="#cb22-45" aria-hidden="true" tabindex="-1"></a>ID_COLS <span class="op">=</span> (<span class="st">"OBJECTID"</span>, <span class="st">"UNIQUE_ID"</span>)</span>
-<span id="cb22-46"><a href="#cb22-46" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-47"><a href="#cb22-47" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
-<span id="cb22-48"><a href="#cb22-48" aria-hidden="true" tabindex="-1"></a>CRS_UTM <span class="op">=</span> <span class="st">"EPSG:26912"</span>  <span class="co"># NAD83 UTM Zone 12N — Utah (metric)</span></span>
-<span id="cb22-49"><a href="#cb22-49" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-50"><a href="#cb22-50" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-51"><a href="#cb22-51" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb22-52"><a href="#cb22-52" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-53"><a href="#cb22-53" aria-hidden="true" tabindex="-1"></a><span class="fu">## Load Data</span></span>
-<span id="cb22-54"><a href="#cb22-54" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-55"><a href="#cb22-55" aria-hidden="true" tabindex="-1"></a><span class="fu">### Candidate Centerlines</span></span>
-<span id="cb22-56"><a href="#cb22-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-57"><a href="#cb22-57" aria-hidden="true" tabindex="-1"></a><span class="in">`CandidateTDMRoadLinks.gpkg`</span> (built in <span class="in">`00_data_preparation.qmd`</span>) is already</span>
-<span id="cb22-58"><a href="#cb22-58" aria-hidden="true" tabindex="-1"></a>filtered, dissolved into maximal chains, and split at physical junctions —</span>
-<span id="cb22-59"><a href="#cb22-59" aria-hidden="true" tabindex="-1"></a>each row here is one component bounded only by a junction or a pre-existing</span>
-<span id="cb22-60"><a href="#cb22-60" aria-hidden="true" tabindex="-1"></a>line endpoint. No further merge/filter is applied; this notebook only splits</span>
-<span id="cb22-61"><a href="#cb22-61" aria-hidden="true" tabindex="-1"></a>these components further at snapped model-node positions.</span>
-<span id="cb22-62"><a href="#cb22-62" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-65"><a href="#cb22-65" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-66"><a href="#cb22-66" aria-hidden="true" tabindex="-1"></a>gdf_centerlines <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_centerlines"</span>]).to_crs(CRS_UTM)</span>
-<span id="cb22-67"><a href="#cb22-67" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-68"><a href="#cb22-68" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Candidate components: </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> | CRS: </span><span class="sc">{</span>gdf_centerlines<span class="sc">.</span>crs<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb22-69"><a href="#cb22-69" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-70"><a href="#cb22-70" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-71"><a href="#cb22-71" aria-hidden="true" tabindex="-1"></a><span class="fu">### Snapped Nodes</span></span>
-<span id="cb22-72"><a href="#cb22-72" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-75"><a href="#cb22-75" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-76"><a href="#cb22-76" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
-<span id="cb22-77"><a href="#cb22-77" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped    <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"cc_nodes_snapped"</span>).to_crs(CRS_UTM)</span>
-<span id="cb22-78"><a href="#cb22-78" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-79"><a href="#cb22-79" aria-hidden="true" tabindex="-1"></a>n_total   <span class="op">=</span> <span class="bu">len</span>(gdf_nodes_snapped)</span>
-<span id="cb22-80"><a href="#cb22-80" aria-hidden="true" tabindex="-1"></a>n_snapped <span class="op">=</span> gdf_nodes_snapped[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>).<span class="bu">sum</span>()</span>
-<span id="cb22-81"><a href="#cb22-81" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Nodes: </span><span class="sc">{</span>n_total<span class="sc">:,}</span><span class="ss"> total | </span><span class="sc">{</span>n_snapped<span class="sc">:,}</span><span class="ss"> snapped (</span><span class="sc">{</span>n_snapped<span class="op">/</span>n_total<span class="sc">:.1%}</span><span class="ss">)"</span>)</span>
-<span id="cb22-82"><a href="#cb22-82" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"CC attachment nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb22-83"><a href="#cb22-83" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-84"><a href="#cb22-84" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-87"><a href="#cb22-87" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-88"><a href="#cb22-88" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb22-89"><a href="#cb22-89" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>]].explore()</span>
-<span id="cb22-90"><a href="#cb22-90" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-91"><a href="#cb22-91" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-92"><a href="#cb22-92" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb22-93"><a href="#cb22-93" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-94"><a href="#cb22-94" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part A — Resolve Snap Coordinates</span></span>
-<span id="cb22-95"><a href="#cb22-95" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-96"><a href="#cb22-96" aria-hidden="true" tabindex="-1"></a><span class="in">`nodes_snapped.gpkg`</span> stores <span class="in">`snapped_x_round / snapped_y_round`</span> rounded to 2 decimal</span>
-<span id="cb22-97"><a href="#cb22-97" aria-hidden="true" tabindex="-1"></a>places (cm precision). Splitting and M-value operations require coordinates that</span>
-<span id="cb22-98"><a href="#cb22-98" aria-hidden="true" tabindex="-1"></a>exactly match a vertex stored in the centerline geometry. For each snapped node,</span>
-<span id="cb22-99"><a href="#cb22-99" aria-hidden="true" tabindex="-1"></a>this step finds the nearest unique centerline vertex within 5 cm and records its</span>
-<span id="cb22-100"><a href="#cb22-100" aria-hidden="true" tabindex="-1"></a>full-precision coordinate.</span>
-<span id="cb22-101"><a href="#cb22-101" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-102"><a href="#cb22-102" aria-hidden="true" tabindex="-1"></a>FixedTransit_Rail nodes are excluded — they snap to GTFS rail infrastructure</span>
-<span id="cb22-103"><a href="#cb22-103" aria-hidden="true" tabindex="-1"></a>(CRT stations, LRT midpoints), not to road centerlines, so they are never road</span>
-<span id="cb22-104"><a href="#cb22-104" aria-hidden="true" tabindex="-1"></a>centerline split points.</span>
-<span id="cb22-105"><a href="#cb22-105" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-108"><a href="#cb22-108" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-109"><a href="#cb22-109" aria-hidden="true" tabindex="-1"></a>gdf_nodes_road <span class="op">=</span> gdf_nodes_snapped[</span>
-<span id="cb22-110"><a href="#cb22-110" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_snapped[<span class="st">"snap_rule"</span>] <span class="op">!=</span> <span class="st">"FixedTransit_Rail"</span></span>
-<span id="cb22-111"><a href="#cb22-111" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb22-112"><a href="#cb22-112" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved <span class="op">=</span> resolve_snap_coords(</span>
-<span id="cb22-113"><a href="#cb22-113" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_road,</span>
-<span id="cb22-114"><a href="#cb22-114" aria-hidden="true" tabindex="-1"></a>    gdf_centerlines,</span>
-<span id="cb22-115"><a href="#cb22-115" aria-hidden="true" tabindex="-1"></a>    tolerance<span class="op">=</span><span class="fl">0.05</span>,</span>
-<span id="cb22-116"><a href="#cb22-116" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb22-117"><a href="#cb22-117" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-118"><a href="#cb22-118" aria-hidden="true" tabindex="-1"></a>n_road_snapped <span class="op">=</span> gdf_nodes_road[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>).<span class="bu">sum</span>()</span>
-<span id="cb22-119"><a href="#cb22-119" aria-hidden="true" tabindex="-1"></a>n_resolved     <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
-<span id="cb22-120"><a href="#cb22-120" aria-hidden="true" tabindex="-1"></a>n_unresolved   <span class="op">=</span> n_road_snapped <span class="op">-</span> n_resolved</span>
-<span id="cb22-121"><a href="#cb22-121" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Coordinate resolution: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> resolved | </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss"> unresolved"</span>)</span>
-<span id="cb22-122"><a href="#cb22-122" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-123"><a href="#cb22-123" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-126"><a href="#cb22-126" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-127"><a href="#cb22-127" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_unresolved <span class="op">&gt;</span> <span class="dv">0</span>:</span>
-<span id="cb22-128"><a href="#cb22-128" aria-hidden="true" tabindex="-1"></a>    unresolved <span class="op">=</span> gdf_nodes_resolved[</span>
-<span id="cb22-129"><a href="#cb22-129" aria-hidden="true" tabindex="-1"></a>        gdf_nodes_resolved[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>) <span class="op">&amp;</span> <span class="op">~</span>gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
-<span id="cb22-130"><a href="#cb22-130" aria-hidden="true" tabindex="-1"></a>    ]</span>
-<span id="cb22-131"><a href="#cb22-131" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Unresolved node sample (check snap quality):"</span>)</span>
-<span id="cb22-132"><a href="#cb22-132" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(unresolved[[<span class="st">"N"</span>, <span class="st">"snap_rule"</span>, <span class="st">"snapped_x_round"</span>, <span class="st">"snapped_y_round"</span>]].head(<span class="dv">10</span>).to_string())</span>
-<span id="cb22-133"><a href="#cb22-133" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-134"><a href="#cb22-134" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-135"><a href="#cb22-135" aria-hidden="true" tabindex="-1"></a>Build the list of exact-coordinate Points used as split locations.</span>
-<span id="cb22-136"><a href="#cb22-136" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-139"><a href="#cb22-139" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-140"><a href="#cb22-140" aria-hidden="true" tabindex="-1"></a>resolved_mask <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
-<span id="cb22-141"><a href="#cb22-141" aria-hidden="true" tabindex="-1"></a>snap_points_exact <span class="op">=</span> [</span>
-<span id="cb22-142"><a href="#cb22-142" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_exact"</span>], row[<span class="st">"y_exact"</span>])</span>
-<span id="cb22-143"><a href="#cb22-143" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> gdf_nodes_resolved[resolved_mask].iterrows()</span>
-<span id="cb22-144"><a href="#cb22-144" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb22-145"><a href="#cb22-145" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Split points prepared: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb22-146"><a href="#cb22-146" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-147"><a href="#cb22-147" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-148"><a href="#cb22-148" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb22-149"><a href="#cb22-149" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-150"><a href="#cb22-150" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part B — Split at Snapped Nodes</span></span>
-<span id="cb22-151"><a href="#cb22-151" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-152"><a href="#cb22-152" aria-hidden="true" tabindex="-1"></a>Each candidate component is split independently at every model-node snap point</span>
-<span id="cb22-153"><a href="#cb22-153" aria-hidden="true" tabindex="-1"></a>and every CC attachment snap point — no merge step runs first, so components</span>
-<span id="cb22-154"><a href="#cb22-154" aria-hidden="true" tabindex="-1"></a>from different VERT_LEVELs are never combined. Points that project to within</span>
-<span id="cb22-155"><a href="#cb22-155" aria-hidden="true" tabindex="-1"></a>0.1 mm of a component's existing endpoint are skipped (already a boundary).</span>
-<span id="cb22-156"><a href="#cb22-156" aria-hidden="true" tabindex="-1"></a>After all splits, each resulting piece is bounded exclusively by:</span>
-<span id="cb22-157"><a href="#cb22-157" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a snapped model node position,</span>
-<span id="cb22-158"><a href="#cb22-158" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a snapped CC attachment node position, or</span>
-<span id="cb22-159"><a href="#cb22-159" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a junction/endpoint already present in CandidateTDMRoadLinks.</span>
-<span id="cb22-160"><a href="#cb22-160" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-161"><a href="#cb22-161" aria-hidden="true" tabindex="-1"></a><span class="in">`OBJECTID`</span> and <span class="in">`UNIQUE_ID`</span> — the GERS lineage keys identified in the project</span>
-<span id="cb22-162"><a href="#cb22-162" aria-hidden="true" tabindex="-1"></a>roadmap — are copied from each parent component onto every sub-piece it produces.</span>
-<span id="cb22-163"><a href="#cb22-163" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-166"><a href="#cb22-166" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-167"><a href="#cb22-167" aria-hidden="true" tabindex="-1"></a>cc_resolved <span class="op">=</span> gdf_cc_snapped[gdf_cc_snapped[<span class="st">"snap_resolved"</span>]]</span>
-<span id="cb22-168"><a href="#cb22-168" aria-hidden="true" tabindex="-1"></a>cc_snap_points <span class="op">=</span> [</span>
-<span id="cb22-169"><a href="#cb22-169" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_snap"</span>], row[<span class="st">"y_snap"</span>])</span>
-<span id="cb22-170"><a href="#cb22-170" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> cc_resolved.iterrows()</span>
-<span id="cb22-171"><a href="#cb22-171" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb22-172"><a href="#cb22-172" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact <span class="op">+</span> cc_snap_points</span>
-<span id="cb22-173"><a href="#cb22-173" aria-hidden="true" tabindex="-1"></a>n_cc_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_cc_snapped) <span class="op">-</span> <span class="bu">len</span>(cc_resolved)</span>
-<span id="cb22-174"><a href="#cb22-174" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
-<span id="cb22-175"><a href="#cb22-175" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Split points: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss"> (model nodes) + "</span></span>
-<span id="cb22-176"><a href="#cb22-176" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(cc_snap_points)<span class="sc">:,}</span><span class="ss"> (CC attachment, </span><span class="sc">{</span>n_cc_unresolved<span class="sc">:,}</span><span class="ss"> unresolved excluded) "</span></span>
-<span id="cb22-177"><a href="#cb22-177" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"= </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> total"</span></span>
-<span id="cb22-178"><a href="#cb22-178" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb22-179"><a href="#cb22-179" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-180"><a href="#cb22-180" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-183"><a href="#cb22-183" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-184"><a href="#cb22-184" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
-<span id="cb22-185"><a href="#cb22-185" aria-hidden="true" tabindex="-1"></a>gdf_pieces_split <span class="op">=</span> split_candidate_links(gdf_centerlines, all_snap_points, id_cols<span class="op">=</span>ID_COLS)</span>
-<span id="cb22-186"><a href="#cb22-186" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces after split: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces_split)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb22-187"><a href="#cb22-187" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-188"><a href="#cb22-188" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-189"><a href="#cb22-189" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb22-190"><a href="#cb22-190" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-191"><a href="#cb22-191" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part C — Build Pieces Layer and Export</span></span>
-<span id="cb22-192"><a href="#cb22-192" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-193"><a href="#cb22-193" aria-hidden="true" tabindex="-1"></a>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for</span>
-<span id="cb22-194"><a href="#cb22-194" aria-hidden="true" tabindex="-1"></a>matching against <span class="in">`snapped_x_round / snapped_y_round`</span> in the next stage), then</span>
-<span id="cb22-195"><a href="#cb22-195" aria-hidden="true" tabindex="-1"></a>export as <span class="in">`link_pieces.gpkg`</span> with the inherited lineage-key columns.</span>
-<span id="cb22-196"><a href="#cb22-196" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-199"><a href="#cb22-199" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-200"><a href="#cb22-200" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
-<span id="cb22-201"><a href="#cb22-201" aria-hidden="true" tabindex="-1"></a>start_coords <span class="op">=</span> np.array([p.coords[<span class="dv">0</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
-<span id="cb22-202"><a href="#cb22-202" aria-hidden="true" tabindex="-1"></a>end_coords   <span class="op">=</span> np.array([p.coords[<span class="op">-</span><span class="dv">1</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
-<span id="cb22-203"><a href="#cb22-203" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-204"><a href="#cb22-204" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gpd.GeoDataFrame(</span>
-<span id="cb22-205"><a href="#cb22-205" aria-hidden="true" tabindex="-1"></a>    {</span>
-<span id="cb22-206"><a href="#cb22-206" aria-hidden="true" tabindex="-1"></a>        <span class="st">"piece_id"</span>: np.arange(<span class="bu">len</span>(pieces)),</span>
-<span id="cb22-207"><a href="#cb22-207" aria-hidden="true" tabindex="-1"></a>        <span class="op">**</span>{col: gdf_pieces_split[col].values <span class="cf">for</span> col <span class="kw">in</span> ID_COLS},</span>
-<span id="cb22-208"><a href="#cb22-208" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
-<span id="cb22-209"><a href="#cb22-209" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
-<span id="cb22-210"><a href="#cb22-210" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
-<span id="cb22-211"><a href="#cb22-211" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
-<span id="cb22-212"><a href="#cb22-212" aria-hidden="true" tabindex="-1"></a>        <span class="st">"length_m"</span>: np.array([p.length <span class="cf">for</span> p <span class="kw">in</span> pieces]),</span>
-<span id="cb22-213"><a href="#cb22-213" aria-hidden="true" tabindex="-1"></a>        <span class="st">"geometry"</span>: pieces,</span>
-<span id="cb22-214"><a href="#cb22-214" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb22-215"><a href="#cb22-215" aria-hidden="true" tabindex="-1"></a>    crs<span class="op">=</span>CRS_UTM,</span>
-<span id="cb22-216"><a href="#cb22-216" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb22-217"><a href="#cb22-217" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-218"><a href="#cb22-218" aria-hidden="true" tabindex="-1"></a>PATHS[<span class="st">"out_link_pieces"</span>].parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb22-219"><a href="#cb22-219" aria-hidden="true" tabindex="-1"></a>gdf_pieces.to_file(PATHS[<span class="st">"out_link_pieces"</span>], driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
-<span id="cb22-220"><a href="#cb22-220" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exported </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb22-221"><a href="#cb22-221" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-222"><a href="#cb22-222" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-223"><a href="#cb22-223" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb22-224"><a href="#cb22-224" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-225"><a href="#cb22-225" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
-<span id="cb22-226"><a href="#cb22-226" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-229"><a href="#cb22-229" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-230"><a href="#cb22-230" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
-<span id="cb22-231"><a href="#cb22-231" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Piece length distribution (m):"</span>)</span>
-<span id="cb22-232"><a href="#cb22-232" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Min:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">min</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb22-233"><a href="#cb22-233" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Median: </span><span class="sc">{</span>lengths<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb22-234"><a href="#cb22-234" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  P90:    </span><span class="sc">{</span>lengths<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb22-235"><a href="#cb22-235" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Max:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb22-236"><a href="#cb22-236" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
-<span id="cb22-237"><a href="#cb22-237" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Input:  </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components"</span>)</span>
-<span id="cb22-238"><a href="#cb22-238" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span>n_road_snapped<span class="sc">:,}</span><span class="ss"> snapped road nodes (</span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> coordinate-resolved)"</span>)</span>
-<span id="cb22-239"><a href="#cb22-239" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes snapped"</span>)</span>
-<span id="cb22-240"><a href="#cb22-240" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Output: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb22-241"><a href="#cb22-241" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes → </span><span class="sc">{</span>PATHS[<span class="st">'in_node_snapped'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss"> (layer: cc_nodes_snapped)"</span>)</span>
-<span id="cb22-242"><a href="#cb22-242" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb22-243"><a href="#cb22-243" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-246"><a href="#cb22-246" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb22-247"><a href="#cb22-247" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb22-248"><a href="#cb22-248" aria-hidden="true" tabindex="-1"></a>gdf_pieces.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span>
-<span id="cb22-249"><a href="#cb22-249" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> Create True-Shape Links</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> Redissolving candidate centerlines and splitting only at snapped model nodes to produce true-shape link pieces</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="an">description:</span><span class="co"> CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC model-node and CC-attachment positions to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="an">author:</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="co"> - name: Pukar Bhandari</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="co">   email: pukar.bhandari@wfrc.utah.gov</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="co">   affiliation:</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="co">     - name: Wasatch Front Regional Council</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="co">       url: "https://wfrc.utah.gov/"</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a><span class="an">date:</span><span class="co"> "2026-05-14"</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a><span class="fu">## Setup</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a><span class="fu">### Imports</span></span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> geopandas <span class="im">as</span> gpd</span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> shapely.geometry <span class="im">import</span> Point</span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>sys.path.insert(<span class="dv">0</span>, <span class="bu">str</span>(Path.cwd()))</span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.link_utils <span class="im">import</span> resolve_snap_coords, split_candidate_links</span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.centerline_utils <span class="im">import</span> dissolve_and_singlepart, transfer_attributes_by_midpoint</span>
+<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-33"><a href="#cb26-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-34"><a href="#cb26-34" aria-hidden="true" tabindex="-1"></a><span class="fu">### Configuration</span></span>
+<span id="cb26-35"><a href="#cb26-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-38"><a href="#cb26-38" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-39"><a href="#cb26-39" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
+<span id="cb26-40"><a href="#cb26-40" aria-hidden="true" tabindex="-1"></a>PATHS <span class="op">=</span> {</span>
+<span id="cb26-41"><a href="#cb26-41" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_centerlines"</span>:  Path(<span class="st">"_data/processed/CandidateTDMRoadLinks.gpkg"</span>),</span>
+<span id="cb26-42"><a href="#cb26-42" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_node_snapped"</span>: Path(<span class="st">"_data/processed/nodes_snapped.gpkg"</span>),</span>
+<span id="cb26-43"><a href="#cb26-43" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link_pieces"</span>: Path(<span class="st">"_data/processed/link_pieces.gpkg"</span>),</span>
+<span id="cb26-44"><a href="#cb26-44" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb26-45"><a href="#cb26-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-46"><a href="#cb26-46" aria-hidden="true" tabindex="-1"></a><span class="co"># Lineage/display attributes reattached onto final pieces via midpoint join</span></span>
+<span id="cb26-47"><a href="#cb26-47" aria-hidden="true" tabindex="-1"></a><span class="co"># (see Part D) — same column list 00_data_preparation.qmd uses for the</span></span>
+<span id="cb26-48"><a href="#cb26-48" aria-hidden="true" tabindex="-1"></a><span class="co"># original CandidateTDMRoadLinks midpoint transfer.</span></span>
+<span id="cb26-49"><a href="#cb26-49" aria-hidden="true" tabindex="-1"></a>TRANSFER_COLS <span class="op">=</span> [</span>
+<span id="cb26-50"><a href="#cb26-50" aria-hidden="true" tabindex="-1"></a>    <span class="st">"OBJECTID"</span>,</span>
+<span id="cb26-51"><a href="#cb26-51" aria-hidden="true" tabindex="-1"></a>    <span class="st">"UNIQUE_ID"</span>,</span>
+<span id="cb26-52"><a href="#cb26-52" aria-hidden="true" tabindex="-1"></a>    <span class="st">"DOT_FCLASS"</span>,</span>
+<span id="cb26-53"><a href="#cb26-53" aria-hidden="true" tabindex="-1"></a>    <span class="st">"POSTTYPE"</span>,</span>
+<span id="cb26-54"><a href="#cb26-54" aria-hidden="true" tabindex="-1"></a>    <span class="st">"DOT_RTNAME"</span>,</span>
+<span id="cb26-55"><a href="#cb26-55" aria-hidden="true" tabindex="-1"></a>    <span class="st">"DOT_HWYNAM"</span>,</span>
+<span id="cb26-56"><a href="#cb26-56" aria-hidden="true" tabindex="-1"></a>    <span class="st">"FULLNAME"</span>,</span>
+<span id="cb26-57"><a href="#cb26-57" aria-hidden="true" tabindex="-1"></a>    <span class="st">"CARTOCODE"</span>,</span>
+<span id="cb26-58"><a href="#cb26-58" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ONEWAY"</span>,</span>
+<span id="cb26-59"><a href="#cb26-59" aria-hidden="true" tabindex="-1"></a>    <span class="st">"VERT_LEVEL"</span>,</span>
+<span id="cb26-60"><a href="#cb26-60" aria-hidden="true" tabindex="-1"></a>    <span class="st">"SPEED_LMT"</span>,</span>
+<span id="cb26-61"><a href="#cb26-61" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb26-62"><a href="#cb26-62" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-63"><a href="#cb26-63" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
+<span id="cb26-64"><a href="#cb26-64" aria-hidden="true" tabindex="-1"></a>CRS_UTM <span class="op">=</span> <span class="st">"EPSG:26912"</span>  <span class="co"># NAD83 UTM Zone 12N — Utah (metric)</span></span>
+<span id="cb26-65"><a href="#cb26-65" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-66"><a href="#cb26-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-67"><a href="#cb26-67" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb26-68"><a href="#cb26-68" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-69"><a href="#cb26-69" aria-hidden="true" tabindex="-1"></a><span class="fu">## Load Data</span></span>
+<span id="cb26-70"><a href="#cb26-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-71"><a href="#cb26-71" aria-hidden="true" tabindex="-1"></a><span class="fu">### Candidate Centerlines</span></span>
+<span id="cb26-72"><a href="#cb26-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-73"><a href="#cb26-73" aria-hidden="true" tabindex="-1"></a><span class="in">`CandidateTDMRoadLinks.gpkg`</span> (built in <span class="in">`00_data_preparation.qmd`</span>) is already</span>
+<span id="cb26-74"><a href="#cb26-74" aria-hidden="true" tabindex="-1"></a>filtered and dissolved, but it is also pre-cut at arcpy-style junction</span>
+<span id="cb26-75"><a href="#cb26-75" aria-hidden="true" tabindex="-1"></a>points — including incidental boundaries between freeway/ramp/CD rows and</span>
+<span id="cb26-76"><a href="#cb26-76" aria-hidden="true" tabindex="-1"></a>surface-street rows wherever they merely touch, not just at genuine</span>
+<span id="cb26-77"><a href="#cb26-77" aria-hidden="true" tabindex="-1"></a>multi-way branches. Part A below re-dissolves these rows into maximal</span>
+<span id="cb26-78"><a href="#cb26-78" aria-hidden="true" tabindex="-1"></a>chains so that every split point in the final pieces (Part C) comes only</span>
+<span id="cb26-79"><a href="#cb26-79" aria-hidden="true" tabindex="-1"></a>from snapping, not from <span class="in">`CandidateTDMRoadLinks`</span>'s own pre-existing cuts.</span>
+<span id="cb26-80"><a href="#cb26-80" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-83"><a href="#cb26-83" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-84"><a href="#cb26-84" aria-hidden="true" tabindex="-1"></a>gdf_centerlines <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_centerlines"</span>]).to_crs(CRS_UTM)</span>
+<span id="cb26-85"><a href="#cb26-85" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-86"><a href="#cb26-86" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Candidate components: </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> | CRS: </span><span class="sc">{</span>gdf_centerlines<span class="sc">.</span>crs<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb26-87"><a href="#cb26-87" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-88"><a href="#cb26-88" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-89"><a href="#cb26-89" aria-hidden="true" tabindex="-1"></a><span class="fu">### Snapped Nodes</span></span>
+<span id="cb26-90"><a href="#cb26-90" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-93"><a href="#cb26-93" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-94"><a href="#cb26-94" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
+<span id="cb26-95"><a href="#cb26-95" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped    <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"cc_nodes_snapped"</span>).to_crs(CRS_UTM)</span>
+<span id="cb26-96"><a href="#cb26-96" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-97"><a href="#cb26-97" aria-hidden="true" tabindex="-1"></a>n_total   <span class="op">=</span> <span class="bu">len</span>(gdf_nodes_snapped)</span>
+<span id="cb26-98"><a href="#cb26-98" aria-hidden="true" tabindex="-1"></a>n_snapped <span class="op">=</span> gdf_nodes_snapped[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>).<span class="bu">sum</span>()</span>
+<span id="cb26-99"><a href="#cb26-99" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Nodes: </span><span class="sc">{</span>n_total<span class="sc">:,}</span><span class="ss"> total | </span><span class="sc">{</span>n_snapped<span class="sc">:,}</span><span class="ss"> snapped (</span><span class="sc">{</span>n_snapped<span class="op">/</span>n_total<span class="sc">:.1%}</span><span class="ss">)"</span>)</span>
+<span id="cb26-100"><a href="#cb26-100" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"CC attachment nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb26-101"><a href="#cb26-101" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-102"><a href="#cb26-102" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-105"><a href="#cb26-105" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-106"><a href="#cb26-106" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb26-107"><a href="#cb26-107" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>]].explore()</span>
+<span id="cb26-108"><a href="#cb26-108" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-109"><a href="#cb26-109" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-110"><a href="#cb26-110" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb26-111"><a href="#cb26-111" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-112"><a href="#cb26-112" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part A — Full Network Redissolve</span></span>
+<span id="cb26-113"><a href="#cb26-113" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-114"><a href="#cb26-114" aria-hidden="true" tabindex="-1"></a><span class="in">`CandidateTDMRoadLinks`</span> is already pre-cut at arcpy-style junction points</span>
+<span id="cb26-115"><a href="#cb26-115" aria-hidden="true" tabindex="-1"></a>(see <span class="in">`00_data_preparation.qmd`</span>'s <span class="in">`rcl_merge`</span>), including boundaries between</span>
+<span id="cb26-116"><a href="#cb26-116" aria-hidden="true" tabindex="-1"></a>freeway/ramp/CD rows and surface-street rows wherever they merely touch —</span>
+<span id="cb26-117"><a href="#cb26-117" aria-hidden="true" tabindex="-1"></a>not just at genuine multi-way branches. To make the final true-shape split</span>
+<span id="cb26-118"><a href="#cb26-118" aria-hidden="true" tabindex="-1"></a>points come **only** from snapped model nodes, every row is re-dissolved</span>
+<span id="cb26-119"><a href="#cb26-119" aria-hidden="true" tabindex="-1"></a>into maximal topological chains first, per <span class="in">`VERT_LEVEL`</span> (freeway and</span>
+<span id="cb26-120"><a href="#cb26-120" aria-hidden="true" tabindex="-1"></a>surface rows combined within a level — genuine branch points, where 3+</span>
+<span id="cb26-121"><a href="#cb26-121" aria-hidden="true" tabindex="-1"></a>lines share an endpoint, still remain hard boundaries after dissolve;</span>
+<span id="cb26-122"><a href="#cb26-122" aria-hidden="true" tabindex="-1"></a>only incidental class-boundary splits are undone).</span>
+<span id="cb26-123"><a href="#cb26-123" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-124"><a href="#cb26-124" aria-hidden="true" tabindex="-1"></a>VERT_LEVEL isolation is preserved deliberately: dissolving across levels</span>
+<span id="cb26-125"><a href="#cb26-125" aria-hidden="true" tabindex="-1"></a>would incorrectly fuse an elevated/tunnel structure with an at-grade road</span>
+<span id="cb26-126"><a href="#cb26-126" aria-hidden="true" tabindex="-1"></a>sharing the same XY footprint (see <span class="in">`dissolve_and_singlepart`</span> docstring).</span>
+<span id="cb26-127"><a href="#cb26-127" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-130"><a href="#cb26-130" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-131"><a href="#cb26-131" aria-hidden="true" tabindex="-1"></a>vert_levels <span class="op">=</span> <span class="bu">sorted</span>(gdf_centerlines[<span class="st">"VERT_LEVEL"</span>].dropna().unique())</span>
+<span id="cb26-132"><a href="#cb26-132" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"VERT_LEVELs present: </span><span class="sc">{</span>vert_levels<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb26-133"><a href="#cb26-133" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-134"><a href="#cb26-134" aria-hidden="true" tabindex="-1"></a>fulldissolve_parts <span class="op">=</span> []</span>
+<span id="cb26-135"><a href="#cb26-135" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> lvl <span class="kw">in</span> vert_levels:</span>
+<span id="cb26-136"><a href="#cb26-136" aria-hidden="true" tabindex="-1"></a>    subset <span class="op">=</span> gdf_centerlines[gdf_centerlines[<span class="st">"VERT_LEVEL"</span>] <span class="op">==</span> lvl]</span>
+<span id="cb26-137"><a href="#cb26-137" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> subset.empty:</span>
+<span id="cb26-138"><a href="#cb26-138" aria-hidden="true" tabindex="-1"></a>        <span class="cf">continue</span></span>
+<span id="cb26-139"><a href="#cb26-139" aria-hidden="true" tabindex="-1"></a>    dissolved <span class="op">=</span> dissolve_and_singlepart(subset)</span>
+<span id="cb26-140"><a href="#cb26-140" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  VERT_LEVEL </span><span class="sc">{</span>lvl<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span><span class="bu">len</span>(subset)<span class="sc">:,}</span><span class="ss"> rows -&gt; </span><span class="sc">{</span><span class="bu">len</span>(dissolved)<span class="sc">:,}</span><span class="ss"> dissolved chains"</span>)</span>
+<span id="cb26-141"><a href="#cb26-141" aria-hidden="true" tabindex="-1"></a>    fulldissolve_parts.append(dissolved)</span>
+<span id="cb26-142"><a href="#cb26-142" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-143"><a href="#cb26-143" aria-hidden="true" tabindex="-1"></a>gdf_fulldissolve <span class="op">=</span> gpd.GeoDataFrame(</span>
+<span id="cb26-144"><a href="#cb26-144" aria-hidden="true" tabindex="-1"></a>    pd.concat(fulldissolve_parts, ignore_index<span class="op">=</span><span class="va">True</span>),</span>
+<span id="cb26-145"><a href="#cb26-145" aria-hidden="true" tabindex="-1"></a>    geometry<span class="op">=</span><span class="st">"geometry"</span>,</span>
+<span id="cb26-146"><a href="#cb26-146" aria-hidden="true" tabindex="-1"></a>    crs<span class="op">=</span>gdf_centerlines.crs,</span>
+<span id="cb26-147"><a href="#cb26-147" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-148"><a href="#cb26-148" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Total: </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate rows -&gt; </span><span class="sc">{</span><span class="bu">len</span>(gdf_fulldissolve)<span class="sc">:,}</span><span class="ss"> redissolved chains"</span>)</span>
+<span id="cb26-149"><a href="#cb26-149" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-150"><a href="#cb26-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-151"><a href="#cb26-151" aria-hidden="true" tabindex="-1"></a>Sanity check: dissolve only merges touching lines into longer chains — it</span>
+<span id="cb26-152"><a href="#cb26-152" aria-hidden="true" tabindex="-1"></a>never adds or removes length. Total length before and after must match.</span>
+<span id="cb26-153"><a href="#cb26-153" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-156"><a href="#cb26-156" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-157"><a href="#cb26-157" aria-hidden="true" tabindex="-1"></a>len_before <span class="op">=</span> gdf_centerlines.geometry.length.<span class="bu">sum</span>()</span>
+<span id="cb26-158"><a href="#cb26-158" aria-hidden="true" tabindex="-1"></a>len_after <span class="op">=</span> gdf_fulldissolve.geometry.length.<span class="bu">sum</span>()</span>
+<span id="cb26-159"><a href="#cb26-159" aria-hidden="true" tabindex="-1"></a>diff_m <span class="op">=</span> <span class="bu">abs</span>(len_before <span class="op">-</span> len_after)</span>
+<span id="cb26-160"><a href="#cb26-160" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Total length before: </span><span class="sc">{</span>len_before<span class="sc">:,.1f}</span><span class="ss"> m"</span>)</span>
+<span id="cb26-161"><a href="#cb26-161" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Total length after:  </span><span class="sc">{</span>len_after<span class="sc">:,.1f}</span><span class="ss"> m"</span>)</span>
+<span id="cb26-162"><a href="#cb26-162" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Difference:          </span><span class="sc">{</span>diff_m<span class="sc">:.3f}</span><span class="ss"> m"</span>)</span>
+<span id="cb26-163"><a href="#cb26-163" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> diff_m <span class="op">&lt;</span> <span class="fl">1.0</span>, <span class="st">"Redissolve changed total network length — investigate before proceeding."</span></span>
+<span id="cb26-164"><a href="#cb26-164" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-165"><a href="#cb26-165" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-166"><a href="#cb26-166" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb26-167"><a href="#cb26-167" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-168"><a href="#cb26-168" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part B — Resolve Snap Coordinates</span></span>
+<span id="cb26-169"><a href="#cb26-169" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-170"><a href="#cb26-170" aria-hidden="true" tabindex="-1"></a><span class="in">`nodes_snapped.gpkg`</span> stores <span class="in">`snapped_x_round / snapped_y_round`</span> rounded to 2 decimal</span>
+<span id="cb26-171"><a href="#cb26-171" aria-hidden="true" tabindex="-1"></a>places (cm precision). Splitting and M-value operations require coordinates that</span>
+<span id="cb26-172"><a href="#cb26-172" aria-hidden="true" tabindex="-1"></a>exactly match a vertex stored in the centerline geometry. For each snapped node,</span>
+<span id="cb26-173"><a href="#cb26-173" aria-hidden="true" tabindex="-1"></a>this step finds the nearest unique centerline vertex within 5 cm and records its</span>
+<span id="cb26-174"><a href="#cb26-174" aria-hidden="true" tabindex="-1"></a>full-precision coordinate.</span>
+<span id="cb26-175"><a href="#cb26-175" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-176"><a href="#cb26-176" aria-hidden="true" tabindex="-1"></a>FixedTransit_Rail nodes are excluded — they snap to GTFS rail infrastructure</span>
+<span id="cb26-177"><a href="#cb26-177" aria-hidden="true" tabindex="-1"></a>(CRT stations, LRT midpoints), not to road centerlines, so they are never road</span>
+<span id="cb26-178"><a href="#cb26-178" aria-hidden="true" tabindex="-1"></a>centerline split points.</span>
+<span id="cb26-179"><a href="#cb26-179" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-182"><a href="#cb26-182" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-183"><a href="#cb26-183" aria-hidden="true" tabindex="-1"></a>gdf_nodes_road <span class="op">=</span> gdf_nodes_snapped[</span>
+<span id="cb26-184"><a href="#cb26-184" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_snapped[<span class="st">"snap_rule"</span>] <span class="op">!=</span> <span class="st">"FixedTransit_Rail"</span></span>
+<span id="cb26-185"><a href="#cb26-185" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb26-186"><a href="#cb26-186" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved <span class="op">=</span> resolve_snap_coords(</span>
+<span id="cb26-187"><a href="#cb26-187" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_road,</span>
+<span id="cb26-188"><a href="#cb26-188" aria-hidden="true" tabindex="-1"></a>    gdf_fulldissolve,</span>
+<span id="cb26-189"><a href="#cb26-189" aria-hidden="true" tabindex="-1"></a>    tolerance<span class="op">=</span><span class="fl">0.05</span>,</span>
+<span id="cb26-190"><a href="#cb26-190" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-191"><a href="#cb26-191" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-192"><a href="#cb26-192" aria-hidden="true" tabindex="-1"></a>n_road_snapped <span class="op">=</span> gdf_nodes_road[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>).<span class="bu">sum</span>()</span>
+<span id="cb26-193"><a href="#cb26-193" aria-hidden="true" tabindex="-1"></a>n_resolved     <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
+<span id="cb26-194"><a href="#cb26-194" aria-hidden="true" tabindex="-1"></a>n_unresolved   <span class="op">=</span> n_road_snapped <span class="op">-</span> n_resolved</span>
+<span id="cb26-195"><a href="#cb26-195" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Coordinate resolution: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> resolved | </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss"> unresolved"</span>)</span>
+<span id="cb26-196"><a href="#cb26-196" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-197"><a href="#cb26-197" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-200"><a href="#cb26-200" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-201"><a href="#cb26-201" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_unresolved <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb26-202"><a href="#cb26-202" aria-hidden="true" tabindex="-1"></a>    unresolved <span class="op">=</span> gdf_nodes_resolved[</span>
+<span id="cb26-203"><a href="#cb26-203" aria-hidden="true" tabindex="-1"></a>        gdf_nodes_resolved[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>) <span class="op">&amp;</span> <span class="op">~</span>gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
+<span id="cb26-204"><a href="#cb26-204" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb26-205"><a href="#cb26-205" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Unresolved node sample (check snap quality):"</span>)</span>
+<span id="cb26-206"><a href="#cb26-206" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(unresolved[[<span class="st">"N"</span>, <span class="st">"snap_rule"</span>, <span class="st">"snapped_x_round"</span>, <span class="st">"snapped_y_round"</span>]].head(<span class="dv">10</span>).to_string())</span>
+<span id="cb26-207"><a href="#cb26-207" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-208"><a href="#cb26-208" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-209"><a href="#cb26-209" aria-hidden="true" tabindex="-1"></a>Build the list of exact-coordinate Points used as split locations.</span>
+<span id="cb26-210"><a href="#cb26-210" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-213"><a href="#cb26-213" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-214"><a href="#cb26-214" aria-hidden="true" tabindex="-1"></a>resolved_mask <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
+<span id="cb26-215"><a href="#cb26-215" aria-hidden="true" tabindex="-1"></a>snap_points_exact <span class="op">=</span> [</span>
+<span id="cb26-216"><a href="#cb26-216" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_exact"</span>], row[<span class="st">"y_exact"</span>])</span>
+<span id="cb26-217"><a href="#cb26-217" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> gdf_nodes_resolved[resolved_mask].iterrows()</span>
+<span id="cb26-218"><a href="#cb26-218" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb26-219"><a href="#cb26-219" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Split points prepared: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb26-220"><a href="#cb26-220" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-221"><a href="#cb26-221" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-222"><a href="#cb26-222" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb26-223"><a href="#cb26-223" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-224"><a href="#cb26-224" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part C — Split at Snapped Nodes</span></span>
+<span id="cb26-225"><a href="#cb26-225" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-226"><a href="#cb26-226" aria-hidden="true" tabindex="-1"></a><span class="in">`gdf_fulldissolve`</span> (Part A) — not the original <span class="in">`CandidateTDMRoadLinks`</span> rows —</span>
+<span id="cb26-227"><a href="#cb26-227" aria-hidden="true" tabindex="-1"></a>is split at every model-node snap point and every CC attachment snap point,</span>
+<span id="cb26-228"><a href="#cb26-228" aria-hidden="true" tabindex="-1"></a>so piece boundaries come only from snapping, never from incidental</span>
+<span id="cb26-229"><a href="#cb26-229" aria-hidden="true" tabindex="-1"></a>arcpy junction cuts. Points that project to within 0.1 mm of a component's</span>
+<span id="cb26-230"><a href="#cb26-230" aria-hidden="true" tabindex="-1"></a>existing endpoint are skipped (already a boundary). After all splits, each</span>
+<span id="cb26-231"><a href="#cb26-231" aria-hidden="true" tabindex="-1"></a>resulting piece is bounded exclusively by:</span>
+<span id="cb26-232"><a href="#cb26-232" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a snapped model node position,</span>
+<span id="cb26-233"><a href="#cb26-233" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a snapped CC attachment node position, or</span>
+<span id="cb26-234"><a href="#cb26-234" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a genuine branch point already present in <span class="in">`gdf_fulldissolve`</span>.</span>
+<span id="cb26-235"><a href="#cb26-235" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-236"><a href="#cb26-236" aria-hidden="true" tabindex="-1"></a>No lineage keys are carried through this split (<span class="in">`id_cols=()`</span>) — a redissolved</span>
+<span id="cb26-237"><a href="#cb26-237" aria-hidden="true" tabindex="-1"></a>row no longer maps 1:1 to a single original <span class="in">`OBJECTID`</span>. Lineage/display</span>
+<span id="cb26-238"><a href="#cb26-238" aria-hidden="true" tabindex="-1"></a>attributes are reattached afterward via midpoint join (Part D).</span>
+<span id="cb26-239"><a href="#cb26-239" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-242"><a href="#cb26-242" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-243"><a href="#cb26-243" aria-hidden="true" tabindex="-1"></a>cc_resolved <span class="op">=</span> gdf_cc_snapped[gdf_cc_snapped[<span class="st">"snap_resolved"</span>]]</span>
+<span id="cb26-244"><a href="#cb26-244" aria-hidden="true" tabindex="-1"></a>cc_snap_points <span class="op">=</span> [</span>
+<span id="cb26-245"><a href="#cb26-245" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_snap"</span>], row[<span class="st">"y_snap"</span>])</span>
+<span id="cb26-246"><a href="#cb26-246" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> cc_resolved.iterrows()</span>
+<span id="cb26-247"><a href="#cb26-247" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb26-248"><a href="#cb26-248" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact <span class="op">+</span> cc_snap_points</span>
+<span id="cb26-249"><a href="#cb26-249" aria-hidden="true" tabindex="-1"></a>n_cc_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_cc_snapped) <span class="op">-</span> <span class="bu">len</span>(cc_resolved)</span>
+<span id="cb26-250"><a href="#cb26-250" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb26-251"><a href="#cb26-251" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Split points: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss"> (model nodes) + "</span></span>
+<span id="cb26-252"><a href="#cb26-252" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(cc_snap_points)<span class="sc">:,}</span><span class="ss"> (CC attachment, </span><span class="sc">{</span>n_cc_unresolved<span class="sc">:,}</span><span class="ss"> unresolved excluded) "</span></span>
+<span id="cb26-253"><a href="#cb26-253" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"= </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> total"</span></span>
+<span id="cb26-254"><a href="#cb26-254" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-255"><a href="#cb26-255" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-256"><a href="#cb26-256" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-259"><a href="#cb26-259" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-260"><a href="#cb26-260" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_fulldissolve)<span class="sc">:,}</span><span class="ss"> redissolved chains at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
+<span id="cb26-261"><a href="#cb26-261" aria-hidden="true" tabindex="-1"></a>gdf_pieces_split <span class="op">=</span> split_candidate_links(gdf_fulldissolve, all_snap_points, id_cols<span class="op">=</span>())</span>
+<span id="cb26-262"><a href="#cb26-262" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces after split: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces_split)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb26-263"><a href="#cb26-263" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-264"><a href="#cb26-264" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-265"><a href="#cb26-265" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb26-266"><a href="#cb26-266" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-267"><a href="#cb26-267" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part D — Build Pieces Layer, Reattach Lineage, and Export</span></span>
+<span id="cb26-268"><a href="#cb26-268" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-269"><a href="#cb26-269" aria-hidden="true" tabindex="-1"></a>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for</span>
+<span id="cb26-270"><a href="#cb26-270" aria-hidden="true" tabindex="-1"></a>matching against <span class="in">`snapped_x_round / snapped_y_round`</span> in the next stage). Since</span>
+<span id="cb26-271"><a href="#cb26-271" aria-hidden="true" tabindex="-1"></a>splitting now runs against the redissolved <span class="in">`gdf_fulldissolve`</span> layer, a piece</span>
+<span id="cb26-272"><a href="#cb26-272" aria-hidden="true" tabindex="-1"></a>no longer maps 1:1 to a single original <span class="in">`CandidateTDMRoadLinks`</span> <span class="in">`OBJECTID`</span> —</span>
+<span id="cb26-273"><a href="#cb26-273" aria-hidden="true" tabindex="-1"></a>lineage/display attributes (<span class="in">`TRANSFER_COLS`</span>) are reattached via the same</span>
+<span id="cb26-274"><a href="#cb26-274" aria-hidden="true" tabindex="-1"></a>midpoint-nearest-join approach <span class="in">`00_data_preparation.qmd`</span> uses to transfer</span>
+<span id="cb26-275"><a href="#cb26-275" aria-hidden="true" tabindex="-1"></a>attributes from raw centerlines onto <span class="in">`CandidateTDMRoadLinks`</span> in the first</span>
+<span id="cb26-276"><a href="#cb26-276" aria-hidden="true" tabindex="-1"></a>place, this time from <span class="in">`CandidateTDMRoadLinks`</span> onto each piece.</span>
+<span id="cb26-277"><a href="#cb26-277" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-280"><a href="#cb26-280" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-281"><a href="#cb26-281" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
+<span id="cb26-282"><a href="#cb26-282" aria-hidden="true" tabindex="-1"></a>start_coords <span class="op">=</span> np.array([p.coords[<span class="dv">0</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
+<span id="cb26-283"><a href="#cb26-283" aria-hidden="true" tabindex="-1"></a>end_coords   <span class="op">=</span> np.array([p.coords[<span class="op">-</span><span class="dv">1</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
+<span id="cb26-284"><a href="#cb26-284" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-285"><a href="#cb26-285" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gpd.GeoDataFrame(</span>
+<span id="cb26-286"><a href="#cb26-286" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb26-287"><a href="#cb26-287" aria-hidden="true" tabindex="-1"></a>        <span class="st">"piece_id"</span>: np.arange(<span class="bu">len</span>(pieces)),</span>
+<span id="cb26-288"><a href="#cb26-288" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
+<span id="cb26-289"><a href="#cb26-289" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
+<span id="cb26-290"><a href="#cb26-290" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
+<span id="cb26-291"><a href="#cb26-291" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
+<span id="cb26-292"><a href="#cb26-292" aria-hidden="true" tabindex="-1"></a>        <span class="st">"length_m"</span>: np.array([p.length <span class="cf">for</span> p <span class="kw">in</span> pieces]),</span>
+<span id="cb26-293"><a href="#cb26-293" aria-hidden="true" tabindex="-1"></a>        <span class="st">"geometry"</span>: pieces,</span>
+<span id="cb26-294"><a href="#cb26-294" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb26-295"><a href="#cb26-295" aria-hidden="true" tabindex="-1"></a>    crs<span class="op">=</span>CRS_UTM,</span>
+<span id="cb26-296"><a href="#cb26-296" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-297"><a href="#cb26-297" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-298"><a href="#cb26-298" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> transfer_attributes_by_midpoint(gdf_pieces, gdf_centerlines, TRANSFER_COLS)</span>
+<span id="cb26-299"><a href="#cb26-299" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-300"><a href="#cb26-300" aria-hidden="true" tabindex="-1"></a>n_null <span class="op">=</span> gdf_pieces[TRANSFER_COLS].isna().<span class="bu">any</span>(axis<span class="op">=</span><span class="dv">1</span>).<span class="bu">sum</span>()</span>
+<span id="cb26-301"><a href="#cb26-301" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces with a null transferred attribute: </span><span class="sc">{</span>n_null<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb26-302"><a href="#cb26-302" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-303"><a href="#cb26-303" aria-hidden="true" tabindex="-1"></a>PATHS[<span class="st">"out_link_pieces"</span>].parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb26-304"><a href="#cb26-304" aria-hidden="true" tabindex="-1"></a>gdf_pieces.to_file(PATHS[<span class="st">"out_link_pieces"</span>], driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
+<span id="cb26-305"><a href="#cb26-305" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exported </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb26-306"><a href="#cb26-306" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-307"><a href="#cb26-307" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-308"><a href="#cb26-308" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb26-309"><a href="#cb26-309" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-310"><a href="#cb26-310" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb26-311"><a href="#cb26-311" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-314"><a href="#cb26-314" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-315"><a href="#cb26-315" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
+<span id="cb26-316"><a href="#cb26-316" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Piece length distribution (m):"</span>)</span>
+<span id="cb26-317"><a href="#cb26-317" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Min:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">min</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb26-318"><a href="#cb26-318" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Median: </span><span class="sc">{</span>lengths<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb26-319"><a href="#cb26-319" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  P90:    </span><span class="sc">{</span>lengths<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb26-320"><a href="#cb26-320" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Max:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb26-321"><a href="#cb26-321" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb26-322"><a href="#cb26-322" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Input:  </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components"</span>)</span>
+<span id="cb26-323"><a href="#cb26-323" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span>n_road_snapped<span class="sc">:,}</span><span class="ss"> snapped road nodes (</span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> coordinate-resolved)"</span>)</span>
+<span id="cb26-324"><a href="#cb26-324" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes snapped"</span>)</span>
+<span id="cb26-325"><a href="#cb26-325" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Output: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb26-326"><a href="#cb26-326" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes → </span><span class="sc">{</span>PATHS[<span class="st">'in_node_snapped'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss"> (layer: cc_nodes_snapped)"</span>)</span>
+<span id="cb26-327"><a href="#cb26-327" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-328"><a href="#cb26-328" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-331"><a href="#cb26-331" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-332"><a href="#cb26-332" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb26-333"><a href="#cb26-333" aria-hidden="true" tabindex="-1"></a>gdf_pieces.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span>
+<span id="cb26-334"><a href="#cb26-334" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
