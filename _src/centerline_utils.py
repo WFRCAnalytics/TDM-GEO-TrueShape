@@ -11,7 +11,10 @@ Design contract
 Public API
 ----------
     build_junction_split_points(all_segments_gdf) -> GeoDataFrame
-        Points at branch/junction locations (join_count >= 3).
+        Points at branch/junction locations (join_count >= 3), matched by a
+        1 m search radius -- arcpy's SpatialJoin DOES honour search_radius
+        under the INTERSECT match option (verified against Esri docs), so
+        this is a distance-based join, not exact coincidence.
         Input must be the COMBINED freeway + surface GeoDataFrame across all
         VERT_LEVELs — matching arcpy FL_All which includes both classes.
 
@@ -37,10 +40,12 @@ Public API
 from __future__ import annotations
 
 import warnings
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import MultiPoint, Point
 from shapely.ops import linemerge, snap, split, unary_union
+from shapely.strtree import STRtree
 
 
 # ---------------------------------------------------------------------------
@@ -71,27 +76,39 @@ def _extract_endpoints(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 def build_junction_split_points(all_segments_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
-    Extract both-end vertices from all segments (fwy + surface, all levels),
-    self-join with 1 m tolerance, and return points where join_count >= 3.
+    Extract both-end vertices from all segments (fwy + surface, all levels)
+    and return every vertex occurrence whose Join_Count (self-count of
+    vertices within a 1 m search radius, inclusive of itself) is >= 3.
 
-    The 1-metre buffer-based self-join matches arcpy SpatialJoin(search_radius=
-    "1 Meters"). predicate="intersects" is used (not "within") so that endpoints
-    lying exactly 1 m apart are counted as co-located — matching arcpy's
-    inclusive search radius behaviour.
+    Equivalent to arcpy FeatureVerticesToPoints(BOTH_ENDS) + SpatialJoin(self,
+    search_radius="1 Meters") + filter Join_Count >= 3. SpatialJoin's
+    match_option is left at its default (INTERSECT), and per Esri's Spatial
+    Join documentation, search_radius IS honoured under INTERSECT: "A search
+    radius is only valid when Match Option is Intersect, Within a Distance,
+    Within a Distance (Geodesic), Have Their Center In, Closest, or Closest
+    (Geodesic)." (An earlier iteration of this function assumed INTERSECT
+    ignored search_radius and used exact-coincidence matching instead; that
+    was incorrect and has been reverted in favour of the documented
+    distance-based behaviour.)
 
-    Equivalent to arcpy FeatureVerticesToPoints(BOTH_ENDS) +
-    SpatialJoin(self, search_radius="1 Meters") + filter Join_Count >= 3.
+    Output intentionally is NOT deduplicated to one point per location: arcpy's
+    join_operation defaults to JOIN_ONE_TO_ONE, so FWY_FV2PEndpointsCount
+    retains one row per input vertex occurrence (with a Join_Count field),
+    and the Join_Count >= 3 filter is applied on that per-occurrence table.
+    split_lines_at_points already deduplicates by on-line projected position,
+    so passing multiple near-duplicate points at/near the same junction is
+    harmless downstream.
     """
     vertices = _extract_endpoints(all_segments_gdf)
+    if vertices.empty:
+        return vertices
 
-    join_buf = gpd.GeoDataFrame(
-        geometry=vertices.geometry.buffer(1.0), crs=vertices.crs
-    )
-    joined = gpd.sjoin(vertices, join_buf, how="left", predicate="intersects")
-    join_counts = joined.groupby(joined.index).size().rename("join_count")
-    vertices = vertices.join(join_counts)
+    geoms = vertices.geometry.values
+    tree = STRtree(geoms)
+    query_idx, _ = tree.query(geoms, predicate="dwithin", distance=1.0)
+    join_counts = np.bincount(query_idx, minlength=len(geoms))
 
-    return vertices[vertices["join_count"] >= 3].drop(columns="join_count").copy()
+    return vertices[join_counts >= 3].reset_index(drop=True)
 
 
 def dissolve_and_singlepart(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -208,7 +225,7 @@ def rcl_merge(
     Pipeline (mirrors arcpy RCLmerge exactly)
     ------------------------------------------
     1. Build junction split-points from the combined fwy + surface pool
-       (all VERT_LEVELs) using a 1 m self-join tolerance.
+       (all VERT_LEVELs) via a 1 m search-radius vertex self-join.
     2. Freeway levels: dissolve_and_singlepart -> split_lines_at_points
        Radii: lvl0=0.1 m, lvl1=1.0 m, lvl2=0.1 m, lvl3=0.1 m
     3. Surface levels: dissolve_and_singlepart -> split_lines_at_points

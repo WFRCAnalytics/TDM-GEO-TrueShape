@@ -116,6 +116,36 @@ for n in sample_ns:
     print(f"N={n} -> {coord} -> N={back}  {'OK' if back == n else 'MISMATCH'}")
 ```
 
+### CC Attachment Nodes
+
+`02_create_link.qmd` also splits `link_pieces.gpkg` at every resolved CC
+attachment node position (Stage 1's `cc_nodes_snapped` layer), but those
+coordinates were previously absent from `snapped_node_ids`/`coord_to_node`
+here — leaving one end of every piece adjacent to a centroid-connector
+attachment unmatched (`a_only`/`b_only` instead of `both_snapped`). Only
+`snap_resolved` rows are added — unresolved CC nodes (>500 m from any
+centerline) were never Stage 2 split points either. Coordinates are rounded
+to 2 dp to match `x_start/y_start/x_end/y_end` in `link_pieces.gpkg`. A CC
+node already snapped via the main pipeline keeps its existing coordinate.
+
+```{python}
+gdf_cc_snapped = gpd.read_file(PATHS["in_node_snapped"], layer="cc_nodes_snapped").to_crs(CRS_UTM)
+cc_resolved = gdf_cc_snapped[gdf_cc_snapped["snap_resolved"]]
+
+cc_coord_lookup: dict[int, tuple[float, float]] = {
+    int(row["N"]): (round(float(row["x_snap"]), 2), round(float(row["y_snap"]), 2))
+    for _, row in cc_resolved.iterrows()
+    if int(row["N"]) not in node_coord_lookup
+}
+node_coord_lookup.update(cc_coord_lookup)
+coord_to_node.update({v: k for k, v in cc_coord_lookup.items()})
+snapped_node_ids |= set(cc_coord_lookup)
+
+print(f"CC attachment nodes: {len(gdf_cc_snapped):,} total | {len(cc_resolved):,} resolved")
+print(f"Newly added to snapped_node_ids: {len(cc_coord_lookup):,}")
+print(f"Nodes: snapped (road, non-rail) + CC attachment: {len(snapped_node_ids):,}")
+```
+
 ### Link Pieces
 
 ```{python}

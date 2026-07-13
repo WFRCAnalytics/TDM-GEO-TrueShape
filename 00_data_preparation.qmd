@@ -152,6 +152,14 @@ gdf_cl = gpd.read_file(
     where="DOT_RTNAME NOT IN ('DupRoute', 'Dupe') AND STATUS NOT IN ('Retired', 'Planned')",
 )
 
+# The raw UGRC export contains literal duplicate rows (identical OBJECTID,
+# attributes, and geometry) for a large share of features -- not route
+# concurrency, just duplicated source records. Left in place, every
+# duplicated endpoint is double-counted by build_junction_split_points'
+# vertex self-join, spuriously inflating Join_Count at ordinary 2-way
+# pass-through points and forcing unwanted splits. Keep one copy per OBJECTID.
+gdf_cl = gdf_cl.drop_duplicates(subset=["OBJECTID"]).copy()
+
 # ── Wasatch Front county FIPS codes ───────────────────────────────────────
 WF_COUNTIES = {"49003", "49011", "49035", "49049", "49057", "49045"}
 
@@ -189,24 +197,21 @@ SURF_FCLASS = {
 mask_surf = gdf_wf["DOT_FCLASS"].isin(SURF_FCLASS)
 
 # ── Per-vert-level splits ──────────────────────────────────────────────────
-# VERT_LEVEL '0' = at-grade (default); '1','2' = elevated/tunnel structures.
-# Pass an empty GeoDataFrame for levels absent in this dataset; rcl_merge
-# silently skips them.
-_empty = gdf_wf.iloc[0:0].copy()
-
+# VERT_LEVEL '0' = at-grade (default); '1','2','3' = elevated/tunnel structures.
+# rcl_merge silently skips any level whose GeoDataFrame is empty.
 fwy_levels = {
     "all":  gdf_wf[mask_fwy],
     "lvl0": gdf_wf[mask_fwy & (gdf_wf["VERT_LEVEL"] == "0")],
     "lvl1": gdf_wf[mask_fwy & (gdf_wf["VERT_LEVEL"] == "1")],
     "lvl2": gdf_wf[mask_fwy & (gdf_wf["VERT_LEVEL"] == "2")],
-    "lvl3": _empty,  # no VERT_LEVEL 3 in this dataset
+    "lvl3": gdf_wf[mask_fwy & (gdf_wf["VERT_LEVEL"] == "3")],
 }
 
 surf_levels = {
     "lvl0": gdf_wf[mask_surf & (gdf_wf["VERT_LEVEL"] == "0")],
     "lvl1": gdf_wf[mask_surf & (gdf_wf["VERT_LEVEL"] == "1")],
     "lvl2": gdf_wf[mask_surf & (gdf_wf["VERT_LEVEL"] == "2")],
-    "lvl3": _empty,
+    "lvl3": gdf_wf[mask_surf & (gdf_wf["VERT_LEVEL"] == "3")],
 }
 
 for k, v in fwy_levels.items():
