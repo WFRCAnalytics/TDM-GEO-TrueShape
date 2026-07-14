@@ -85,11 +85,13 @@ print(f"Candidate components: {len(gdf_centerlines):,} | CRS: {gdf_centerlines.c
 ```{python}
 gdf_nodes_snapped = gpd.read_file(PATHS["in_node_snapped"], layer="nodes_snapped").to_crs(CRS_UTM)
 gdf_cc_snapped    = gpd.read_file(PATHS["in_node_snapped"], layer="cc_nodes_snapped").to_crs(CRS_UTM)
+gdf_ext_snapped   = gpd.read_file(PATHS["in_node_snapped"], layer="ext_nodes_snapped").to_crs(CRS_UTM)
 
 n_total   = len(gdf_nodes_snapped)
 n_snapped = gdf_nodes_snapped["snapped"].fillna(False).sum()
 print(f"Nodes: {n_total:,} total | {n_snapped:,} snapped ({n_snapped/n_total:.1%})")
 print(f"CC attachment nodes: {len(gdf_cc_snapped):,}")
+print(f"External station nodes: {len(gdf_ext_snapped):,}")
 ```
 
 ```{python}
@@ -204,13 +206,14 @@ print(f"Split points prepared: {len(snap_points_exact):,}")
 ## Part C — Split at Snapped Nodes
 
 `gdf_fulldissolve` (Part A) — not the original `CandidateTDMRoadLinks` rows —
-is split at every model-node snap point and every CC attachment snap point,
-so piece boundaries come only from snapping, never from incidental
-arcpy junction cuts. Points that project to within 0.1 mm of a component's
-existing endpoint are skipped (already a boundary). After all splits, each
-resulting piece is bounded exclusively by:
+is split at every model-node snap point, every CC attachment snap point, and
+every external station snap point, so piece boundaries come only from
+snapping, never from incidental arcpy junction cuts. Points that project to
+within 0.1 mm of a component's existing endpoint are skipped (already a
+boundary). After all splits, each resulting piece is bounded exclusively by:
 - a snapped model node position,
-- a snapped CC attachment node position, or
+- a snapped CC attachment node position,
+- a snapped external station node position, or
 - a genuine branch point already present in `gdf_fulldissolve`.
 
 No lineage keys are carried through this split (`id_cols=()`) — a redissolved
@@ -223,11 +226,18 @@ cc_snap_points = [
     Point(row["x_snap"], row["y_snap"])
     for _, row in cc_resolved.iterrows()
 ]
-all_snap_points = snap_points_exact + cc_snap_points
+ext_resolved = gdf_ext_snapped[gdf_ext_snapped["snap_resolved"]]
+ext_snap_points = [
+    Point(row["x_snap"], row["y_snap"])
+    for _, row in ext_resolved.iterrows()
+]
+all_snap_points = snap_points_exact + cc_snap_points + ext_snap_points
 n_cc_unresolved = len(gdf_cc_snapped) - len(cc_resolved)
+n_ext_unresolved = len(gdf_ext_snapped) - len(ext_resolved)
 print(
     f"Split points: {len(snap_points_exact):,} (model nodes) + "
-    f"{len(cc_snap_points):,} (CC attachment, {n_cc_unresolved:,} unresolved excluded) "
+    f"{len(cc_snap_points):,} (CC attachment, {n_cc_unresolved:,} unresolved excluded) + "
+    f"{len(ext_snap_points):,} (external station, {n_ext_unresolved:,} unresolved excluded) "
     f"= {len(all_snap_points):,} total"
 )
 ```
@@ -294,8 +304,10 @@ print()
 print(f"Input:  {len(gdf_centerlines):,} candidate components")
 print(f"        {n_road_snapped:,} snapped road nodes ({n_resolved:,} coordinate-resolved)")
 print(f"        {len(gdf_cc_snapped):,} CC attachment nodes snapped")
+print(f"        {len(gdf_ext_snapped):,} external station nodes snapped")
 print(f"Output: {len(gdf_pieces):,} pieces → {PATHS['out_link_pieces'].name}")
 print(f"        {len(gdf_cc_snapped):,} CC attachment nodes → {PATHS['in_node_snapped'].name} (layer: cc_nodes_snapped)")
+print(f"        {len(gdf_ext_snapped):,} external station nodes → {PATHS['in_node_snapped'].name} (layer: ext_nodes_snapped)")
 ```
 
 ```{python}

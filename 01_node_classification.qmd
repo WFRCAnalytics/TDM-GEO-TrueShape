@@ -1332,3 +1332,37 @@ print(f"Snap distance (m): median={dist.median():.1f} | P90={dist.quantile(0.90)
 gdf_cc_snapped.to_crs(CRS_UTM).to_file(out_path, layer="cc_nodes_snapped", driver="GPKG")
 print(f"CC attachment nodes saved to: {out_path} (layer: cc_nodes_snapped)")
 ```
+
+### External Station Nodes
+
+External station nodes (`EXTERNAL_ = 1` on the node table, N 3601–3629) are
+gateway points where the model network intentionally truncates at the edge
+of the modelled region — canyon passes, state lines (e.g. "I-15 to
+Tremonton", "SR 190 Guardsman Pass"). Like CC attachment nodes, they are not
+reliably handled by the direction-aware greedy snapper, so they get the same
+simple nearest-vertex treatment and are written as a third `nodes_snapped.gpkg`
+layer for Stage 2 to use as additional split points.
+
+The same 500 m default cutoff as CC nodes is kept deliberately tight, not
+loosened: several external nodes sit 1–13 km from any WF-county centerline
+(true remote boundary points where our centerline extract simply doesn't
+reach), and snapping those to whatever vertex happens to be nearest would be
+a misleading match rather than a real one — better left unresolved.
+
+```{python}
+gdf_ext_nodes = gdf_nodes[gdf_nodes["EXTERNAL_"] == 1].copy()
+print(f"External station nodes (EXTERNAL_ = 1): {len(gdf_ext_nodes):,}")
+```
+
+```{python}
+gdf_ext_snapped = snap_cc_nodes(gdf_ext_nodes.to_crs(CRS_UTM), gdf_centerlines)
+
+n_resolved   = gdf_ext_snapped["snap_resolved"].sum()
+n_unresolved = len(gdf_ext_snapped) - n_resolved
+dist = gdf_ext_snapped.loc[gdf_ext_snapped["snap_resolved"], "snap_dist_m"]
+print(f"Resolved: {n_resolved:,} | Unresolved (> 500 m): {n_unresolved:,}")
+print(f"Snap distance (m): median={dist.median():.1f} | P90={dist.quantile(0.90):.1f} | max={dist.max():.1f}")
+
+gdf_ext_snapped.to_crs(CRS_UTM).to_file(out_path, layer="ext_nodes_snapped", driver="GPKG")
+print(f"External station nodes saved to: {out_path} (layer: ext_nodes_snapped)")
+```

@@ -146,6 +146,31 @@ print(f"Newly added to snapped_node_ids: {len(cc_coord_lookup):,}")
 print(f"Nodes: snapped (road, non-rail) + CC attachment: {len(snapped_node_ids):,}")
 ```
 
+### External Station Nodes
+
+Same fix, same reason, for external station nodes (`EXTERNAL_ = 1`, Stage 1's
+`ext_nodes_snapped` layer) — model-boundary gateway points that
+`02_create_link.qmd` already splits `link_pieces.gpkg` at, but that were
+absent from `snapped_node_ids`/`coord_to_node` here.
+
+```{python}
+gdf_ext_snapped = gpd.read_file(PATHS["in_node_snapped"], layer="ext_nodes_snapped").to_crs(CRS_UTM)
+ext_resolved = gdf_ext_snapped[gdf_ext_snapped["snap_resolved"]]
+
+ext_coord_lookup: dict[int, tuple[float, float]] = {
+    int(row["N"]): (round(float(row["x_snap"]), 2), round(float(row["y_snap"]), 2))
+    for _, row in ext_resolved.iterrows()
+    if int(row["N"]) not in node_coord_lookup
+}
+node_coord_lookup.update(ext_coord_lookup)
+coord_to_node.update({v: k for k, v in ext_coord_lookup.items()})
+snapped_node_ids |= set(ext_coord_lookup)
+
+print(f"External station nodes: {len(gdf_ext_snapped):,} total | {len(ext_resolved):,} resolved")
+print(f"Newly added to snapped_node_ids: {len(ext_coord_lookup):,}")
+print(f"Nodes: snapped (road, non-rail) + CC attachment + external station: {len(snapped_node_ids):,}")
+```
+
 ### Link Pieces
 
 ```{python}
@@ -452,6 +477,26 @@ print(f"  vs. {len(gdf_pieces):,} pieces + {len(gdf_matched_final) - len(matched
 print(f"Null geometries: {gdf_trueshape.geometry.isna().sum()}")
 assert len(gdf_trueshape) == len(gdf_pieces) + (len(gdf_matched_final) - len(matched_piece_ids))
 assert gdf_trueshape.geometry.isna().sum() == 0
+```
+
+Combine `trueshape_method` and `endpoint_status` into a single QA field for
+map symbology. `trueshape_method == "matched"` is always a strict subset of
+`endpoint_status == "both_snapped"` (Part B's merge only ever runs against
+the both-snapped subset of pieces), so the two collapse into five
+non-overlapping categories with no ambiguous case:
+
+```{python}
+gdf_trueshape["qa_status"] = np.select(
+    [
+        gdf_trueshape["trueshape_method"] == "matched",
+        gdf_trueshape["endpoint_status"] == "both_snapped",
+        gdf_trueshape["endpoint_status"] == "a_only",
+        gdf_trueshape["endpoint_status"] == "b_only",
+    ],
+    ["matched", "endpoints_only", "a_only", "b_only"],
+    default="neither",
+)
+print(gdf_trueshape["qa_status"].value_counts().to_string())
 ```
 
 ```{python}
