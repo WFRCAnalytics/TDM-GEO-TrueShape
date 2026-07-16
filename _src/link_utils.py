@@ -197,8 +197,15 @@ def split_candidate_links(
     components = gdf_components.geometry.tolist()
     n_components = len(components)
 
-    # ── Assign each snap point to the component(s) it lies on ────────────────
-    # Use a 1 cm buffer for the query, then verify with distance check.
+    # ── Assign each snap point to every component it lies on ─────────────────
+    # Use a 1 cm buffer for the query, then verify with distance check. A point
+    # can legitimately lie on more than one component: components are dissolved
+    # per VERT_LEVEL (see 02_create_link.qmd Part A), and at a freeway gore the
+    # mainline and the ramp/CD road are digitized to share the exact same XY
+    # coordinate even though they live in different VERT_LEVEL components.
+    # Assigning to every match (not just the first STRtree hit) is safe: for
+    # components where the point is actually one of that component's own
+    # endpoints, _split_line_at_points' _EPS skip makes it a no-op.
     _QUERY_TOL = 0.01  # metres
     tree = STRtree(components)
 
@@ -210,7 +217,6 @@ def split_candidate_links(
         for idx in candidate_idxs:
             if idx < n_components and components[idx].distance(pt) <= _QUERY_TOL:
                 piece_to_pts[idx].append(pt)
-                break  # a point lies on at most one component (rows don't overlap)
 
     # ── Split each component at its assigned points, carrying id_cols ────────
     id_values = gdf_components[list(id_cols)].to_numpy()
