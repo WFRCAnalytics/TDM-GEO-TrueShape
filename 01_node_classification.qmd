@@ -37,6 +37,7 @@ from _src.node_utils import (
     count_links,
     count_neighbors,
     assign_node_directions,
+    cluster_endpoints,
     assign_endpoint_directions,
     snap_nodes,
     snap_transit,
@@ -61,6 +62,12 @@ PATHS = {
 # ── CRS ───────────────────────────────────────────────────────────────────
 CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
 CRS_WGS = "EPSG:4326"  # WGS84 — required by Folium
+
+# ── Endpoint clustering ──────────────────────────────────────────────────
+# Max gap between directly-linked raw endpoints for cluster_endpoints() —
+# see B4. 1cm matches the old rounded-coordinate grid's implicit precision
+# but merges true single-linkage clusters instead of grid buckets.
+ENDPOINT_CLUSTER_TOLERANCE_M = 0.01
 ```
 
 ---
@@ -574,18 +581,56 @@ gdf_ep_raw = gpd.GeoDataFrame(
 print(f"Raw endpoint records: {len(gdf_ep_raw):,}  (2 × {len(active_cl):,} segments)")
 ```
 
-### B4 — Deduplicate by Coordinate
+### B4 — Deduplicate by Tolerance-Based Clustering
 
-Group raw endpoints by rounded XY (centimetre precision) — used only as a
-dedup key. Aggregate type flags with OR — a coordinate is `is_freeway=True`
-if any freeway segment terminates there. The output geometry keeps the exact
+Cluster raw endpoints by true single-linkage distance (`cluster_endpoints`,
+`ENDPOINT_CLUSTER_TOLERANCE_M` = 1cm) rather than a rounded-coordinate grid
+bucket — two points 2mm apart that happen to round into different 1cm grid
+cells (e.g. `10.004999` → `10.00` vs `10.005001` → `10.01`) are now correctly
+merged. Aggregate type flags with OR — a cluster is `is_freeway=True` if any
+freeway segment terminates there. The output geometry keeps the exact
 (unrounded) coordinate of one contributing raw endpoint rather than
 reconstructing a point from the rounded key, so `gdf_ep_unique` — and every
 node later snapped onto it — stays bit-exact with a real `CandidateTDMRoadLinks`
-vertex instead of sitting on a 1cm quantization grid.
+vertex instead of sitting on a 1cm quantization grid. `x_round`/`y_round` are
+still carried through (first raw point) for QGIS inspection and for
+`link_utils.resolve_snap_coords`'s downstream nearest-vertex lookup, which
+is out of scope for this change.
 
 ```{python}
-ep_agg = gdf_ep_raw.groupby(["x_round", "y_round"], as_index=False).agg(
+gdf_ep_raw["cluster_id"] = cluster_endpoints(
+    gdf_ep_raw, tolerance_m=ENDPOINT_CLUSTER_TOLERANCE_M
+)
+
+cluster_sizes = gdf_ep_raw.groupby("cluster_id").size()
+print(
+    f"Endpoint clusters: {len(cluster_sizes):,} clusters "
+    f"from {len(gdf_ep_raw):,} raw points (tolerance={ENDPOINT_CLUSTER_TOLERANCE_M}m)"
+)
+print(f"Cluster size distribution: {cluster_sizes.value_counts().sort_index().to_dict()}")
+
+# Chaining-risk QA: single-linkage clustering can in principle chain several
+# close-but-distinct vertices together. Flag any cluster whose raw points
+# span more than 2x tolerance end-to-end (bounding-box diagonal as a cheap
+# upper bound on max pairwise distance).
+_span = pd.DataFrame(
+    {
+        "cluster_id": gdf_ep_raw["cluster_id"],
+        "x": gdf_ep_raw.geometry.x.values,
+        "y": gdf_ep_raw.geometry.y.values,
+    }
+).groupby("cluster_id").agg(x_span=("x", np.ptp), y_span=("y", np.ptp))
+_span["diag_m"] = np.hypot(_span["x_span"], _span["y_span"])
+_chaining_risk = _span[_span["diag_m"] > 2 * ENDPOINT_CLUSTER_TOLERANCE_M]
+if len(_chaining_risk):
+    print(f"WARNING: {len(_chaining_risk)} cluster(s) span > {2 * ENDPOINT_CLUSTER_TOLERANCE_M:.2f}m — possible chaining:")
+    print(_chaining_risk.sort_values("diag_m", ascending=False).head(10).to_string())
+else:
+    print("No chaining risk detected — all clusters within 2x tolerance.")
+
+ep_agg = gdf_ep_raw.groupby("cluster_id", as_index=False).agg(
+    x_round=("x_round", "first"),
+    y_round=("y_round", "first"),
     is_freeway=("is_freeway", "any"),
     is_interchange=("is_interchange", "any"),
     is_surface=("is_surface", "any"),
@@ -596,7 +641,7 @@ ep_agg = gdf_ep_raw.groupby(["x_round", "y_round"], as_index=False).agg(
     geometry=("geometry", "first"),
 )
 gdf_ep_unique = gpd.GeoDataFrame(ep_agg, geometry="geometry", crs=CRS_UTM)
-gdf_ep_unique["ep_uid"] = gdf_ep_unique.index
+gdf_ep_unique["ep_uid"] = gdf_ep_unique["cluster_id"]
 
 print(f"Unique endpoints: {len(gdf_ep_unique):,}")
 print(

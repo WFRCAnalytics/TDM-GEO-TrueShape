@@ -22,8 +22,16 @@ Public API
     assign_node_directions(gdf_nodes, gdf_links, freeway_ft_codes) -> GeoDataFrame
         Append link_directions and fw_directions columns.
 
+    cluster_endpoints(gdf_ep_raw, tolerance_m=0.01) -> np.ndarray
+        Assign a cluster id to each raw endpoint via true single-linkage
+        distance clustering (STRtree dwithin + scipy connected components),
+        replacing the rounded-coordinate (x_round, y_round) grid-bucket dedup
+        key so points straddling a grid boundary are still merged correctly.
+
     assign_endpoint_directions(gdf_ep_unique, gdf_ep_raw) -> GeoDataFrame
-        Append ep_allowed_dirs direction string per unique endpoint.
+        Append ep_allowed_dirs direction string per unique endpoint. Groups
+        gdf_ep_raw by the shared cluster_id column (from cluster_endpoints)
+        rather than re-deriving its own rounded-coordinate key.
 
     assign_endpoint_type(gdf_ep_unique) -> GeoDataFrame
         Append ep_type column — one of: "fwy" | "gore" | "fwy_sf" | "ramp" | "ramp_sf" | "surface".
@@ -60,6 +68,8 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 from shapely.strtree import STRtree
 
 # =============================================================================
@@ -226,6 +236,66 @@ def assign_node_directions(
 # =============================================================================
 
 
+def cluster_endpoints(gdf_ep_raw: gpd.GeoDataFrame, tolerance_m: float = 0.01) -> np.ndarray:
+    """
+    Assign a cluster id to each raw endpoint row via true single-linkage
+    spatial clustering, replacing the rounded-coordinate (x_round, y_round)
+    grid-bucket dedup key.
+
+    Two raw endpoints are merged into the same cluster iff they are directly
+    within tolerance_m of each other, OR connected through a chain of such
+    pairwise links (single-linkage / connected-components semantics). This
+    fixes the grid-boundary blind spot in a plain groupby(["x_round",
+    "y_round"]): two points 0.002m apart that happen to round to different
+    1cm grid cells (e.g. x=10.004999 -> 10.00 vs x=10.005001 -> 10.01) are
+    correctly merged here, and conversely two points that share a rounded
+    coordinate only by 1cm-grid coincidence but are actually tolerance_m
+    apart are handled the same way a grid bucket would handle them (merged),
+    since dwithin is symmetric and grid buckets are also within-tolerance
+    by construction — the difference only shows up at grid boundaries.
+
+    Implementation
+    --------------
+    1. Bulk pairwise proximity query via STRtree.query(..., predicate=
+       "dwithin", distance=tolerance_m) — vectorised, no row-level Python
+       loop.
+    2. Build a sparse adjacency graph from the returned index pairs and run
+       scipy.sparse.csgraph.connected_components (undirected) to get the
+       cluster label per row.
+
+    Parameters
+    ----------
+    gdf_ep_raw   : Raw endpoint records (one row per segment start/end),
+                   e.g. the output of the B3 extraction step. Only the
+                   geometry column is used.
+    tolerance_m  : Maximum gap between directly-linked points, in the same
+                   units as the GeoDataFrame's CRS (metres for UTM).
+
+    Returns
+    -------
+    np.ndarray of int cluster ids, positionally aligned to gdf_ep_raw rows
+    (dense integers 0..n_clusters-1, arbitrary order). Assign directly to a
+    new column, e.g. gdf_ep_raw["cluster_id"] = cluster_endpoints(gdf_ep_raw).
+
+    Chaining risk
+    -------------
+    Single-linkage clustering can in principle chain together a string of
+    points each within tolerance_m of the next but spanning much more than
+    tolerance_m end-to-end. At tolerance_m=0.01 (1cm) this is only a
+    practical concern if multiple distinct physical vertices sit within a
+    few centimetres of each other in a chain — the calling notebook should
+    print a per-cluster span diagnostic to flag this (see B4 in
+    01_node_classification.qmd).
+    """
+    geoms = gdf_ep_raw.geometry.values
+    n = len(geoms)
+    tree = STRtree(geoms)
+    left, right = tree.query(geoms, predicate="dwithin", distance=tolerance_m)
+    graph = coo_matrix((np.ones(len(left), dtype=bool), (left, right)), shape=(n, n))
+    _, labels = connected_components(graph, directed=False)
+    return labels
+
+
 def assign_endpoint_directions(
     gdf_ep_unique: gpd.GeoDataFrame, gdf_ep_raw: gpd.GeoDataFrame
 ) -> gpd.GeoDataFrame:
@@ -233,8 +303,8 @@ def assign_endpoint_directions(
     Append ep_allowed_dirs to each unique endpoint using the freeway-priority
     direction cascade.
 
-    Priority per unique coordinate
-    --------------------------------
+    Priority per cluster
+    ---------------------
     1. Any freeway segment terminates here →
        FULLNAME token (e.g. "I-15 NB FWY") → LRS P/N fallback (DOT_RTNAME[4]).
     2. Interchange-only (no freeway) →
@@ -243,22 +313,28 @@ def assign_endpoint_directions(
 
     Parameters
     ----------
-    gdf_ep_unique : Deduplicated endpoint layer (from groupby x_round/y_round).
-    gdf_ep_raw    : Raw endpoint records from extract_endpoints().
+    gdf_ep_unique : Deduplicated endpoint layer, one row per cluster, with a
+                    cluster_id column matching gdf_ep_raw's.
+    gdf_ep_raw    : Raw endpoint records from extract_endpoints(), with a
+                    cluster_id column assigned by cluster_endpoints() —
+                    shared with gdf_ep_unique so direction resolution stays
+                    consistent with the B4 dedup clustering (both group on
+                    the same tolerance-based cluster_id rather than each
+                    independently re-deriving a rounded-coordinate key).
 
     """
     result = gdf_ep_unique.copy()
 
-    # Build a lookup: coord_key → slice of raw records (vectorised groupby)
-    raw_grouped = gdf_ep_raw.groupby(["x_round", "y_round"])
+    # Build a lookup: cluster_id → slice of raw records (vectorised groupby)
+    raw_grouped = gdf_ep_raw.groupby("cluster_id")
 
     ep_dirs = []
     for _, ep_row in result.iterrows():
-        key = (ep_row["x_round"], ep_row["y_round"])
-        if key not in raw_grouped.groups:
+        cid = ep_row["cluster_id"]
+        if cid not in raw_grouped.groups:
             ep_dirs.append("")
             continue
-        raw_rows = gdf_ep_raw.loc[raw_grouped.groups[key]]
+        raw_rows = gdf_ep_raw.loc[raw_grouped.groups[cid]]
         ep_dirs.append(
             _resolve_direction(
                 directions=[""] * len(raw_rows),  # DIRECTION not on centerlines
