@@ -83,18 +83,32 @@ print(f"FT_2027 distribution:\n{gdf_links['FT_2027'].value_counts().sort_index()
 
 Stage 2 guarantees every `link_pieces.gpkg` boundary is already a snap point,
 so Stage 3 needs *which* nodes are snapped (split points) versus not. For the
-"not" side, only true topological pseudonodes (`is_pseudo` from
-`nodes_classified.gpkg` — `NeighborCount==2`, uniform `FT`, uniform lane
-count) are safe to silently walk through and absorb into a multi-hop chain in
-Part A. An unsnapped node that fails that test is a real junction (3+
-neighbors, or an FT/LN transition) that the snapping pass simply didn't
-resolve — `dissolve_pseudonodes`'s single-preferred-edge walk has no reliable
-way to know which of several real branches continues the correct chain, so
-treating every unsnapped node as pass-through (as an earlier version of this
-notebook did) silently produced wrong-branch chains at those nodes. Only true
-pseudonodes are dissolved through now; any other unsnapped node is left as a
-hard chain boundary, and pieces touching it honestly fail to match rather
-than getting attributed from a guessed direction.
+"not" side, `is_topo_passthrough` from `nodes_classified.gpkg`
+(`NeighborCount==2`, regardless of FT, lane count, or link-class/designation
+uniformity) is safe to silently walk through and absorb into a multi-hop
+chain in Part A — a node with exactly two distinct neighbors has exactly one
+way to continue through it, full stop, no matter what changes there on the
+model side. An unsnapped node that fails even that (3+ neighbors — a real
+junction) is *not* pass-through: `dissolve_pseudonodes`'s single-preferred-edge
+walk has no reliable way to know which of several real branches continues the
+correct chain, so treating every unsnapped node as pass-through (as an
+earlier version of this notebook did) silently produced wrong-branch chains
+at those nodes. Only 2-neighbor nodes are dissolved through; any 3+-neighbor
+unsnapped node is left as a hard chain boundary, and pieces touching it
+honestly fail to match rather than getting attributed from a guessed
+direction.
+
+This is deliberately broader than `is_pseudo` (which additionally requires
+uniform FT and uniform lane count, because it also gates Stage 1 snapping
+eligibility — a snap *target* needs that stricter guarantee). Stage 3 only
+needs the topological guarantee: real FT-transition, lane-transition, and
+link-class-transition nodes have no physical vertex of their own in the
+UGRC/UDOT centerlines (arcpy only cuts at genuine junctions), so treating
+them as hard chain boundaries here — while `is_pseudo` correctly still sends
+them to snapping in `01_node_classification.qmd` — was silently splitting one
+physical piece across a model chain boundary the physical network was never
+actually cut at. See `_plan/freeway-endpoint-pool-diagnosis.md` and the
+node-30208 (Antelope Island Causeway) example that first surfaced this.
 
 `FixedTransit_Rail`-snapped nodes are excluded from `snapped_node_ids` — they
 attach to GTFS rail infrastructure, not road centerlines, so they were never
@@ -127,10 +141,10 @@ print(f"Reverse coord→node lookup: {len(coord_to_node):,} entries")
 
 ```{python}
 gdf_nodes_classified = gpd.read_file(PATHS["in_node_classified"]).to_crs(CRS_UTM)
-pseudo_ids = set(gdf_nodes_classified.loc[gdf_nodes_classified["is_pseudo"], "N"].astype(int))
+pseudo_ids = set(gdf_nodes_classified.loc[gdf_nodes_classified["is_topo_passthrough"], "N"].astype(int))
 
 n_pseudo_snapped = len(pseudo_ids & snapped_node_ids)
-print(f"Pseudonodes (NeighborCount==2, uniform FT+LN): {len(pseudo_ids):,}")
+print(f"Topological pass-through nodes (NeighborCount==2, any FT/LN/class): {len(pseudo_ids):,}")
 print(f"  of which already snapped (unexpected, should be ~0): {n_pseudo_snapped:,}")
 ```
 
@@ -211,42 +225,40 @@ print(f"Link pieces: {len(gdf_pieces):,} | CRS: {gdf_pieces.crs}")
 ## Part A — Pass-Through Chain Dissolve
 
 Collapse chains of model links connected through **pass-through nodes** —
-strictly the topological-pseudonode set (`pass_through_ids = pseudo_ids -
-snapped_node_ids`; the subtraction is defensive, pseudonodes are never
-snapped by design — see `01_node_classification.qmd`). A node only qualifies
-if it lies on a single homogeneous path between two real junctions
-(`NeighborCount==2`, uniform `FT_2027`, uniform `LN_2027`) — the same
-guarantee the walk needs to be safe: at a true pseudonode there is exactly
-one way to continue the chain, so `dissolve_pseudonodes`'s
-preferred-else-first-found edge choice can't pick wrong. Any other unsnapped
-node — a real 3+-way junction, or an FT/LN transition, that simply wasn't
-resolved by snapping — is **not** pass-through here: it's a hard chain
-boundary, same as a snapped node. Pieces whose real physical boundary sits at
-such a node will fail to match (`endpoints_only`/`a_only`/`b_only`) rather
-than silently being attributed via a guessed branch.
+the topological pass-through set (`pass_through_ids = pseudo_ids -
+snapped_node_ids`; the subtraction is defensive, these nodes are never
+snapped by design — see `01_node_classification.qmd`'s `is_topo_passthrough`).
+A node only qualifies if it has exactly two distinct neighbors
+(`NeighborCount==2`) — that alone is the guarantee the walk needs to be safe:
+at a 2-neighbor node there is exactly one way to continue the chain, so
+`dissolve_pseudonodes`'s preferred-else-first-found edge choice can't pick
+wrong, regardless of whether FT, lane count, or link class (freeway/ramp/
+surface designation) changes there. Only a real 3+-way junction — where
+topology alone can't say which branch continues the same physical road — is
+**not** pass-through here: it's a hard chain boundary, same as a snapped
+node. Pieces whose real physical boundary sits at such a junction will fail
+to match (`endpoints_only`/`a_only`/`b_only`) rather than silently being
+attributed via a guessed branch.
 
-Each dissolved chain spans from one snapped node to another; pass-through
-pseudonodes along the way are absorbed. Every model link attribute column
-(besides `A`, `B`, geometry) rides along onto the dissolved output, taken
-from each chain's first constituent link — this default is only provisional
-here; Part C replaces it with a nearest-centroid resolution for
-multi-constituent chains.
+Each dissolved chain spans from one snapped node (or real junction) to
+another; pass-through nodes along the way are absorbed regardless of any
+attribute change there. Every model link attribute column (besides `A`, `B`,
+geometry) rides along onto the dissolved output, taken from each chain's
+first constituent link — this default is only provisional here; Part C
+replaces it with a nearest-centroid resolution for multi-constituent chains.
 
-Because pass-through is now restricted to true pseudonodes, `FT_2027`/
-`LN_2027` uniformity across a chain's constituents is guaranteed by
-construction — `invariant_cols=()` is kept anyway as a live sanity check on
-exactly those two columns; any disagreement reported for `FT_2027` or
-`LN_2027` specifically would indicate a bug. Other columns (`LINKID`,
-`DISTANCE`, `TAZID`, future-year `FT*`/`LN*` scenario variants, etc.) are not
-part of the pseudonode invariant and can legitimately disagree even across a
-true pseudonode chain — e.g. `LINKID` differs by definition per source row,
-and a future-year lane change can fall exactly at a node that is only a
-pseudonode in the 2027 base year.
+Unlike the old strict-pseudonode set, `FT_2027`/`LN_2027` uniformity across a
+chain's constituents is **no longer** guaranteed by construction — a chain
+can now legitimately walk through a real FT- or lane-transition node.
+`invariant_cols=()` reflects that: both columns go through the same
+disagreement check as everything else, and a disagreement is expected and
+informational (Part C's nearest-centroid resolution is what actually decides
+which constituent's attributes a given physical piece gets), not a bug.
 
 ```{python}
 pass_through_ids = pseudo_ids - snapped_node_ids
-print(f"Pseudonode ids: {len(pseudo_ids):,}")
-print(f"Pass-through (pseudonode, unsnapped) ids: {len(pass_through_ids):,}")
+print(f"Topological pass-through ids (is_topo_passthrough): {len(pseudo_ids):,}")
+print(f"Pass-through (unsnapped) ids: {len(pass_through_ids):,}")
 ```
 
 ```{python}

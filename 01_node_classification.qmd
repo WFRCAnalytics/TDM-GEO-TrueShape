@@ -302,12 +302,31 @@ gdf_nodes["LinkLNCount"] = gdf_nodes["N"].map(_ln_counts).fillna(0).astype(int)
 
 # Pseudonode: shape vertex on a single homogeneous path — no physical snap target.
 # Requires uniform FT AND uniform lane count: a lane-drop node has a real physical
-# endpoint in the centerline data and must not be dissolved away.
+# endpoint in the centerline data and must not be dissolved away. is_pseudo gates
+# Part A3's node_type assignment below (a pseudonode gets no node_type / is never
+# sent to spatial snapping) and must stay this strict — a snapping target still
+# needs FT/LN uniformity to be a safe physical match.
 gdf_nodes["is_pseudo"] = (
     (gdf_nodes["NeighborCount"] == 2)
     & (gdf_nodes["LinkFTCount"] == 1)
     & (gdf_nodes["LinkLNCount"] == 1)
 )
+
+# Broader topological pass-through flag, for Stage 3 chain dissolution only
+# (03_transfer_attributes.qmd) — NOT used for snapping eligibility here.
+# NeighborCount==2 alone is a sufficient safety guarantee on its own: a node
+# with exactly two distinct neighbors has exactly one way to walk through it,
+# regardless of whether FT, lane count, or link class (freeway/ramp/surface
+# designation) changes there. Dropping the uniform-FT/uniform-LN/uniform-class
+# requirements here (unlike is_pseudo above) lets Stage 3 dissolve through
+# real FT/lane-transition and class-transition nodes that have no physical
+# vertex of their own — the dominant cause of `endpoints_only` pieces, see
+# _plan/freeway-endpoint-pool-diagnosis.md and the node-30208 (Antelope Island
+# Causeway) example that first surfaced it. A node with 3+ neighbors is never
+# included regardless — with a real branch, topology alone can't tell you
+# which branch continues the same physical road (see dissolve_pseudonodes'
+# docstring), so it must stay a hard boundary.
+gdf_nodes["is_topo_passthrough"] = gdf_nodes["NeighborCount"] == 2
 
 print(f"Pseudonodes (NeighborCount==2, uniform FT+LN): {gdf_nodes['is_pseudo'].sum():,}")
 print(f"  of which LinkCount==2: {(gdf_nodes['is_pseudo'] & (gdf_nodes['LinkCount'] == 2)).sum():,}")
@@ -315,6 +334,7 @@ print(f"  of which LinkCount> 2: {(gdf_nodes['is_pseudo'] & (gdf_nodes['LinkCoun
 print(f"Class-transition nodes (NeighborCount==2, multi-class): {((gdf_nodes['NeighborCount'] == 2) & (gdf_nodes['LinkClassCount'] > 1)).sum():,}  ← real junctions, must be snapped")
 print(f"FT-transition nodes sent to snapping (NeighborCount==2, same class, diff FT): {((gdf_nodes['NeighborCount'] == 2) & (gdf_nodes['LinkClassCount'] == 1) & (gdf_nodes['LinkFTCount'] > 1)).sum():,}")
 print(f"LN-transition nodes sent to snapping (NeighborCount==2, uniform FT, diff LN): {((gdf_nodes['NeighborCount'] == 2) & (gdf_nodes['LinkFTCount'] == 1) & (gdf_nodes['LinkLNCount'] > 1)).sum():,}")
+print(f"is_topo_passthrough (NeighborCount==2, any FT/LN/class): {gdf_nodes['is_topo_passthrough'].sum():,}  ← Stage 3 dissolve set (broader than is_pseudo by {gdf_nodes['is_topo_passthrough'].sum() - gdf_nodes['is_pseudo'].sum():,})")
 ```
 
 ```{python}
