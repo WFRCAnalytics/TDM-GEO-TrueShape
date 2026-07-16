@@ -38,6 +38,7 @@ from _src.link_utils import dissolve_pseudonodes
 PATHS = {
     "in_network_links":    Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
     "in_node_snapped":     Path("_data/processed/nodes_snapped.gpkg"),
+    "in_node_classified":  Path("_data/processed/nodes_classified.gpkg"),
     "in_link_pieces":      Path("_data/processed/link_pieces.gpkg"),
     "out_links_trueshape": Path("_data/processed/links_trueshape.gpkg"),
 }
@@ -52,13 +53,22 @@ CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
 
 ### Model Links
 
-Centroid connectors (FT=1) and non-physical HOV/Managed-Access links (FT=37,38,39) are
-excluded — only links with physical road geometry and active lanes in 2027 are dissolved.
+Centroid connectors (FT=1), non-physical HOV/Managed-Access links (FT=37,38,39), and
+conceptual/placeholder scenario links (FT=50,70,80,90 — network-wide, 0% of these rows
+ever carry a `STREET` name or `LN_2027 > 0`; there is no real centerline behind them)
+are excluded. Everything else with a real facility class is kept regardless of
+`LN_2027` — a link coded zero-lane in 2027 can still be a real, already-conflated
+physical road that simply hasn't opened yet (or one the model never got around to
+lane-coding in any scenario year); excluding it from the connectivity graph orphaned
+its node from every possible chain match, even though Stage 1/2 snapped and split its
+physical geometry normally. `LN_2027`/`FT_2027` themselves are reported unchanged on
+matched output — this only affects whether a chain counts as connected, not what gets
+displayed.
 
 ```{python}
 gdf_links = gpd.read_file(
     PATHS["in_network_links"],
-    where="LN_2027 > 0 AND FT_2027 NOT IN (1, 37, 38, 39)",
+    where="FT_2027 NOT IN (1, 37, 38, 39, 50, 70, 80, 90)",
 ).to_crs(CRS_UTM)
 
 for col in ("DIRECTION",):
@@ -71,11 +81,20 @@ print(f"FT_2027 distribution:\n{gdf_links['FT_2027'].value_counts().sort_index()
 
 ### Snapped Nodes
 
-`nodes_classified.gpkg`/`is_pseudo` is no longer the relevant concept for this
-notebook — Stage 2 now guarantees every `link_pieces.gpkg` boundary is already
-a snap point, so the only thing Stage 3 needs from node classification is
-*which* nodes are snapped (split points) versus not (pass-through, absorbed
-into a multi-hop chain in Part A).
+Stage 2 guarantees every `link_pieces.gpkg` boundary is already a snap point,
+so Stage 3 needs *which* nodes are snapped (split points) versus not. For the
+"not" side, only true topological pseudonodes (`is_pseudo` from
+`nodes_classified.gpkg` — `NeighborCount==2`, uniform `FT`, uniform lane
+count) are safe to silently walk through and absorb into a multi-hop chain in
+Part A. An unsnapped node that fails that test is a real junction (3+
+neighbors, or an FT/LN transition) that the snapping pass simply didn't
+resolve — `dissolve_pseudonodes`'s single-preferred-edge walk has no reliable
+way to know which of several real branches continues the correct chain, so
+treating every unsnapped node as pass-through (as an earlier version of this
+notebook did) silently produced wrong-branch chains at those nodes. Only true
+pseudonodes are dissolved through now; any other unsnapped node is left as a
+hard chain boundary, and pieces touching it honestly fail to match rather
+than getting attributed from a guessed direction.
 
 `FixedTransit_Rail`-snapped nodes are excluded from `snapped_node_ids` — they
 attach to GTFS rail infrastructure, not road centerlines, so they were never
@@ -104,6 +123,15 @@ coord_to_node: dict[tuple[float, float], int] = {v: k for k, v in node_coord_loo
 
 print(f"Snap coord lookup: {len(node_coord_lookup):,} entries")
 print(f"Reverse coord→node lookup: {len(coord_to_node):,} entries")
+```
+
+```{python}
+gdf_nodes_classified = gpd.read_file(PATHS["in_node_classified"]).to_crs(CRS_UTM)
+pseudo_ids = set(gdf_nodes_classified.loc[gdf_nodes_classified["is_pseudo"], "N"].astype(int))
+
+n_pseudo_snapped = len(pseudo_ids & snapped_node_ids)
+print(f"Pseudonodes (NeighborCount==2, uniform FT+LN): {len(pseudo_ids):,}")
+print(f"  of which already snapped (unexpected, should be ~0): {n_pseudo_snapped:,}")
 ```
 
 ```{python}
@@ -182,32 +210,43 @@ print(f"Link pieces: {len(gdf_pieces):,} | CRS: {gdf_pieces.crs}")
 
 ## Part A — Pass-Through Chain Dissolve
 
-Collapse chains of model links connected through **pass-through nodes** — every
-node that is not itself a snap point (`pass_through_ids = all A/B node ids in
-gdf_links - snapped_node_ids`). This generalizes the old topological-pseudonode
-concept (`is_pseudo`) to a strict superset: snapping coverage is currently
-sparse (~16% of nodes), so many ordinary "real" nodes are unsnapped too, and
-must be treated the same way — absorbed into a multi-hop chain — since Stage 2
-never split a physical piece at their position either.
+Collapse chains of model links connected through **pass-through nodes** —
+strictly the topological-pseudonode set (`pass_through_ids = pseudo_ids -
+snapped_node_ids`; the subtraction is defensive, pseudonodes are never
+snapped by design — see `01_node_classification.qmd`). A node only qualifies
+if it lies on a single homogeneous path between two real junctions
+(`NeighborCount==2`, uniform `FT_2027`, uniform `LN_2027`) — the same
+guarantee the walk needs to be safe: at a true pseudonode there is exactly
+one way to continue the chain, so `dissolve_pseudonodes`'s
+preferred-else-first-found edge choice can't pick wrong. Any other unsnapped
+node — a real 3+-way junction, or an FT/LN transition, that simply wasn't
+resolved by snapping — is **not** pass-through here: it's a hard chain
+boundary, same as a snapped node. Pieces whose real physical boundary sits at
+such a node will fail to match (`endpoints_only`/`a_only`/`b_only`) rather
+than silently being attributed via a guessed branch.
 
 Each dissolved chain spans from one snapped node to another; pass-through
-nodes along the way are absorbed. Every model link attribute column (besides
-`A`, `B`, geometry) rides along onto the dissolved output, taken from each
-chain's first constituent link — this default is only provisional here; Part
-C replaces it with a nearest-centroid resolution for multi-constituent chains.
+pseudonodes along the way are absorbed. Every model link attribute column
+(besides `A`, `B`, geometry) rides along onto the dissolved output, taken
+from each chain's first constituent link — this default is only provisional
+here; Part C replaces it with a nearest-centroid resolution for
+multi-constituent chains.
 
-Links whose both endpoints are already snapped appear as single-constituent
-chains. Unlike strict `is_pseudo` chains, `FT_2027`/`LN_2027` uniformity is
-**not** guaranteed across a broadened pass-through chain's constituents (an
-unsnapped-but-real node can have an FT/LN change), so `invariant_cols=()` —
-every column is checked for agreement, and disagreements are expected and
-informative rather than a bug.
+Because pass-through is now restricted to true pseudonodes, `FT_2027`/
+`LN_2027` uniformity across a chain's constituents is guaranteed by
+construction — `invariant_cols=()` is kept anyway as a live sanity check on
+exactly those two columns; any disagreement reported for `FT_2027` or
+`LN_2027` specifically would indicate a bug. Other columns (`LINKID`,
+`DISTANCE`, `TAZID`, future-year `FT*`/`LN*` scenario variants, etc.) are not
+part of the pseudonode invariant and can legitimately disagree even across a
+true pseudonode chain — e.g. `LINKID` differs by definition per source row,
+and a future-year lane change can fall exactly at a node that is only a
+pseudonode in the 2027 base year.
 
 ```{python}
-node_ids_in_links = set(gdf_links["A"].astype(int)) | set(gdf_links["B"].astype(int))
-pass_through_ids = node_ids_in_links - snapped_node_ids
-print(f"Node ids in gdf_links: {len(node_ids_in_links):,}")
-print(f"Pass-through (unsnapped) ids: {len(pass_through_ids):,}")
+pass_through_ids = pseudo_ids - snapped_node_ids
+print(f"Pseudonode ids: {len(pseudo_ids):,}")
+print(f"Pass-through (pseudonode, unsnapped) ids: {len(pass_through_ids):,}")
 ```
 
 ```{python}
@@ -513,7 +552,7 @@ print(f"Saved to: {out_path}")
 ```{python}
 print("=== Stage 3 Summary ===")
 print()
-print(f"Input:  {len(gdf_links):,} model links (FT_2027 not in 1,37,38,39; LN_2027 > 0)")
+print(f"Input:  {len(gdf_links):,} model links (FT_2027 not in 1,37,38,39,50,70,80,90)")
 print(f"        {len(pass_through_ids):,} pass-through (unsnapped) node ids absorbed into chains")
 print(f"        {len(gdf_dissolved):,} dissolved chains")
 print(f"        {len(gdf_pieces):,} physical link pieces (link_pieces.gpkg)")

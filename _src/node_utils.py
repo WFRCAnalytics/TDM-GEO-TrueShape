@@ -32,7 +32,7 @@ Public API
         Snap a masked subset of nodes to the nearest compatible endpoint using
         Gale-Shapley stable matching with (type_tier, dir_tier, dist) sorting.
         Returns the updated node GeoDataFrame and the cumulative set of claimed
-        endpoint coordinates for passing to the next call via excluded_ep_coords.
+        endpoint ep_uid values for passing to the next call via excluded_ep_coords.
 
     snap_transit(gdf_nodes, gdf_stops, node_mask, max_distance_m, ...) -> GeoDataFrame
         Snap transit nodes to nearest GTFS stop (no direction matching).
@@ -44,8 +44,8 @@ Public API
         Adds x_snap, y_snap, snap_dist_m, snap_resolved columns.
 
     ep_claimed_coords(gdf_nodes_snapped) -> frozenset
-        Return set of (x_round, y_round) tuples already claimed across all
-        completed snap passes.
+        Return set of ep_uid values already claimed across all completed snap
+        passes.
 
     filter_ep_claimed(gdf_ep, claimed_coords) -> GeoDataFrame
         Remove endpoint rows already claimed in prior passes so the same
@@ -583,7 +583,11 @@ def _spatial_snap(
                     continue  # opposite P/N groups → reject
 
         orig_pt = target_geoms_orig[t_idx]
-        ep_id = (round(target_geoms_proj[t_idx].x, 3), round(target_geoms_proj[t_idx].y, 3))
+        # t_idx is already a 1:1 identity for "this candidate target point" —
+        # snap_targets is deduplicated upstream (endpoint pools via the B4
+        # groupby, transit stops via the explicit grouping step), so no
+        # coordinate rounding is needed to recognize repeat bids on it.
+        ep_id = t_idx
         all_candidates.append((type_tier, dir_tier, dist_pt, n_idx, ep_id, orig_pt, t_idx))
 
     # ==========================================
@@ -712,22 +716,24 @@ def snap_nodes(
     Returns
     -------
     (result, claimed) where result is the updated node GeoDataFrame and claimed
-    is a frozenset of (x_round, y_round) tuples for every endpoint assigned
-    across all passes so far.  Pass claimed as excluded_ep_coords on the next
-    call to prevent two nodes in different passes from landing on the same
-    physical endpoint.
+    is a frozenset of ep_uid values for every endpoint assigned across all
+    passes so far.  Pass claimed as excluded_ep_coords on the next call to
+    prevent two nodes in different passes from landing on the same physical
+    endpoint.
 
     Parameters
     ----------
     gdf_nodes          : Full node layer.
-    gdf_endpoints      : Pre-classified endpoint layer.
+    gdf_endpoints      : Pre-classified endpoint layer. Must have an ep_uid column.
     node_mask          : Boolean Series selecting which nodes to attempt.
     max_distance_m     : Search radius in metres.
     label              : snap_rule value written for successfully snapped nodes.
     direction_col      : "link_directions" for passes (a)/(c); "fw_directions" for (b).
     target_id_cols     : Columns on gdf_endpoints to propagate to snapped_<col> output.
+                         Include "ep_uid" so the returned claimed set can be
+                         computed from this pass's output.
     node_type_col      : Column containing topology type label.
-    excluded_ep_coords : Frozenset of (x_round, y_round) already claimed in prior
+    excluded_ep_coords : Frozenset of ep_uid values already claimed in prior
                          passes.  Matching endpoint rows are removed before matching
                          so they cannot be double-assigned.
 
@@ -859,12 +865,21 @@ def snap_cc_nodes(
     max_snap_dist_m: float = 500.0,
 ) -> gpd.GeoDataFrame:
     """
-    Snap centroid connector attachment nodes to the nearest centerline vertex.
+    Snap centroid connector attachment nodes to the nearest point on the
+    nearest centerline (perpendicular projection), not to a vertex.
 
     Unlike the greedy endpoint snapping in snap_nodes(), this performs a simple
-    nearest-vertex lookup with no direction filtering. Nodes whose nearest vertex
-    exceeds max_snap_dist_m receive NaN x_snap/y_snap and snap_resolved=False;
-    they are excluded from downstream split-point lists.
+    nearest-line lookup with no direction filtering: for each node, find the
+    nearest centerline geometry, then project the node onto that line
+    (line.project + line.interpolate — the perpendicular-foot point, clamped to
+    the line's own extent). A vertex-nearest search was tried first and
+    rejected — sparsely-vertexed lines (e.g. a long highway digitized with only
+    a handful of vertices) can put the nearest *vertex* hundreds of metres away
+    even when the node sits a few metres off the line itself, because the
+    search only ever considers existing vertex positions. Projecting onto the
+    line's own continuous geometry has no such blind spot. Nodes whose nearest
+    line exceeds max_snap_dist_m receive NaN x_snap/y_snap and
+    snap_resolved=False; they are excluded from downstream split-point lists.
 
     Parameters
     ----------
@@ -872,43 +887,44 @@ def snap_cc_nodes(
         Centroid connector attachment nodes. Must have point geometry and N column.
         Both GeoDataFrames must be in the same CRS.
     gdf_centerlines : GeoDataFrame
-        Centerline layer. Used for vertex extraction only.
+        Centerline layer to snap onto.
     max_snap_dist_m : float
         Distance cap in metres. Nodes farther than this from any centerline
-        vertex are flagged unresolved (x_snap/y_snap left NaN). Default 500 m.
+        are flagged unresolved (x_snap/y_snap left NaN). Default 500 m.
 
     Returns
     -------
     GeoDataFrame
         Copy of gdf_cc_nodes with four new columns:
-        - x_snap, y_snap  : float — exact vertex coordinate (NaN if unresolved)
-        - snap_dist_m     : float — distance to nearest vertex
+        - x_snap, y_snap  : float — projected point coordinate (NaN if unresolved)
+        - snap_dist_m     : float — perpendicular distance to the nearest centerline
         - snap_resolved   : bool  — True when within max_snap_dist_m
     """
-    raw_coords = shapely.get_coordinates(gdf_centerlines.geometry.values)
-    unique_coords = np.unique(np.round(raw_coords, 4), axis=0)
-    vertex_geoms = shapely.points(unique_coords[:, 0], unique_coords[:, 1])
-    tree = STRtree(vertex_geoms)
+    line_geoms = gdf_centerlines.geometry.values
+    tree = STRtree(line_geoms)
 
     node_coords = shapely.get_coordinates(gdf_cc_nodes.geometry.values)
     query_pts = shapely.points(node_coords[:, 0], node_coords[:, 1])
 
     nearest_idxs = tree.nearest(query_pts)
-    nearest_verts = vertex_geoms[nearest_idxs]
-    nearest_xy = shapely.get_coordinates(nearest_verts)
-    dists = shapely.distance(query_pts, nearest_verts)
+    nearest_lines = line_geoms[nearest_idxs]
+
+    m = shapely.line_locate_point(nearest_lines, query_pts)
+    snapped_pts = shapely.line_interpolate_point(nearest_lines, m)
+    dists = shapely.distance(query_pts, snapped_pts)
+    snapped_xy = shapely.get_coordinates(snapped_pts)
 
     resolved = dists <= max_snap_dist_m
     n_unresolved = int((~resolved).sum())
     if n_unresolved:
         warnings.warn(
             f"snap_cc_nodes: {n_unresolved} CC attachment node(s) had no "
-            f"centerline vertex within {max_snap_dist_m} m — x_snap/y_snap left NaN."
+            f"centerline within {max_snap_dist_m} m — x_snap/y_snap left NaN."
         )
 
     result = gdf_cc_nodes.copy()
-    result["x_snap"] = np.where(resolved, nearest_xy[:, 0], np.nan)
-    result["y_snap"] = np.where(resolved, nearest_xy[:, 1], np.nan)
+    result["x_snap"] = np.where(resolved, snapped_xy[:, 0], np.nan)
+    result["y_snap"] = np.where(resolved, snapped_xy[:, 1], np.nan)
     result["snap_dist_m"] = dists
     result["snap_resolved"] = resolved
     return result
@@ -916,8 +932,8 @@ def snap_cc_nodes(
 
 def ep_claimed_coords(gdf_nodes_snapped: gpd.GeoDataFrame) -> frozenset:
     """
-    Return the set of (x_round, y_round) endpoint coordinates that have already
-    been claimed across all completed snap passes.
+    Return the set of ep_uid values already claimed across all completed snap
+    passes.
 
     Call this after each snap_nodes() call and pass the result to
     filter_ep_claimed() before the next pass.  This ensures each physical
@@ -925,15 +941,17 @@ def ep_claimed_coords(gdf_nodes_snapped: gpd.GeoDataFrame) -> frozenset:
     row appears in multiple per-pass pools (e.g. a gore endpoint that lives in
     both ep_gore and ep_surface).
 
-    Requires target_id_cols=["x_round", "y_round"] on all prior snap_nodes()
-    calls so that snapped_x_round / snapped_y_round columns are present.
+    Requires target_id_cols=["ep_uid", ...] on all prior snap_nodes() calls so
+    that the snapped_ep_uid column is present. ep_uid must be a column shared
+    by every per-pass endpoint pool (e.g. gdf_ep_unique.index, preserved
+    across the boolean-filtered pools) — it is a row identity, not a rounded
+    coordinate, so there is no grid-boundary ambiguity about which pool row a
+    claim refers to.
     """
-    if "snapped_x_round" not in gdf_nodes_snapped.columns:
+    if "snapped_ep_uid" not in gdf_nodes_snapped.columns:
         return frozenset()
-    claimed = gdf_nodes_snapped.loc[
-        gdf_nodes_snapped["snapped"], ["snapped_x_round", "snapped_y_round"]
-    ].dropna()
-    return frozenset(zip(claimed["snapped_x_round"], claimed["snapped_y_round"]))
+    claimed = gdf_nodes_snapped.loc[gdf_nodes_snapped["snapped"], "snapped_ep_uid"].dropna()
+    return frozenset(claimed)
 
 
 def filter_ep_claimed(
@@ -941,20 +959,16 @@ def filter_ep_claimed(
     claimed_coords: frozenset,
 ) -> gpd.GeoDataFrame:
     """
-    Remove endpoint rows whose (x_round, y_round) coordinate is already in
-    claimed_coords.  Endpoints are identified by their rounded coordinate pair
-    (written by snap_nodes when target_id_cols=["x_round","y_round"]), so the
-    lookup is exact for values produced by np.round(x, 2).
+    Remove endpoint rows whose ep_uid is already in claimed_coords.
 
     Parameters
     ----------
-    gdf_ep        : Endpoint pool GeoDataFrame.  Must have x_round, y_round.
+    gdf_ep        : Endpoint pool GeoDataFrame. Must have an ep_uid column.
     claimed_coords: Frozenset from ep_claimed_coords().
     """
     if not claimed_coords:
         return gdf_ep
-    keys = list(zip(gdf_ep["x_round"], gdf_ep["y_round"]))
-    keep = [k not in claimed_coords for k in keys]
+    keep = ~gdf_ep["ep_uid"].isin(claimed_coords)
     return gdf_ep[keep].copy()
 
 

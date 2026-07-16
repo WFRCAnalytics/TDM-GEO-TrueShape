@@ -576,8 +576,13 @@ print(f"Raw endpoint records: {len(gdf_ep_raw):,}  (2 × {len(active_cl):,} segm
 
 ### B4 — Deduplicate by Coordinate
 
-Group raw endpoints by rounded XY (millimetre precision). Aggregate type flags
-with OR — a coordinate is `is_freeway=True` if any freeway segment terminates there.
+Group raw endpoints by rounded XY (centimetre precision) — used only as a
+dedup key. Aggregate type flags with OR — a coordinate is `is_freeway=True`
+if any freeway segment terminates there. The output geometry keeps the exact
+(unrounded) coordinate of one contributing raw endpoint rather than
+reconstructing a point from the rounded key, so `gdf_ep_unique` — and every
+node later snapped onto it — stays bit-exact with a real `CandidateTDMRoadLinks`
+vertex instead of sitting on a 1cm quantization grid.
 
 ```{python}
 ep_agg = gdf_ep_raw.groupby(["x_round", "y_round"], as_index=False).agg(
@@ -588,9 +593,10 @@ ep_agg = gdf_ep_raw.groupby(["x_round", "y_round"], as_index=False).agg(
         "dot_rtname",
         lambda s: s[gdf_ep_raw.loc[s.index, "is_freeway"]].str[:4].nunique(),
     ),
+    geometry=("geometry", "first"),
 )
-ep_agg["geometry"] = gpd.points_from_xy(ep_agg["x_round"], ep_agg["y_round"])
-gdf_ep_unique = gpd.GeoDataFrame(ep_agg, crs=CRS_UTM)
+gdf_ep_unique = gpd.GeoDataFrame(ep_agg, geometry="geometry", crs=CRS_UTM)
+gdf_ep_unique["ep_uid"] = gdf_ep_unique.index
 
 print(f"Unique endpoints: {len(gdf_ep_unique):,}")
 print(
@@ -823,7 +829,7 @@ gdf_nodes_snapped, _claimed = snap_nodes(
     gdf_nodes_snapped, ep_fwy_only,
     node_mask=is_fwy_node & ~is_ramp_node & ~is_surface_node & ~is_transit_node,
     max_distance_m=500, label="Freeway_Only",
-    direction_col="link_directions", target_id_cols=["x_round", "y_round"],
+    direction_col="link_directions", target_id_cols=["ep_uid", "x_round", "y_round"],
     excluded_ep_coords=_claimed,
 )
 
@@ -838,7 +844,7 @@ gdf_nodes_snapped, _claimed = snap_nodes(
     gdf_nodes_snapped, ep_fwy_sf,
     node_mask=is_fwy_node & ~is_ramp_node & is_surface_node & ~is_transit_node,
     max_distance_m=500, label="Freeway_Surface",
-    direction_col="link_directions", target_id_cols=["x_round", "y_round"],
+    direction_col="link_directions", target_id_cols=["ep_uid", "x_round", "y_round"],
     excluded_ep_coords=_claimed,
 )
 
@@ -856,7 +862,7 @@ gdf_nodes_snapped, _claimed = snap_nodes(
     gdf_nodes_snapped, ep_gore,
     node_mask=is_fwy_node & is_ramp_node & ~is_transit_node,
     max_distance_m=500, label="Freeway_Gore",
-    direction_col="fw_directions", target_id_cols=["x_round", "y_round"],
+    direction_col="fw_directions", target_id_cols=["ep_uid", "x_round", "y_round"],
     excluded_ep_coords=_claimed,
 )
 
@@ -871,7 +877,7 @@ gdf_nodes_snapped, _claimed = snap_nodes(
     gdf_nodes_snapped, ep_ic_only,
     node_mask=~is_fwy_node & is_ramp_node & ~is_surface_node & ~is_transit_node,
     max_distance_m=100, label="Interchange_Only",
-    direction_col="ic_fw_directions", target_id_cols=["x_round", "y_round"],
+    direction_col="ic_fw_directions", target_id_cols=["ep_uid", "x_round", "y_round"],
     excluded_ep_coords=_claimed,
 )
 ```
@@ -1020,7 +1026,7 @@ gdf_nodes_snapped, _claimed = snap_nodes(
     max_distance_m = 400,   # wider than pass (c) — ramp_sf terminals can be displaced
     label          = "Surface",
     direction_col  = "link_directions",
-    target_id_cols = ["x_round", "y_round"],
+    target_id_cols = ["ep_uid", "x_round", "y_round"],
     excluded_ep_coords = _claimed,
 )
 ```
@@ -1363,6 +1369,22 @@ dist = gdf_ext_snapped.loc[gdf_ext_snapped["snap_resolved"], "snap_dist_m"]
 print(f"Resolved: {n_resolved:,} | Unresolved (> 500 m): {n_unresolved:,}")
 print(f"Snap distance (m): median={dist.median():.1f} | P90={dist.quantile(0.90):.1f} | max={dist.max():.1f}")
 
+# QA flag: nodes >100 m from the nearest centerline are suspect regardless of
+# whether they cleared the 500 m resolve cutoff — a true external station
+# should sit right at the edge of the road network, not far off it. A large
+# gap here usually means the node's true position falls outside our
+# centerline extract (e.g. an out-of-county boundary point never merged in),
+# not a genuine snap.
+gdf_ext_snapped["far_flag"] = gdf_ext_snapped["snap_dist_m"] > 100
+n_far = int(gdf_ext_snapped["far_flag"].sum())
+print(f"\nFlagged (> 100 m from nearest centerline): {n_far:,} / {len(gdf_ext_snapped):,}")
+if n_far:
+    print(
+        gdf_ext_snapped.loc[gdf_ext_snapped["far_flag"], ["N", "snap_dist_m", "snap_resolved"]]
+        .sort_values("snap_dist_m", ascending=False)
+        .to_string(index=False)
+    )
+
 gdf_ext_snapped.to_crs(CRS_UTM).to_file(out_path, layer="ext_nodes_snapped", driver="GPKG")
-print(f"External station nodes saved to: {out_path} (layer: ext_nodes_snapped)")
+print(f"\nExternal station nodes saved to: {out_path} (layer: ext_nodes_snapped)")
 ```
