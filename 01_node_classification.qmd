@@ -42,6 +42,7 @@ from _src.node_utils import (
     snap_nodes,
     snap_transit,
     snap_cc_nodes,
+    allowed_ep_types,
 )
 ```
 
@@ -768,59 +769,62 @@ export so at-grade crossing snaps can be verified before running surface snappin
 ```{python}
 # ── Endpoint pools ────────────────────────────────────────────────────────
 #
-# Pass (a) — fwy nodes → fwy endpoints only.
-#   Strict pool: no ramp or surface endpoints. Prevents divided-highway collapse
-#   where NB and SB nodes both compete for the same non-directional endpoint.
-ep_fwy_only = gdf_ep_unique[gdf_ep_unique["ep_type"] == "fwy"].copy()
+# Each pool is now built from node_utils.allowed_ep_types(), which reads
+# straight off _TYPE_TIER — the same table _spatial_snap uses to score
+# candidates — instead of a hand-typed ep_type list. Diagnosis (2026-07-16)
+# found the previous hand-typed pools had silently drifted narrower than
+# _TYPE_TIER (and this section's own comments) already declared permitted:
+# e.g. ("fwy", "gore"): 1 was documented as a Tier-1 fallback, but "gore"
+# endpoints were never actually in the fwy pool below, so that fallback was
+# dead code. Freeway/interchange node types took the brunt of it: their
+# nearest real physical vertex is disproportionately a Tier-1 type one class
+# over (arcpy only cuts centerlines at interchanges, not at the FT/lane
+# -transition points that generate many freeway model nodes), and that
+# vertex was almost always well within the search radius — median 100-150m
+# vs. a 500m threshold — it just never reached the candidate pool. See
+# node_utils.allowed_ep_types docstring for the full writeup. Any deviation
+# from the raw tier table below is a deliberate, separately-justified
+# business rule, called out inline.
 
-# Pass (a2) — fwy_sf nodes → fwy_sf + fwy + gore endpoints.
-#   fwy_sf nodes touch freeway links, so the freeway direction signal is reliable.
-#   Surface endpoints are intentionally excluded from this pool — if no fwy-class
-#   endpoint is within range the node falls through to D2 (surface pass) where
-#   surface endpoints are available as a Tier-1 fallback.
-ep_fwy_sf = (
-    pd.concat(
-        [
-            gdf_ep_unique[gdf_ep_unique["ep_type"] == "fwy_sf"],
-            gdf_ep_unique[gdf_ep_unique["ep_type"] == "fwy"],
-            gdf_ep_unique[gdf_ep_unique["ep_type"] == "gore"],
-        ]
-    )
-    .drop_duplicates()
-    .copy()
-)
+# Pass (a) — fwy nodes → {fwy, gore, fwy_sf} (_TYPE_TIER tier ≤ 1 for "fwy").
+#   ramp/surface are absent from _TYPE_TIER's "fwy" row entirely (not merely
+#   tier>1), so they stay excluded — the divided-highway-collapse protection
+#   this pool was designed for is unchanged, only the gore/fwy_sf Tier-1
+#   fallback (previously dead) is now reachable.
+ep_fwy_only = gdf_ep_unique[gdf_ep_unique["ep_type"].isin(allowed_ep_types("fwy"))].copy()
 
-# Pass (b) — gore + gore_sf nodes → gore endpoint pool.
-#   Core pool: gore eps and multi-route fwy eps (major interchange hubs).
-#   Extended with ramp_sf for gore_sf nodes (all three classes meet at grade).
-#   _TYPE_TIER rejects ramp_sf for plain gore nodes, so the extension is harmless.
-ep_gore = (
-    pd.concat(
-        [
-            gdf_ep_unique[gdf_ep_unique["ep_type"] == "gore"],
-            gdf_ep_unique[
-                (gdf_ep_unique["ep_type"] == "fwy") & (gdf_ep_unique["fw_route_count"] >= 2)
-            ],
-            gdf_ep_unique[gdf_ep_unique["ep_type"] == "ramp_sf"],  # for gore_sf nodes
-        ]
-    )
-    .drop_duplicates()
-    .copy()
-)
+# Pass (a2) — fwy_sf nodes → _TYPE_TIER gives {fwy_sf, fwy, surface, gore};
+#   surface is deliberately dropped here — if no fwy-class endpoint is within
+#   range the node falls through to D2 (surface pass) where surface endpoints
+#   are available under D2's own (more appropriate) direction logic.
+ep_fwy_sf = gdf_ep_unique[
+    gdf_ep_unique["ep_type"].isin(allowed_ep_types("fwy_sf") - {"surface"})
+].copy()
 
-# Pass (c) — ramp nodes → ramp + ramp_sf endpoints.
-#   ramp_sf nodes are excluded: they have surface links and route to D2 where
-#   their at-grade topology is Tier-0.
-ep_ic_only = gdf_ep_unique[gdf_ep_unique["ep_type"].isin(["ramp", "ramp_sf"])].copy()
+# Pass (b) — gore + gore_sf nodes share one pool: the union of each node
+#   type's _TYPE_TIER-allowed set is {fwy, fwy_sf, gore, ramp, ramp_sf}.
+#   "fwy" is further restricted to multi-route hub interchanges
+#   (fw_route_count >= 2) — a deliberate heuristic beyond what _TYPE_TIER
+#   encodes, kept to avoid over-matching a gore node to an isolated
+#   single-route fwy endpoint that merely happens to be nearby.
+_gore_allowed = allowed_ep_types("gore") | allowed_ep_types("gore_sf")
+ep_gore = gdf_ep_unique[
+    gdf_ep_unique["ep_type"].isin(_gore_allowed)
+    & ~((gdf_ep_unique["ep_type"] == "fwy") & (gdf_ep_unique["fw_route_count"] < 2))
+].copy()
 
-print(f"Pass (a)  pool — fwy:                  {len(ep_fwy_only):,}")
-print(f"Pass (a2) pool — fwy_sf + fwy + gore:  {len(ep_fwy_sf):,}")
-print(f"Pass (b)  pool — gore + ramp_sf:       {len(ep_gore):,}")
-print(f"Pass (c)  pool — ramp + ramp_sf:       {len(ep_ic_only):,}")
+# Pass (c) — ramp nodes → _TYPE_TIER gives {ramp, gore, ramp_sf}.
+ep_ic_only = gdf_ep_unique[gdf_ep_unique["ep_type"].isin(allowed_ep_types("ramp"))].copy()
+
+print(f"Pass (a)  pool — fwy, gore, fwy_sf:                 {len(ep_fwy_only):,}")
+print(f"Pass (a2) pool — fwy_sf, fwy, gore:                 {len(ep_fwy_sf):,}")
+print(f"Pass (b)  pool — gore, fwy(hub), ramp, fwy_sf, ramp_sf: {len(ep_gore):,}")
+print(f"Pass (c)  pool — ramp, gore, ramp_sf:               {len(ep_ic_only):,}")
 
 # ── Node masks ────────────────────────────────────────────────────────────
 # gore_sf (fwy+ramp+surface): included in pass (b) alongside gore nodes;
-#   _TYPE_TIER gives it access to ramp_sf endpoints at Tier-1.
+#   _TYPE_TIER gives it access to fwy_sf/ramp_sf/fwy/ramp endpoints at Tier-1
+#   (folded into ep_gore's union above).
 # ramp_sf (ramp+surface): skips pass (c), routes directly to D2 surface pass.
 print()
 print(f"Pass (a)  nodes — fwy:     {(is_fwy_node & ~is_ramp_node & ~is_surface_node & ~is_transit_node).sum():,}")

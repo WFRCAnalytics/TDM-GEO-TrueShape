@@ -36,6 +36,12 @@ Public API
     assign_endpoint_type(gdf_ep_unique) -> GeoDataFrame
         Append ep_type column — one of: "fwy" | "gore" | "fwy_sf" | "ramp" | "ramp_sf" | "surface".
 
+    allowed_ep_types(node_type, max_tier=1) -> set[str]
+        Return the ep_type values permitted for a node_type per _TYPE_TIER —
+        the source of truth for building each pass's candidate endpoint pool
+        in the notebook so it can't silently drift narrower than what
+        _spatial_snap itself is willing to accept.
+
     snap_nodes(gdf_nodes, gdf_endpoints, node_mask, max_distance_m, label, ...) -> (GeoDataFrame, frozenset)
         Snap a masked subset of nodes to the nearest compatible endpoint using
         Gale-Shapley stable matching with (type_tier, dir_tier, dist) sorting.
@@ -518,6 +524,30 @@ _TYPE_TIER: dict[tuple[str, str], int] = {
     ("surface", "ramp_sf"): 1,
 }
 _TYPE_TIER_REJECT = 99
+
+
+def allowed_ep_types(node_type: str, max_tier: int = 1) -> set[str]:
+    """
+    Return the `ep_type` values permitted for a given node_type per
+    _TYPE_TIER, at or below max_tier (0=same topology class, 1=adjacent
+    class permitted).
+
+    _TYPE_TIER is the single table _spatial_snap actually scores candidates
+    against — a pass's endpoint pool must be built from this function (or a
+    documented, narrower subset of it) rather than a hand-typed ep_type
+    list, or the pool can silently drift narrower than what _spatial_snap is
+    willing to accept. This happened in practice: passes (a)/(b)/(c) in
+    01_node_classification.qmd each hand-typed an ep_type list that omitted
+    one or more Tier-1 types the table (and the pass's own inline comment)
+    already declared permitted — e.g. ("fwy", "gore"): 1 was documented but
+    "gore" was never in the "fwy" node pool. Freeway/interchange node types
+    were hit hardest because their nearest real physical vertex is
+    disproportionately likely to be one class over (arcpy only cuts
+    centerlines at interchanges, not at the FT/lane-transition points that
+    generate many freeway model nodes) — see the endpoint-pool-alignment fix
+    for the full diagnosis.
+    """
+    return {ep_type for (nt, ep_type), tier in _TYPE_TIER.items() if nt == node_type and tier <= max_tier}
 
 
 # =============================================================================
