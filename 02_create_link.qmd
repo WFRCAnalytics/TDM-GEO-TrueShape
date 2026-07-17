@@ -1,7 +1,7 @@
 ---
 title: Create True-Shape Links
 subtitle: Redissolving candidate centerlines and splitting only at snapped model nodes to produce true-shape link pieces
-description: CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC model-node and CC-attachment positions to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.
+description: CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC road model-node positions to produce the raw building-block pieces for true-shape link conflation. CC attachment and external station nodes are excluded from this split (folded in separately later). Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.
 author:
  - name: Pukar Bhandari
    email: pukar.bhandari@wfrc.utah.gov
@@ -206,62 +206,34 @@ print(f"Split points prepared: {len(snap_points_exact):,}")
 ## Part C — Split at Snapped Nodes
 
 `gdf_fulldissolve` (Part A) — not the original `CandidateTDMRoadLinks` rows —
-is split at every model-node snap point, every CC attachment snap point, and
-every external station snap point, so piece boundaries come only from
-snapping, never from incidental arcpy junction cuts. Points that project to
-within 0.1 mm of a component's existing endpoint are skipped (already a
-boundary). After all splits, each resulting piece is bounded exclusively by:
-- a snapped model node position,
-- a snapped CC attachment node position,
-- a snapped external station node position, or
+is split only at snapped road model-node positions, so piece boundaries come
+exclusively from road-node snapping, never from incidental arcpy junction
+cuts. Points that project to within 0.1 mm of a component's existing
+endpoint are skipped (already a boundary). After all splits, each resulting
+piece is bounded exclusively by:
+- a snapped model node position, or
 - a genuine branch point already present in `gdf_fulldissolve`.
+
+CC attachment nodes (`cc_nodes_snapped`) and external station nodes
+(`ext_nodes_snapped`) are deliberately **not** used as split points here.
+`snap_cc_nodes()` computes their position independently (nearest-line
+projection from the node's own raw coordinate, uncapped), which can land far
+from the node's true location — e.g. a TAZ centroid connector projecting
+330 m onto an unrelated freeway mainline — planting a phantom split in the
+middle of an otherwise-continuous physical piece. Centroid connector and
+external station nodes will be split into the true-shape network as a
+separate, later pass instead of being folded into this one.
 
 No lineage keys are carried through this split (`id_cols=()`) — a redissolved
 row no longer maps 1:1 to a single original `OBJECTID`. Lineage/display
 attributes are reattached afterward via midpoint join (Part D).
 
-A CC or external-station node can share its `N` with a node that the main
-greedy snapper already resolved to a real road-junction position (e.g. a
-zone centroid loaded at an actual intersection). `03_transfer_attributes.qmd`
-already gives the road-snapped position precedence for that `N` and discards
-the CC/EXT coordinate — but `snap_cc_nodes()` computes the CC/EXT position
-independently (nearest-line projection from the node's own raw coordinate),
-so it rarely lands exactly on the road-snapped point. Left unfiltered, this
-produces a redundant split a few metres from the real node: a sliver piece
-whose far end is an orphaned coordinate `coord_to_node` will never resolve,
-showing up downstream as spurious `a_only`/`b_only`. Nodes already road-
-snapped are excluded here so their `N` contributes exactly one split point
-(the road one), not two.
-
 ```{python}
-road_snapped_ids = set(gdf_nodes_road.loc[gdf_nodes_road["snapped"].fillna(False), "N"].astype(int))
-
-cc_resolved = gdf_cc_snapped[
-    gdf_cc_snapped["snap_resolved"] & ~gdf_cc_snapped["N"].astype(int).isin(road_snapped_ids)
-]
-cc_snap_points = [
-    Point(row["x_snap"], row["y_snap"])
-    for _, row in cc_resolved.iterrows()
-]
-ext_resolved = gdf_ext_snapped[
-    gdf_ext_snapped["snap_resolved"] & ~gdf_ext_snapped["N"].astype(int).isin(road_snapped_ids)
-]
-ext_snap_points = [
-    Point(row["x_snap"], row["y_snap"])
-    for _, row in ext_resolved.iterrows()
-]
-all_snap_points = snap_points_exact + cc_snap_points + ext_snap_points
-n_cc_dual = int((gdf_cc_snapped["snap_resolved"] & gdf_cc_snapped["N"].astype(int).isin(road_snapped_ids)).sum())
-n_ext_dual = int((gdf_ext_snapped["snap_resolved"] & gdf_ext_snapped["N"].astype(int).isin(road_snapped_ids)).sum())
-n_cc_unresolved = len(gdf_cc_snapped) - gdf_cc_snapped["snap_resolved"].sum()
-n_ext_unresolved = len(gdf_ext_snapped) - gdf_ext_snapped["snap_resolved"].sum()
+all_snap_points = snap_points_exact
 print(
-    f"Split points: {len(snap_points_exact):,} (model nodes) + "
-    f"{len(cc_snap_points):,} (CC attachment, {n_cc_unresolved:,} unresolved + "
-    f"{n_cc_dual:,} dual-identity with a road node excluded) + "
-    f"{len(ext_snap_points):,} (external station, {n_ext_unresolved:,} unresolved + "
-    f"{n_ext_dual:,} dual-identity with a road node excluded) "
-    f"= {len(all_snap_points):,} total"
+    f"Split points: {len(snap_points_exact):,} (model nodes). "
+    f"CC attachment ({len(gdf_cc_snapped):,}) and external station "
+    f"({len(gdf_ext_snapped):,}) nodes excluded — split separately later."
 )
 ```
 

@@ -1396,12 +1396,12 @@ print(f"CC attachment nodes (N ≥ 3600): {len(gdf_cc_nodes):,}")
 ```
 
 ```{python}
-gdf_cc_snapped = snap_cc_nodes(gdf_cc_nodes.to_crs(CRS_UTM), gdf_centerlines)
+gdf_cc_snapped = snap_cc_nodes(gdf_cc_nodes.to_crs(CRS_UTM), gdf_centerlines, max_snap_dist_m=100.0)
 
 n_resolved   = gdf_cc_snapped["snap_resolved"].sum()
 n_unresolved = len(gdf_cc_snapped) - n_resolved
 dist = gdf_cc_snapped.loc[gdf_cc_snapped["snap_resolved"], "snap_dist_m"]
-print(f"Resolved: {n_resolved:,} | Unresolved (> 500 m): {n_unresolved:,}")
+print(f"Resolved: {n_resolved:,} | Unresolved (> 100 m): {n_unresolved:,}")
 print(f"Snap distance (m): median={dist.median():.1f} | P90={dist.quantile(0.90):.1f} | max={dist.max():.1f}")
 
 gdf_cc_snapped.to_crs(CRS_UTM).to_file(out_path, layer="cc_nodes_snapped", driver="GPKG")
@@ -1418,11 +1418,11 @@ reliably handled by the direction-aware greedy snapper, so they get the same
 simple nearest-vertex treatment and are written as a third `nodes_snapped.gpkg`
 layer for Stage 2 to use as additional split points.
 
-The same 500 m default cutoff as CC nodes is kept deliberately tight, not
-loosened: several external nodes sit 1–13 km from any WF-county centerline
-(true remote boundary points where our centerline extract simply doesn't
-reach), and snapping those to whatever vertex happens to be nearest would be
-a misleading match rather than a real one — better left unresolved.
+The same 100 m cutoff as CC nodes is kept deliberately tight: several
+external nodes sit 1–13 km from any WF-county centerline (true remote
+boundary points where our centerline extract simply doesn't reach), and
+snapping those to whatever vertex happens to be nearest would be a
+misleading match rather than a real one — better left unresolved.
 
 ```{python}
 gdf_ext_nodes = gdf_nodes[gdf_nodes["EXTERNAL_"] == 1].copy()
@@ -1430,29 +1430,13 @@ print(f"External station nodes (EXTERNAL_ = 1): {len(gdf_ext_nodes):,}")
 ```
 
 ```{python}
-gdf_ext_snapped = snap_cc_nodes(gdf_ext_nodes.to_crs(CRS_UTM), gdf_centerlines)
+gdf_ext_snapped = snap_cc_nodes(gdf_ext_nodes.to_crs(CRS_UTM), gdf_centerlines, max_snap_dist_m=100.0)
 
 n_resolved   = gdf_ext_snapped["snap_resolved"].sum()
 n_unresolved = len(gdf_ext_snapped) - n_resolved
 dist = gdf_ext_snapped.loc[gdf_ext_snapped["snap_resolved"], "snap_dist_m"]
-print(f"Resolved: {n_resolved:,} | Unresolved (> 500 m): {n_unresolved:,}")
+print(f"Resolved: {n_resolved:,} | Unresolved (> 100 m): {n_unresolved:,}")
 print(f"Snap distance (m): median={dist.median():.1f} | P90={dist.quantile(0.90):.1f} | max={dist.max():.1f}")
-
-# QA flag: nodes >100 m from the nearest centerline are suspect regardless of
-# whether they cleared the 500 m resolve cutoff — a true external station
-# should sit right at the edge of the road network, not far off it. A large
-# gap here usually means the node's true position falls outside our
-# centerline extract (e.g. an out-of-county boundary point never merged in),
-# not a genuine snap.
-gdf_ext_snapped["far_flag"] = gdf_ext_snapped["snap_dist_m"] > 100
-n_far = int(gdf_ext_snapped["far_flag"].sum())
-print(f"\nFlagged (> 100 m from nearest centerline): {n_far:,} / {len(gdf_ext_snapped):,}")
-if n_far:
-    print(
-        gdf_ext_snapped.loc[gdf_ext_snapped["far_flag"], ["N", "snap_dist_m", "snap_resolved"]]
-        .sort_values("snap_dist_m", ascending=False)
-        .to_string(index=False)
-    )
 
 gdf_ext_snapped.to_crs(CRS_UTM).to_file(out_path, layer="ext_nodes_snapped", driver="GPKG")
 print(f"\nExternal station nodes saved to: {out_path} (layer: ext_nodes_snapped)")

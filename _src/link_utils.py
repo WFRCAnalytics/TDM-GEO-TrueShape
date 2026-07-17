@@ -361,19 +361,26 @@ def dissolve_pseudonodes(
 
             chain_pairs: list[list[int]] = [[edata["orig_A"], edata["orig_B"]]]
             chain_row_idxs: list[int] = [edata["row_idx"]]
+            prev = start
             curr = nbr
 
             while curr in pass_through_ids:
-                # Prefer edges not returning to `start`; fall back to any unvisited edge.
-                # This prevents a pseudonode's back-edge to the entry real node from being
-                # chosen when a forward edge to a different real node is also available.
+                # Prefer edges not returning to the node just visited (`prev`);
+                # fall back to any unvisited edge. This prevents a pseudonode's
+                # back-edge from being chosen when a forward edge is also
+                # available -- checking against `prev` (not just the chain's
+                # original `start`) is required on a two-way street modeled as
+                # two independent one-way rows: the reverse-direction sibling
+                # of the edge just traversed is a distinct edge to a node other
+                # than `start`, so it would otherwise look like valid forward
+                # progress and send the walk straight back the way it came.
                 next_found = None
                 fallback = None
                 for _, cnbr, ckey, cedata in G.out_edges(curr, keys=True, data=True):
                     cek = (curr, cnbr, ckey)
                     if cek in visited_edges:
                         continue
-                    if cnbr != start:
+                    if cnbr != prev:
                         next_found = (cnbr, cedata, cek)
                         break
                     if fallback is None:
@@ -386,6 +393,7 @@ def dissolve_pseudonodes(
                 visited_edges.add(next_ek)
                 chain_pairs.append([next_edata["orig_A"], next_edata["orig_B"]])
                 chain_row_idxs.append(next_edata["row_idx"])
+                prev = curr
                 curr = next_nbr
 
             first_vals = values[chain_row_idxs[0]]

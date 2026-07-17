@@ -8,7 +8,7 @@
 
 <meta name="author" content="Pukar Bhandari">
 <meta name="dcterms.date" content="2026-05-14">
-<meta name="description" content="CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC model-node and CC-attachment positions to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.">
+<meta name="description" content="CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC road model-node positions to produce the raw building-block pieces for true-shape link conflation. CC attachment and external station nodes are excluded from this split (folded in separately later). Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.">
 
 <title>Create True-Shape Links – True Shape Network</title>
 <style>
@@ -318,7 +318,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <p class="subtitle lead">Redissolving candidate centerlines and splitting only at snapped model nodes to produce true-shape link pieces</p>
                   <div>
         <div class="description">
-          CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC model-node and CC-attachment positions to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.
+          CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC road model-node positions to produce the raw building-block pieces for true-shape link conflation. CC attachment and external station nodes are excluded from this split (folded in separately later). Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.
         </div>
       </div>
                 </div>
@@ -392,7 +392,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="imports" class="level3">
 <h3 class="anchored" data-anchor-id="imports">Imports</h3>
-<div id="a5e09480" class="cell" data-execution_count="1">
+<div id="a6dd7bbf" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -411,7 +411,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="configuration" class="level3">
 <h3 class="anchored" data-anchor-id="configuration">Configuration</h3>
-<div id="b88daa5a" class="cell" data-execution_count="2">
+<div id="aad2ef34" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -450,7 +450,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="candidate-centerlines" class="level3">
 <h3 class="anchored" data-anchor-id="candidate-centerlines">Candidate Centerlines</h3>
 <p><code>CandidateTDMRoadLinks.gpkg</code> (built in <code>00_data_preparation.qmd</code>) is already filtered and dissolved, but it is also pre-cut at arcpy-style junction points — including incidental boundaries between freeway/ramp/CD rows and surface-street rows wherever they merely touch, not just at genuine multi-way branches. Part A below re-dissolves these rows into maximal chains so that every split point in the final pieces (Part C) comes only from snapping, not from <code>CandidateTDMRoadLinks</code>’s own pre-existing cuts.</p>
-<div id="f7bd1f53" class="cell" data-execution_count="3">
+<div id="9da9a55c" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>gdf_centerlines <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_centerlines"</span>]).to_crs(CRS_UTM)</span>
@@ -464,7 +464,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="snapped-nodes" class="level3">
 <h3 class="anchored" data-anchor-id="snapped-nodes">Snapped Nodes</h3>
-<div id="ca3910c2" class="cell" data-execution_count="4">
+<div id="8d933c0e" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
@@ -483,7 +483,7 @@ CC attachment nodes: 6,539
 External station nodes: 29</code></pre>
 </div>
 </div>
-<div id="9dd4b673" class="cell" data-execution_count="5">
+<div id="2c0f5026" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>]].explore()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -496,7 +496,7 @@ External station nodes: 29</code></pre>
 <h2 data-number="3" class="anchored" data-anchor-id="part-a-full-network-redissolve"><span class="header-section-number">3</span> Part A — Full Network Redissolve</h2>
 <p><code>CandidateTDMRoadLinks</code> is already pre-cut at arcpy-style junction points (see <code>00_data_preparation.qmd</code>’s <code>rcl_merge</code>), including boundaries between freeway/ramp/CD rows and surface-street rows wherever they merely touch — not just at genuine multi-way branches. To make the final true-shape split points come <strong>only</strong> from snapped model nodes, every row is re-dissolved into maximal topological chains first, per <code>VERT_LEVEL</code> (freeway and surface rows combined within a level — genuine branch points, where 3+ lines share an endpoint, still remain hard boundaries after dissolve; only incidental class-boundary splits are undone).</p>
 <p>VERT_LEVEL isolation is preserved deliberately: dissolving across levels would incorrectly fuse an elevated/tunnel structure with an at-grade road sharing the same XY footprint (see <code>dissolve_and_singlepart</code> docstring).</p>
-<div id="45705bd2" class="cell" data-execution_count="6">
+<div id="59deada4" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>vert_levels <span class="op">=</span> <span class="bu">sorted</span>(gdf_centerlines[<span class="st">"VERT_LEVEL"</span>].dropna().unique())</span>
@@ -529,7 +529,7 @@ Total: 7,642 candidate rows -&gt; 7,141 redissolved chains</code></pre>
 </div>
 </div>
 <p>Sanity check: dissolve only merges touching lines into longer chains — it never adds or removes length. Total length before and after must match.</p>
-<div id="2c860bc7" class="cell" data-execution_count="7">
+<div id="3bea6d53" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>len_before <span class="op">=</span> gdf_centerlines.geometry.length.<span class="bu">sum</span>()</span>
@@ -552,7 +552,7 @@ Difference:          0.000 m</code></pre>
 <h2 data-number="4" class="anchored" data-anchor-id="part-b-resolve-snap-coordinates"><span class="header-section-number">4</span> Part B — Resolve Snap Coordinates</h2>
 <p><code>nodes_snapped.gpkg</code> stores <code>snapped_x_round / snapped_y_round</code> rounded to 2 decimal places (cm precision). Splitting and M-value operations require coordinates that exactly match a vertex stored in the centerline geometry. For each snapped node, this step finds the nearest unique centerline vertex within 5 cm and records its full-precision coordinate.</p>
 <p>FixedTransit_Rail nodes are excluded — they snap to GTFS rail infrastructure (CRT stations, LRT midpoints), not to road centerlines, so they are never road centerline split points.</p>
-<div id="68da1060" class="cell" data-execution_count="8">
+<div id="12a28fe8" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_road <span class="op">=</span> gdf_nodes_snapped[</span>
@@ -573,7 +573,7 @@ Difference:          0.000 m</code></pre>
 <pre><code>Coordinate resolution: 3,476 resolved | 0 unresolved</code></pre>
 </div>
 </div>
-<div id="9138e1b4" class="cell" data-execution_count="9">
+<div id="eccce65a" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_unresolved <span class="op">&gt;</span> <span class="dv">0</span>:</span>
@@ -585,7 +585,7 @@ Difference:          0.000 m</code></pre>
 </details>
 </div>
 <p>Build the list of exact-coordinate Points used as split locations.</p>
-<div id="cb0afd96" class="cell" data-execution_count="10">
+<div id="7b390e8e" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>resolved_mask <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
@@ -603,47 +603,24 @@ Difference:          0.000 m</code></pre>
 </section>
 <section id="part-c-split-at-snapped-nodes" class="level2" data-number="5">
 <h2 data-number="5" class="anchored" data-anchor-id="part-c-split-at-snapped-nodes"><span class="header-section-number">5</span> Part C — Split at Snapped Nodes</h2>
-<p><code>gdf_fulldissolve</code> (Part A) — not the original <code>CandidateTDMRoadLinks</code> rows — is split at every model-node snap point, every CC attachment snap point, and every external station snap point, so piece boundaries come only from snapping, never from incidental arcpy junction cuts. Points that project to within 0.1 mm of a component’s existing endpoint are skipped (already a boundary). After all splits, each resulting piece is bounded exclusively by: - a snapped model node position, - a snapped CC attachment node position, - a snapped external station node position, or - a genuine branch point already present in <code>gdf_fulldissolve</code>.</p>
+<p><code>gdf_fulldissolve</code> (Part A) — not the original <code>CandidateTDMRoadLinks</code> rows — is split only at snapped road model-node positions, so piece boundaries come exclusively from road-node snapping, never from incidental arcpy junction cuts. Points that project to within 0.1 mm of a component’s existing endpoint are skipped (already a boundary). After all splits, each resulting piece is bounded exclusively by: - a snapped model node position, or - a genuine branch point already present in <code>gdf_fulldissolve</code>.</p>
+<p>CC attachment nodes (<code>cc_nodes_snapped</code>) and external station nodes (<code>ext_nodes_snapped</code>) are deliberately <strong>not</strong> used as split points here. <code>snap_cc_nodes()</code> computes their position independently (nearest-line projection from the node’s own raw coordinate, uncapped), which can land far from the node’s true location — e.g.&nbsp;a TAZ centroid connector projecting 330 m onto an unrelated freeway mainline — planting a phantom split in the middle of an otherwise-continuous physical piece. Centroid connector and external station nodes will be split into the true-shape network as a separate, later pass instead of being folded into this one.</p>
 <p>No lineage keys are carried through this split (<code>id_cols=()</code>) — a redissolved row no longer maps 1:1 to a single original <code>OBJECTID</code>. Lineage/display attributes are reattached afterward via midpoint join (Part D).</p>
-<p>A CC or external-station node can share its <code>N</code> with a node that the main greedy snapper already resolved to a real road-junction position (e.g.&nbsp;a zone centroid loaded at an actual intersection). <code>03_transfer_attributes.qmd</code> already gives the road-snapped position precedence for that <code>N</code> and discards the CC/EXT coordinate — but <code>snap_cc_nodes()</code> computes the CC/EXT position independently (nearest-line projection from the node’s own raw coordinate), so it rarely lands exactly on the road-snapped point. Left unfiltered, this produces a redundant split a few metres from the real node: a sliver piece whose far end is an orphaned coordinate <code>coord_to_node</code> will never resolve, showing up downstream as spurious <code>a_only</code>/<code>b_only</code>. Nodes already road- snapped are excluded here so their <code>N</code> contributes exactly one split point (the road one), not two.</p>
-<div id="77f9d020" class="cell" data-execution_count="11">
+<div id="8c457bea" class="cell" data-execution_count="11">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>road_snapped_ids <span class="op">=</span> <span class="bu">set</span>(gdf_nodes_road.loc[gdf_nodes_road[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>), <span class="st">"N"</span>].astype(<span class="bu">int</span>))</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>cc_resolved <span class="op">=</span> gdf_cc_snapped[</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    gdf_cc_snapped[<span class="st">"snap_resolved"</span>] <span class="op">&amp;</span> <span class="op">~</span>gdf_cc_snapped[<span class="st">"N"</span>].astype(<span class="bu">int</span>).isin(road_snapped_ids)</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>cc_snap_points <span class="op">=</span> [</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_snap"</span>], row[<span class="st">"y_snap"</span>])</span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> cc_resolved.iterrows()</span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>ext_resolved <span class="op">=</span> gdf_ext_snapped[</span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    gdf_ext_snapped[<span class="st">"snap_resolved"</span>] <span class="op">&amp;</span> <span class="op">~</span>gdf_ext_snapped[<span class="st">"N"</span>].astype(<span class="bu">int</span>).isin(road_snapped_ids)</span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>ext_snap_points <span class="op">=</span> [</span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_snap"</span>], row[<span class="st">"y_snap"</span>])</span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> ext_resolved.iterrows()</span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact <span class="op">+</span> cc_snap_points <span class="op">+</span> ext_snap_points</span>
-<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>n_cc_dual <span class="op">=</span> <span class="bu">int</span>((gdf_cc_snapped[<span class="st">"snap_resolved"</span>] <span class="op">&amp;</span> gdf_cc_snapped[<span class="st">"N"</span>].astype(<span class="bu">int</span>).isin(road_snapped_ids)).<span class="bu">sum</span>())</span>
-<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>n_ext_dual <span class="op">=</span> <span class="bu">int</span>((gdf_ext_snapped[<span class="st">"snap_resolved"</span>] <span class="op">&amp;</span> gdf_ext_snapped[<span class="st">"N"</span>].astype(<span class="bu">int</span>).isin(road_snapped_ids)).<span class="bu">sum</span>())</span>
-<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>n_cc_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_cc_snapped) <span class="op">-</span> gdf_cc_snapped[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
-<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>n_ext_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_ext_snapped) <span class="op">-</span> gdf_ext_snapped[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
-<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
-<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Split points: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss"> (model nodes) + "</span></span>
-<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(cc_snap_points)<span class="sc">:,}</span><span class="ss"> (CC attachment, </span><span class="sc">{</span>n_cc_unresolved<span class="sc">:,}</span><span class="ss"> unresolved + "</span></span>
-<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>n_cc_dual<span class="sc">:,}</span><span class="ss"> dual-identity with a road node excluded) + "</span></span>
-<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(ext_snap_points)<span class="sc">:,}</span><span class="ss"> (external station, </span><span class="sc">{</span>n_ext_unresolved<span class="sc">:,}</span><span class="ss"> unresolved + "</span></span>
-<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>n_ext_dual<span class="sc">:,}</span><span class="ss"> dual-identity with a road node excluded) "</span></span>
-<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"= </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> total"</span></span>
-<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Split points: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss"> (model nodes). "</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"CC attachment (</span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss">) and external station "</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"(</span><span class="sc">{</span><span class="bu">len</span>(gdf_ext_snapped)<span class="sc">:,}</span><span class="ss">) nodes excluded — split separately later."</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Split points: 3,476 (model nodes) + 5,305 (CC attachment, 560 unresolved + 674 dual-identity with a road node excluded) + 22 (external station, 7 unresolved + 0 dual-identity with a road node excluded) = 8,803 total</code></pre>
+<pre><code>Split points: 3,476 (model nodes). CC attachment (6,539) and external station (29) nodes excluded — split separately later.</code></pre>
 </div>
 </div>
-<div id="e01e1abd" class="cell" data-execution_count="12">
+<div id="4b379a03" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_fulldissolve)<span class="sc">:,}</span><span class="ss"> redissolved chains at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
@@ -651,8 +628,8 @@ Difference:          0.000 m</code></pre>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces after split: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces_split)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Splitting 7,141 redissolved chains at 8,803 points …
-Pieces after split: 12,829</code></pre>
+<pre><code>Splitting 7,141 redissolved chains at 3,476 points …
+Pieces after split: 7,613</code></pre>
 </div>
 </div>
 <hr>
@@ -660,7 +637,7 @@ Pieces after split: 12,829</code></pre>
 <section id="part-d-build-pieces-layer-reattach-lineage-and-export" class="level2" data-number="6">
 <h2 data-number="6" class="anchored" data-anchor-id="part-d-build-pieces-layer-reattach-lineage-and-export"><span class="header-section-number">6</span> Part D — Build Pieces Layer, Reattach Lineage, and Export</h2>
 <p>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for matching against <code>snapped_x_round / snapped_y_round</code> in the next stage). Since splitting now runs against the redissolved <code>gdf_fulldissolve</code> layer, a piece no longer maps 1:1 to a single original <code>CandidateTDMRoadLinks</code> <code>OBJECTID</code> — lineage/display attributes (<code>TRANSFER_COLS</code>) are reattached via the same midpoint-nearest-join approach <code>00_data_preparation.qmd</code> uses to transfer attributes from raw centerlines onto <code>CandidateTDMRoadLinks</code> in the first place, this time from <code>CandidateTDMRoadLinks</code> onto each piece.</p>
-<div id="d9ce8d3a" class="cell" data-execution_count="13">
+<div id="2f2ac963" class="cell" data-execution_count="13">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
@@ -682,7 +659,7 @@ Pieces after split: 12,829</code></pre>
 </details>
 </div>
 <p><code>CandidateTDMRoadLinks</code> contains a small number of standalone sub-centimetre “stub” features (max ~6 mm, confirmed by direct <code>OBJECTID</code> lookup) — digitizing artifacts, not anything this pipeline creates. Because <code>split_candidate_links</code> never cuts a component shorter than its 0.5 m <code>_EPS</code>, each stub passes through whole as its own piece; since both of its (near-identical) endpoints round to the same snapped-node coordinate, Stage 3 later resolves <code>A_piece == B_piece</code> for it — a spurious self-loop. Genuine physical loop roads (cloverleaf/collector loops that legitimately start and end at the same point) are tens of metres to several kilometres long, so a <code>length_m &lt; 1 m</code> gate removes only the artifacts.</p>
-<div id="8f52b1a3" class="cell" data-execution_count="14">
+<div id="1a82a4c3" class="cell" data-execution_count="14">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>n_before_drop <span class="op">=</span> <span class="bu">len</span>(gdf_pieces)</span>
@@ -712,16 +689,16 @@ Pieces after split: 12,829</code></pre>
 <span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exported </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Dropped 20 / 12,829 degenerate zero-length pieces (start == end, length &lt; 1 m) — pre-existing near-duplicate-vertex stub features already present as standalone rows in CandidateTDMRoadLinks, not created by this pipeline. Real closed-loop roads (cloverleaf/collector loops, tens of metres to several km long) are left untouched — the length gate cleanly separates the two populations with a &gt;3,000x margin.
-Pieces with a null transferred attribute: 1,492 / 12,809
-Exported 12,809 pieces → _data\processed\link_pieces.gpkg</code></pre>
+<pre><code>Dropped 20 / 7,613 degenerate zero-length pieces (start == end, length &lt; 1 m) — pre-existing near-duplicate-vertex stub features already present as standalone rows in CandidateTDMRoadLinks, not created by this pipeline. Real closed-loop roads (cloverleaf/collector loops, tens of metres to several km long) are left untouched — the length gate cleanly separates the two populations with a &gt;3,000x margin.
+Pieces with a null transferred attribute: 1,451 / 7,593
+Exported 7,593 pieces → _data\processed\link_pieces.gpkg</code></pre>
 </div>
 </div>
 <hr>
 </section>
 <section id="summary" class="level2" data-number="7">
 <h2 data-number="7" class="anchored" data-anchor-id="summary"><span class="header-section-number">7</span> Summary</h2>
-<div id="490b0651" class="cell" data-execution_count="15">
+<div id="bd57084a" class="cell" data-execution_count="15">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
@@ -742,20 +719,20 @@ Exported 12,809 pieces → _data\processed\link_pieces.gpkg</code></pre>
 <div class="cell-output cell-output-stdout">
 <pre><code>Piece length distribution (m):
   Min:    0.0
-  Median: 365.4
-  P90:    870.4
+  Median: 547.3
+  P90:    1611.5
   Max:    48924.3
 
 Input:  7,642 candidate components
         3,476 snapped road nodes (3,476 coordinate-resolved)
         6,539 CC attachment nodes snapped
         29 external station nodes snapped
-Output: 12,809 pieces → link_pieces.gpkg
+Output: 7,593 pieces → link_pieces.gpkg
         6,539 CC attachment nodes → nodes_snapped.gpkg (layer: cc_nodes_snapped)
         29 external station nodes → nodes_snapped.gpkg (layer: ext_nodes_snapped)</code></pre>
 </div>
 </div>
-<div id="d4f6530b" class="cell" data-execution_count="16">
+<div id="2ec4331b" class="cell" data-execution_count="16">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>gdf_pieces.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -1235,7 +1212,7 @@ Output: 12,809 pieces → link_pieces.gpkg
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> Create True-Shape Links</span></span>
 <span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> Redissolving candidate centerlines and splitting only at snapped model nodes to produce true-shape link pieces</span></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="an">description:</span><span class="co"> CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC model-node and CC-attachment positions to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="an">description:</span><span class="co"> CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts), then split only at snapped WFRC road model-node positions to produce the raw building-block pieces for true-shape link conflation. CC attachment and external station nodes are excluded from this split (folded in separately later). Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks.</span></span>
 <span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="an">author:</span></span>
 <span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="co"> - name: Pukar Bhandari</span></span>
 <span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="co">   email: pukar.bhandari@wfrc.utah.gov</span></span>
@@ -1440,166 +1417,138 @@ Output: 12,809 pieces → link_pieces.gpkg
 <span id="cb27-226"><a href="#cb27-226" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part C — Split at Snapped Nodes</span></span>
 <span id="cb27-227"><a href="#cb27-227" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb27-228"><a href="#cb27-228" aria-hidden="true" tabindex="-1"></a><span class="in">`gdf_fulldissolve`</span> (Part A) — not the original <span class="in">`CandidateTDMRoadLinks`</span> rows —</span>
-<span id="cb27-229"><a href="#cb27-229" aria-hidden="true" tabindex="-1"></a>is split at every model-node snap point, every CC attachment snap point, and</span>
-<span id="cb27-230"><a href="#cb27-230" aria-hidden="true" tabindex="-1"></a>every external station snap point, so piece boundaries come only from</span>
-<span id="cb27-231"><a href="#cb27-231" aria-hidden="true" tabindex="-1"></a>snapping, never from incidental arcpy junction cuts. Points that project to</span>
-<span id="cb27-232"><a href="#cb27-232" aria-hidden="true" tabindex="-1"></a>within 0.1 mm of a component's existing endpoint are skipped (already a</span>
-<span id="cb27-233"><a href="#cb27-233" aria-hidden="true" tabindex="-1"></a>boundary). After all splits, each resulting piece is bounded exclusively by:</span>
-<span id="cb27-234"><a href="#cb27-234" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a snapped model node position,</span>
-<span id="cb27-235"><a href="#cb27-235" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a snapped CC attachment node position,</span>
-<span id="cb27-236"><a href="#cb27-236" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a snapped external station node position, or</span>
-<span id="cb27-237"><a href="#cb27-237" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a genuine branch point already present in <span class="in">`gdf_fulldissolve`</span>.</span>
-<span id="cb27-238"><a href="#cb27-238" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-239"><a href="#cb27-239" aria-hidden="true" tabindex="-1"></a>No lineage keys are carried through this split (<span class="in">`id_cols=()`</span>) — a redissolved</span>
-<span id="cb27-240"><a href="#cb27-240" aria-hidden="true" tabindex="-1"></a>row no longer maps 1:1 to a single original <span class="in">`OBJECTID`</span>. Lineage/display</span>
-<span id="cb27-241"><a href="#cb27-241" aria-hidden="true" tabindex="-1"></a>attributes are reattached afterward via midpoint join (Part D).</span>
-<span id="cb27-242"><a href="#cb27-242" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-243"><a href="#cb27-243" aria-hidden="true" tabindex="-1"></a>A CC or external-station node can share its <span class="in">`N`</span> with a node that the main</span>
-<span id="cb27-244"><a href="#cb27-244" aria-hidden="true" tabindex="-1"></a>greedy snapper already resolved to a real road-junction position (e.g. a</span>
-<span id="cb27-245"><a href="#cb27-245" aria-hidden="true" tabindex="-1"></a>zone centroid loaded at an actual intersection). <span class="in">`03_transfer_attributes.qmd`</span></span>
-<span id="cb27-246"><a href="#cb27-246" aria-hidden="true" tabindex="-1"></a>already gives the road-snapped position precedence for that <span class="in">`N`</span> and discards</span>
-<span id="cb27-247"><a href="#cb27-247" aria-hidden="true" tabindex="-1"></a>the CC/EXT coordinate — but <span class="in">`snap_cc_nodes()`</span> computes the CC/EXT position</span>
-<span id="cb27-248"><a href="#cb27-248" aria-hidden="true" tabindex="-1"></a>independently (nearest-line projection from the node's own raw coordinate),</span>
-<span id="cb27-249"><a href="#cb27-249" aria-hidden="true" tabindex="-1"></a>so it rarely lands exactly on the road-snapped point. Left unfiltered, this</span>
-<span id="cb27-250"><a href="#cb27-250" aria-hidden="true" tabindex="-1"></a>produces a redundant split a few metres from the real node: a sliver piece</span>
-<span id="cb27-251"><a href="#cb27-251" aria-hidden="true" tabindex="-1"></a>whose far end is an orphaned coordinate <span class="in">`coord_to_node`</span> will never resolve,</span>
-<span id="cb27-252"><a href="#cb27-252" aria-hidden="true" tabindex="-1"></a>showing up downstream as spurious <span class="in">`a_only`</span>/<span class="in">`b_only`</span>. Nodes already road-</span>
-<span id="cb27-253"><a href="#cb27-253" aria-hidden="true" tabindex="-1"></a>snapped are excluded here so their <span class="in">`N`</span> contributes exactly one split point</span>
-<span id="cb27-254"><a href="#cb27-254" aria-hidden="true" tabindex="-1"></a>(the road one), not two.</span>
-<span id="cb27-255"><a href="#cb27-255" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-258"><a href="#cb27-258" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb27-259"><a href="#cb27-259" aria-hidden="true" tabindex="-1"></a>road_snapped_ids <span class="op">=</span> <span class="bu">set</span>(gdf_nodes_road.loc[gdf_nodes_road[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>), <span class="st">"N"</span>].astype(<span class="bu">int</span>))</span>
-<span id="cb27-260"><a href="#cb27-260" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-261"><a href="#cb27-261" aria-hidden="true" tabindex="-1"></a>cc_resolved <span class="op">=</span> gdf_cc_snapped[</span>
-<span id="cb27-262"><a href="#cb27-262" aria-hidden="true" tabindex="-1"></a>    gdf_cc_snapped[<span class="st">"snap_resolved"</span>] <span class="op">&amp;</span> <span class="op">~</span>gdf_cc_snapped[<span class="st">"N"</span>].astype(<span class="bu">int</span>).isin(road_snapped_ids)</span>
-<span id="cb27-263"><a href="#cb27-263" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb27-264"><a href="#cb27-264" aria-hidden="true" tabindex="-1"></a>cc_snap_points <span class="op">=</span> [</span>
-<span id="cb27-265"><a href="#cb27-265" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_snap"</span>], row[<span class="st">"y_snap"</span>])</span>
-<span id="cb27-266"><a href="#cb27-266" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> cc_resolved.iterrows()</span>
-<span id="cb27-267"><a href="#cb27-267" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb27-268"><a href="#cb27-268" aria-hidden="true" tabindex="-1"></a>ext_resolved <span class="op">=</span> gdf_ext_snapped[</span>
-<span id="cb27-269"><a href="#cb27-269" aria-hidden="true" tabindex="-1"></a>    gdf_ext_snapped[<span class="st">"snap_resolved"</span>] <span class="op">&amp;</span> <span class="op">~</span>gdf_ext_snapped[<span class="st">"N"</span>].astype(<span class="bu">int</span>).isin(road_snapped_ids)</span>
-<span id="cb27-270"><a href="#cb27-270" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb27-271"><a href="#cb27-271" aria-hidden="true" tabindex="-1"></a>ext_snap_points <span class="op">=</span> [</span>
-<span id="cb27-272"><a href="#cb27-272" aria-hidden="true" tabindex="-1"></a>    Point(row[<span class="st">"x_snap"</span>], row[<span class="st">"y_snap"</span>])</span>
-<span id="cb27-273"><a href="#cb27-273" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _, row <span class="kw">in</span> ext_resolved.iterrows()</span>
-<span id="cb27-274"><a href="#cb27-274" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb27-275"><a href="#cb27-275" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact <span class="op">+</span> cc_snap_points <span class="op">+</span> ext_snap_points</span>
-<span id="cb27-276"><a href="#cb27-276" aria-hidden="true" tabindex="-1"></a>n_cc_dual <span class="op">=</span> <span class="bu">int</span>((gdf_cc_snapped[<span class="st">"snap_resolved"</span>] <span class="op">&amp;</span> gdf_cc_snapped[<span class="st">"N"</span>].astype(<span class="bu">int</span>).isin(road_snapped_ids)).<span class="bu">sum</span>())</span>
-<span id="cb27-277"><a href="#cb27-277" aria-hidden="true" tabindex="-1"></a>n_ext_dual <span class="op">=</span> <span class="bu">int</span>((gdf_ext_snapped[<span class="st">"snap_resolved"</span>] <span class="op">&amp;</span> gdf_ext_snapped[<span class="st">"N"</span>].astype(<span class="bu">int</span>).isin(road_snapped_ids)).<span class="bu">sum</span>())</span>
-<span id="cb27-278"><a href="#cb27-278" aria-hidden="true" tabindex="-1"></a>n_cc_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_cc_snapped) <span class="op">-</span> gdf_cc_snapped[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
-<span id="cb27-279"><a href="#cb27-279" aria-hidden="true" tabindex="-1"></a>n_ext_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_ext_snapped) <span class="op">-</span> gdf_ext_snapped[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
-<span id="cb27-280"><a href="#cb27-280" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
-<span id="cb27-281"><a href="#cb27-281" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Split points: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss"> (model nodes) + "</span></span>
-<span id="cb27-282"><a href="#cb27-282" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(cc_snap_points)<span class="sc">:,}</span><span class="ss"> (CC attachment, </span><span class="sc">{</span>n_cc_unresolved<span class="sc">:,}</span><span class="ss"> unresolved + "</span></span>
-<span id="cb27-283"><a href="#cb27-283" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>n_cc_dual<span class="sc">:,}</span><span class="ss"> dual-identity with a road node excluded) + "</span></span>
-<span id="cb27-284"><a href="#cb27-284" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(ext_snap_points)<span class="sc">:,}</span><span class="ss"> (external station, </span><span class="sc">{</span>n_ext_unresolved<span class="sc">:,}</span><span class="ss"> unresolved + "</span></span>
-<span id="cb27-285"><a href="#cb27-285" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>n_ext_dual<span class="sc">:,}</span><span class="ss"> dual-identity with a road node excluded) "</span></span>
-<span id="cb27-286"><a href="#cb27-286" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"= </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> total"</span></span>
-<span id="cb27-287"><a href="#cb27-287" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb27-288"><a href="#cb27-288" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb27-229"><a href="#cb27-229" aria-hidden="true" tabindex="-1"></a>is split only at snapped road model-node positions, so piece boundaries come</span>
+<span id="cb27-230"><a href="#cb27-230" aria-hidden="true" tabindex="-1"></a>exclusively from road-node snapping, never from incidental arcpy junction</span>
+<span id="cb27-231"><a href="#cb27-231" aria-hidden="true" tabindex="-1"></a>cuts. Points that project to within 0.1 mm of a component's existing</span>
+<span id="cb27-232"><a href="#cb27-232" aria-hidden="true" tabindex="-1"></a>endpoint are skipped (already a boundary). After all splits, each resulting</span>
+<span id="cb27-233"><a href="#cb27-233" aria-hidden="true" tabindex="-1"></a>piece is bounded exclusively by:</span>
+<span id="cb27-234"><a href="#cb27-234" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a snapped model node position, or</span>
+<span id="cb27-235"><a href="#cb27-235" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a genuine branch point already present in <span class="in">`gdf_fulldissolve`</span>.</span>
+<span id="cb27-236"><a href="#cb27-236" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-237"><a href="#cb27-237" aria-hidden="true" tabindex="-1"></a>CC attachment nodes (<span class="in">`cc_nodes_snapped`</span>) and external station nodes</span>
+<span id="cb27-238"><a href="#cb27-238" aria-hidden="true" tabindex="-1"></a>(<span class="in">`ext_nodes_snapped`</span>) are deliberately **not** used as split points here.</span>
+<span id="cb27-239"><a href="#cb27-239" aria-hidden="true" tabindex="-1"></a><span class="in">`snap_cc_nodes()`</span> computes their position independently (nearest-line</span>
+<span id="cb27-240"><a href="#cb27-240" aria-hidden="true" tabindex="-1"></a>projection from the node's own raw coordinate, uncapped), which can land far</span>
+<span id="cb27-241"><a href="#cb27-241" aria-hidden="true" tabindex="-1"></a>from the node's true location — e.g. a TAZ centroid connector projecting</span>
+<span id="cb27-242"><a href="#cb27-242" aria-hidden="true" tabindex="-1"></a>330 m onto an unrelated freeway mainline — planting a phantom split in the</span>
+<span id="cb27-243"><a href="#cb27-243" aria-hidden="true" tabindex="-1"></a>middle of an otherwise-continuous physical piece. Centroid connector and</span>
+<span id="cb27-244"><a href="#cb27-244" aria-hidden="true" tabindex="-1"></a>external station nodes will be split into the true-shape network as a</span>
+<span id="cb27-245"><a href="#cb27-245" aria-hidden="true" tabindex="-1"></a>separate, later pass instead of being folded into this one.</span>
+<span id="cb27-246"><a href="#cb27-246" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-247"><a href="#cb27-247" aria-hidden="true" tabindex="-1"></a>No lineage keys are carried through this split (<span class="in">`id_cols=()`</span>) — a redissolved</span>
+<span id="cb27-248"><a href="#cb27-248" aria-hidden="true" tabindex="-1"></a>row no longer maps 1:1 to a single original <span class="in">`OBJECTID`</span>. Lineage/display</span>
+<span id="cb27-249"><a href="#cb27-249" aria-hidden="true" tabindex="-1"></a>attributes are reattached afterward via midpoint join (Part D).</span>
+<span id="cb27-250"><a href="#cb27-250" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-253"><a href="#cb27-253" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb27-254"><a href="#cb27-254" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact</span>
+<span id="cb27-255"><a href="#cb27-255" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb27-256"><a href="#cb27-256" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Split points: </span><span class="sc">{</span><span class="bu">len</span>(snap_points_exact)<span class="sc">:,}</span><span class="ss"> (model nodes). "</span></span>
+<span id="cb27-257"><a href="#cb27-257" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"CC attachment (</span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss">) and external station "</span></span>
+<span id="cb27-258"><a href="#cb27-258" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"(</span><span class="sc">{</span><span class="bu">len</span>(gdf_ext_snapped)<span class="sc">:,}</span><span class="ss">) nodes excluded — split separately later."</span></span>
+<span id="cb27-259"><a href="#cb27-259" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb27-260"><a href="#cb27-260" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb27-261"><a href="#cb27-261" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-264"><a href="#cb27-264" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb27-265"><a href="#cb27-265" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_fulldissolve)<span class="sc">:,}</span><span class="ss"> redissolved chains at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
+<span id="cb27-266"><a href="#cb27-266" aria-hidden="true" tabindex="-1"></a>gdf_pieces_split <span class="op">=</span> split_candidate_links(gdf_fulldissolve, all_snap_points, id_cols<span class="op">=</span>())</span>
+<span id="cb27-267"><a href="#cb27-267" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces after split: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces_split)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb27-268"><a href="#cb27-268" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb27-269"><a href="#cb27-269" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-270"><a href="#cb27-270" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb27-271"><a href="#cb27-271" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-272"><a href="#cb27-272" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part D — Build Pieces Layer, Reattach Lineage, and Export</span></span>
+<span id="cb27-273"><a href="#cb27-273" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-274"><a href="#cb27-274" aria-hidden="true" tabindex="-1"></a>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for</span>
+<span id="cb27-275"><a href="#cb27-275" aria-hidden="true" tabindex="-1"></a>matching against <span class="in">`snapped_x_round / snapped_y_round`</span> in the next stage). Since</span>
+<span id="cb27-276"><a href="#cb27-276" aria-hidden="true" tabindex="-1"></a>splitting now runs against the redissolved <span class="in">`gdf_fulldissolve`</span> layer, a piece</span>
+<span id="cb27-277"><a href="#cb27-277" aria-hidden="true" tabindex="-1"></a>no longer maps 1:1 to a single original <span class="in">`CandidateTDMRoadLinks`</span> <span class="in">`OBJECTID`</span> —</span>
+<span id="cb27-278"><a href="#cb27-278" aria-hidden="true" tabindex="-1"></a>lineage/display attributes (<span class="in">`TRANSFER_COLS`</span>) are reattached via the same</span>
+<span id="cb27-279"><a href="#cb27-279" aria-hidden="true" tabindex="-1"></a>midpoint-nearest-join approach <span class="in">`00_data_preparation.qmd`</span> uses to transfer</span>
+<span id="cb27-280"><a href="#cb27-280" aria-hidden="true" tabindex="-1"></a>attributes from raw centerlines onto <span class="in">`CandidateTDMRoadLinks`</span> in the first</span>
+<span id="cb27-281"><a href="#cb27-281" aria-hidden="true" tabindex="-1"></a>place, this time from <span class="in">`CandidateTDMRoadLinks`</span> onto each piece.</span>
+<span id="cb27-282"><a href="#cb27-282" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-285"><a href="#cb27-285" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb27-286"><a href="#cb27-286" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
+<span id="cb27-287"><a href="#cb27-287" aria-hidden="true" tabindex="-1"></a>start_coords <span class="op">=</span> np.array([p.coords[<span class="dv">0</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
+<span id="cb27-288"><a href="#cb27-288" aria-hidden="true" tabindex="-1"></a>end_coords   <span class="op">=</span> np.array([p.coords[<span class="op">-</span><span class="dv">1</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
 <span id="cb27-289"><a href="#cb27-289" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-292"><a href="#cb27-292" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb27-293"><a href="#cb27-293" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_fulldissolve)<span class="sc">:,}</span><span class="ss"> redissolved chains at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
-<span id="cb27-294"><a href="#cb27-294" aria-hidden="true" tabindex="-1"></a>gdf_pieces_split <span class="op">=</span> split_candidate_links(gdf_fulldissolve, all_snap_points, id_cols<span class="op">=</span>())</span>
-<span id="cb27-295"><a href="#cb27-295" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces after split: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces_split)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb27-296"><a href="#cb27-296" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb27-297"><a href="#cb27-297" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-298"><a href="#cb27-298" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb27-299"><a href="#cb27-299" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-300"><a href="#cb27-300" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part D — Build Pieces Layer, Reattach Lineage, and Export</span></span>
-<span id="cb27-301"><a href="#cb27-301" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-302"><a href="#cb27-302" aria-hidden="true" tabindex="-1"></a>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for</span>
-<span id="cb27-303"><a href="#cb27-303" aria-hidden="true" tabindex="-1"></a>matching against <span class="in">`snapped_x_round / snapped_y_round`</span> in the next stage). Since</span>
-<span id="cb27-304"><a href="#cb27-304" aria-hidden="true" tabindex="-1"></a>splitting now runs against the redissolved <span class="in">`gdf_fulldissolve`</span> layer, a piece</span>
-<span id="cb27-305"><a href="#cb27-305" aria-hidden="true" tabindex="-1"></a>no longer maps 1:1 to a single original <span class="in">`CandidateTDMRoadLinks`</span> <span class="in">`OBJECTID`</span> —</span>
-<span id="cb27-306"><a href="#cb27-306" aria-hidden="true" tabindex="-1"></a>lineage/display attributes (<span class="in">`TRANSFER_COLS`</span>) are reattached via the same</span>
-<span id="cb27-307"><a href="#cb27-307" aria-hidden="true" tabindex="-1"></a>midpoint-nearest-join approach <span class="in">`00_data_preparation.qmd`</span> uses to transfer</span>
-<span id="cb27-308"><a href="#cb27-308" aria-hidden="true" tabindex="-1"></a>attributes from raw centerlines onto <span class="in">`CandidateTDMRoadLinks`</span> in the first</span>
-<span id="cb27-309"><a href="#cb27-309" aria-hidden="true" tabindex="-1"></a>place, this time from <span class="in">`CandidateTDMRoadLinks`</span> onto each piece.</span>
-<span id="cb27-310"><a href="#cb27-310" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-313"><a href="#cb27-313" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb27-314"><a href="#cb27-314" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
-<span id="cb27-315"><a href="#cb27-315" aria-hidden="true" tabindex="-1"></a>start_coords <span class="op">=</span> np.array([p.coords[<span class="dv">0</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
-<span id="cb27-316"><a href="#cb27-316" aria-hidden="true" tabindex="-1"></a>end_coords   <span class="op">=</span> np.array([p.coords[<span class="op">-</span><span class="dv">1</span>] <span class="cf">for</span> p <span class="kw">in</span> pieces])</span>
-<span id="cb27-317"><a href="#cb27-317" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-318"><a href="#cb27-318" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gpd.GeoDataFrame(</span>
-<span id="cb27-319"><a href="#cb27-319" aria-hidden="true" tabindex="-1"></a>    {</span>
-<span id="cb27-320"><a href="#cb27-320" aria-hidden="true" tabindex="-1"></a>        <span class="st">"piece_id"</span>: np.arange(<span class="bu">len</span>(pieces)),</span>
-<span id="cb27-321"><a href="#cb27-321" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
-<span id="cb27-322"><a href="#cb27-322" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
-<span id="cb27-323"><a href="#cb27-323" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
-<span id="cb27-324"><a href="#cb27-324" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
-<span id="cb27-325"><a href="#cb27-325" aria-hidden="true" tabindex="-1"></a>        <span class="st">"length_m"</span>: np.array([p.length <span class="cf">for</span> p <span class="kw">in</span> pieces]),</span>
-<span id="cb27-326"><a href="#cb27-326" aria-hidden="true" tabindex="-1"></a>        <span class="st">"geometry"</span>: pieces,</span>
-<span id="cb27-327"><a href="#cb27-327" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb27-328"><a href="#cb27-328" aria-hidden="true" tabindex="-1"></a>    crs<span class="op">=</span>CRS_UTM,</span>
-<span id="cb27-329"><a href="#cb27-329" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb27-330"><a href="#cb27-330" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb27-331"><a href="#cb27-331" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-332"><a href="#cb27-332" aria-hidden="true" tabindex="-1"></a><span class="in">`CandidateTDMRoadLinks`</span> contains a small number of standalone sub-centimetre</span>
-<span id="cb27-333"><a href="#cb27-333" aria-hidden="true" tabindex="-1"></a>"stub" features (max ~6 mm, confirmed by direct <span class="in">`OBJECTID`</span> lookup) — digitizing</span>
-<span id="cb27-334"><a href="#cb27-334" aria-hidden="true" tabindex="-1"></a>artifacts, not anything this pipeline creates. Because <span class="in">`split_candidate_links`</span></span>
-<span id="cb27-335"><a href="#cb27-335" aria-hidden="true" tabindex="-1"></a>never cuts a component shorter than its 0.5 m <span class="in">`_EPS`</span>, each stub passes through</span>
-<span id="cb27-336"><a href="#cb27-336" aria-hidden="true" tabindex="-1"></a>whole as its own piece; since both of its (near-identical) endpoints round to</span>
-<span id="cb27-337"><a href="#cb27-337" aria-hidden="true" tabindex="-1"></a>the same snapped-node coordinate, Stage 3 later resolves <span class="in">`A_piece == B_piece`</span></span>
-<span id="cb27-338"><a href="#cb27-338" aria-hidden="true" tabindex="-1"></a>for it — a spurious self-loop. Genuine physical loop roads (cloverleaf/collector</span>
-<span id="cb27-339"><a href="#cb27-339" aria-hidden="true" tabindex="-1"></a>loops that legitimately start and end at the same point) are tens of metres to</span>
-<span id="cb27-340"><a href="#cb27-340" aria-hidden="true" tabindex="-1"></a>several kilometres long, so a <span class="in">`length_m &lt; 1 m`</span> gate removes only the artifacts.</span>
-<span id="cb27-341"><a href="#cb27-341" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-344"><a href="#cb27-344" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb27-345"><a href="#cb27-345" aria-hidden="true" tabindex="-1"></a>n_before_drop <span class="op">=</span> <span class="bu">len</span>(gdf_pieces)</span>
-<span id="cb27-346"><a href="#cb27-346" aria-hidden="true" tabindex="-1"></a>degenerate_mask <span class="op">=</span> (</span>
-<span id="cb27-347"><a href="#cb27-347" aria-hidden="true" tabindex="-1"></a>    (gdf_pieces[<span class="st">"x_start"</span>] <span class="op">==</span> gdf_pieces[<span class="st">"x_end"</span>])</span>
-<span id="cb27-348"><a href="#cb27-348" aria-hidden="true" tabindex="-1"></a>    <span class="op">&amp;</span> (gdf_pieces[<span class="st">"y_start"</span>] <span class="op">==</span> gdf_pieces[<span class="st">"y_end"</span>])</span>
-<span id="cb27-349"><a href="#cb27-349" aria-hidden="true" tabindex="-1"></a>    <span class="op">&amp;</span> (gdf_pieces[<span class="st">"length_m"</span>] <span class="op">&lt;</span> <span class="fl">1.0</span>)</span>
-<span id="cb27-350"><a href="#cb27-350" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb27-351"><a href="#cb27-351" aria-hidden="true" tabindex="-1"></a>n_degenerate <span class="op">=</span> <span class="bu">int</span>(degenerate_mask.<span class="bu">sum</span>())</span>
-<span id="cb27-352"><a href="#cb27-352" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gdf_pieces[<span class="op">~</span>degenerate_mask].reset_index(drop<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb27-353"><a href="#cb27-353" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
-<span id="cb27-354"><a href="#cb27-354" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Dropped </span><span class="sc">{</span>n_degenerate<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span>n_before_drop<span class="sc">:,}</span><span class="ss"> degenerate zero-length pieces "</span></span>
-<span id="cb27-355"><a href="#cb27-355" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"(start == end, length &lt; 1 m) — pre-existing near-duplicate-vertex stub "</span></span>
-<span id="cb27-356"><a href="#cb27-356" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"features already present as standalone rows in CandidateTDMRoadLinks, "</span></span>
-<span id="cb27-357"><a href="#cb27-357" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"not created by this pipeline. Real closed-loop roads (cloverleaf/collector "</span></span>
-<span id="cb27-358"><a href="#cb27-358" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"loops, tens of metres to several km long) are left untouched — the length "</span></span>
-<span id="cb27-359"><a href="#cb27-359" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"gate cleanly separates the two populations with a &gt;3,000x margin."</span></span>
-<span id="cb27-360"><a href="#cb27-360" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb27-361"><a href="#cb27-361" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-362"><a href="#cb27-362" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> transfer_attributes_by_midpoint(gdf_pieces, gdf_centerlines, TRANSFER_COLS)</span>
-<span id="cb27-363"><a href="#cb27-363" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-364"><a href="#cb27-364" aria-hidden="true" tabindex="-1"></a>n_null <span class="op">=</span> gdf_pieces[TRANSFER_COLS].isna().<span class="bu">any</span>(axis<span class="op">=</span><span class="dv">1</span>).<span class="bu">sum</span>()</span>
-<span id="cb27-365"><a href="#cb27-365" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces with a null transferred attribute: </span><span class="sc">{</span>n_null<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb27-290"><a href="#cb27-290" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gpd.GeoDataFrame(</span>
+<span id="cb27-291"><a href="#cb27-291" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb27-292"><a href="#cb27-292" aria-hidden="true" tabindex="-1"></a>        <span class="st">"piece_id"</span>: np.arange(<span class="bu">len</span>(pieces)),</span>
+<span id="cb27-293"><a href="#cb27-293" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
+<span id="cb27-294"><a href="#cb27-294" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_start"</span>:  np.<span class="bu">round</span>(start_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
+<span id="cb27-295"><a href="#cb27-295" aria-hidden="true" tabindex="-1"></a>        <span class="st">"x_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">0</span>], <span class="dv">2</span>),</span>
+<span id="cb27-296"><a href="#cb27-296" aria-hidden="true" tabindex="-1"></a>        <span class="st">"y_end"</span>:    np.<span class="bu">round</span>(end_coords[:, <span class="dv">1</span>], <span class="dv">2</span>),</span>
+<span id="cb27-297"><a href="#cb27-297" aria-hidden="true" tabindex="-1"></a>        <span class="st">"length_m"</span>: np.array([p.length <span class="cf">for</span> p <span class="kw">in</span> pieces]),</span>
+<span id="cb27-298"><a href="#cb27-298" aria-hidden="true" tabindex="-1"></a>        <span class="st">"geometry"</span>: pieces,</span>
+<span id="cb27-299"><a href="#cb27-299" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb27-300"><a href="#cb27-300" aria-hidden="true" tabindex="-1"></a>    crs<span class="op">=</span>CRS_UTM,</span>
+<span id="cb27-301"><a href="#cb27-301" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb27-302"><a href="#cb27-302" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb27-303"><a href="#cb27-303" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-304"><a href="#cb27-304" aria-hidden="true" tabindex="-1"></a><span class="in">`CandidateTDMRoadLinks`</span> contains a small number of standalone sub-centimetre</span>
+<span id="cb27-305"><a href="#cb27-305" aria-hidden="true" tabindex="-1"></a>"stub" features (max ~6 mm, confirmed by direct <span class="in">`OBJECTID`</span> lookup) — digitizing</span>
+<span id="cb27-306"><a href="#cb27-306" aria-hidden="true" tabindex="-1"></a>artifacts, not anything this pipeline creates. Because <span class="in">`split_candidate_links`</span></span>
+<span id="cb27-307"><a href="#cb27-307" aria-hidden="true" tabindex="-1"></a>never cuts a component shorter than its 0.5 m <span class="in">`_EPS`</span>, each stub passes through</span>
+<span id="cb27-308"><a href="#cb27-308" aria-hidden="true" tabindex="-1"></a>whole as its own piece; since both of its (near-identical) endpoints round to</span>
+<span id="cb27-309"><a href="#cb27-309" aria-hidden="true" tabindex="-1"></a>the same snapped-node coordinate, Stage 3 later resolves <span class="in">`A_piece == B_piece`</span></span>
+<span id="cb27-310"><a href="#cb27-310" aria-hidden="true" tabindex="-1"></a>for it — a spurious self-loop. Genuine physical loop roads (cloverleaf/collector</span>
+<span id="cb27-311"><a href="#cb27-311" aria-hidden="true" tabindex="-1"></a>loops that legitimately start and end at the same point) are tens of metres to</span>
+<span id="cb27-312"><a href="#cb27-312" aria-hidden="true" tabindex="-1"></a>several kilometres long, so a <span class="in">`length_m &lt; 1 m`</span> gate removes only the artifacts.</span>
+<span id="cb27-313"><a href="#cb27-313" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-316"><a href="#cb27-316" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb27-317"><a href="#cb27-317" aria-hidden="true" tabindex="-1"></a>n_before_drop <span class="op">=</span> <span class="bu">len</span>(gdf_pieces)</span>
+<span id="cb27-318"><a href="#cb27-318" aria-hidden="true" tabindex="-1"></a>degenerate_mask <span class="op">=</span> (</span>
+<span id="cb27-319"><a href="#cb27-319" aria-hidden="true" tabindex="-1"></a>    (gdf_pieces[<span class="st">"x_start"</span>] <span class="op">==</span> gdf_pieces[<span class="st">"x_end"</span>])</span>
+<span id="cb27-320"><a href="#cb27-320" aria-hidden="true" tabindex="-1"></a>    <span class="op">&amp;</span> (gdf_pieces[<span class="st">"y_start"</span>] <span class="op">==</span> gdf_pieces[<span class="st">"y_end"</span>])</span>
+<span id="cb27-321"><a href="#cb27-321" aria-hidden="true" tabindex="-1"></a>    <span class="op">&amp;</span> (gdf_pieces[<span class="st">"length_m"</span>] <span class="op">&lt;</span> <span class="fl">1.0</span>)</span>
+<span id="cb27-322"><a href="#cb27-322" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb27-323"><a href="#cb27-323" aria-hidden="true" tabindex="-1"></a>n_degenerate <span class="op">=</span> <span class="bu">int</span>(degenerate_mask.<span class="bu">sum</span>())</span>
+<span id="cb27-324"><a href="#cb27-324" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gdf_pieces[<span class="op">~</span>degenerate_mask].reset_index(drop<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb27-325"><a href="#cb27-325" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb27-326"><a href="#cb27-326" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Dropped </span><span class="sc">{</span>n_degenerate<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span>n_before_drop<span class="sc">:,}</span><span class="ss"> degenerate zero-length pieces "</span></span>
+<span id="cb27-327"><a href="#cb27-327" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"(start == end, length &lt; 1 m) — pre-existing near-duplicate-vertex stub "</span></span>
+<span id="cb27-328"><a href="#cb27-328" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"features already present as standalone rows in CandidateTDMRoadLinks, "</span></span>
+<span id="cb27-329"><a href="#cb27-329" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"not created by this pipeline. Real closed-loop roads (cloverleaf/collector "</span></span>
+<span id="cb27-330"><a href="#cb27-330" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"loops, tens of metres to several km long) are left untouched — the length "</span></span>
+<span id="cb27-331"><a href="#cb27-331" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"gate cleanly separates the two populations with a &gt;3,000x margin."</span></span>
+<span id="cb27-332"><a href="#cb27-332" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb27-333"><a href="#cb27-333" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-334"><a href="#cb27-334" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> transfer_attributes_by_midpoint(gdf_pieces, gdf_centerlines, TRANSFER_COLS)</span>
+<span id="cb27-335"><a href="#cb27-335" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-336"><a href="#cb27-336" aria-hidden="true" tabindex="-1"></a>n_null <span class="op">=</span> gdf_pieces[TRANSFER_COLS].isna().<span class="bu">any</span>(axis<span class="op">=</span><span class="dv">1</span>).<span class="bu">sum</span>()</span>
+<span id="cb27-337"><a href="#cb27-337" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces with a null transferred attribute: </span><span class="sc">{</span>n_null<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb27-338"><a href="#cb27-338" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-339"><a href="#cb27-339" aria-hidden="true" tabindex="-1"></a>PATHS[<span class="st">"out_link_pieces"</span>].parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb27-340"><a href="#cb27-340" aria-hidden="true" tabindex="-1"></a>gdf_pieces.to_file(PATHS[<span class="st">"out_link_pieces"</span>], driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
+<span id="cb27-341"><a href="#cb27-341" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exported </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb27-342"><a href="#cb27-342" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb27-343"><a href="#cb27-343" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-344"><a href="#cb27-344" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb27-345"><a href="#cb27-345" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-346"><a href="#cb27-346" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb27-347"><a href="#cb27-347" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-350"><a href="#cb27-350" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb27-351"><a href="#cb27-351" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
+<span id="cb27-352"><a href="#cb27-352" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Piece length distribution (m):"</span>)</span>
+<span id="cb27-353"><a href="#cb27-353" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Min:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">min</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb27-354"><a href="#cb27-354" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Median: </span><span class="sc">{</span>lengths<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb27-355"><a href="#cb27-355" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  P90:    </span><span class="sc">{</span>lengths<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb27-356"><a href="#cb27-356" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Max:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
+<span id="cb27-357"><a href="#cb27-357" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb27-358"><a href="#cb27-358" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Input:  </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components"</span>)</span>
+<span id="cb27-359"><a href="#cb27-359" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span>n_road_snapped<span class="sc">:,}</span><span class="ss"> snapped road nodes (</span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> coordinate-resolved)"</span>)</span>
+<span id="cb27-360"><a href="#cb27-360" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes snapped"</span>)</span>
+<span id="cb27-361"><a href="#cb27-361" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_ext_snapped)<span class="sc">:,}</span><span class="ss"> external station nodes snapped"</span>)</span>
+<span id="cb27-362"><a href="#cb27-362" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Output: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb27-363"><a href="#cb27-363" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes → </span><span class="sc">{</span>PATHS[<span class="st">'in_node_snapped'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss"> (layer: cc_nodes_snapped)"</span>)</span>
+<span id="cb27-364"><a href="#cb27-364" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_ext_snapped)<span class="sc">:,}</span><span class="ss"> external station nodes → </span><span class="sc">{</span>PATHS[<span class="st">'in_node_snapped'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss"> (layer: ext_nodes_snapped)"</span>)</span>
+<span id="cb27-365"><a href="#cb27-365" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb27-366"><a href="#cb27-366" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-367"><a href="#cb27-367" aria-hidden="true" tabindex="-1"></a>PATHS[<span class="st">"out_link_pieces"</span>].parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb27-368"><a href="#cb27-368" aria-hidden="true" tabindex="-1"></a>gdf_pieces.to_file(PATHS[<span class="st">"out_link_pieces"</span>], driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
-<span id="cb27-369"><a href="#cb27-369" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exported </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb27-370"><a href="#cb27-370" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb27-371"><a href="#cb27-371" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-372"><a href="#cb27-372" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb27-373"><a href="#cb27-373" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-374"><a href="#cb27-374" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
-<span id="cb27-375"><a href="#cb27-375" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-378"><a href="#cb27-378" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb27-379"><a href="#cb27-379" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
-<span id="cb27-380"><a href="#cb27-380" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Piece length distribution (m):"</span>)</span>
-<span id="cb27-381"><a href="#cb27-381" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Min:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">min</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb27-382"><a href="#cb27-382" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Median: </span><span class="sc">{</span>lengths<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb27-383"><a href="#cb27-383" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  P90:    </span><span class="sc">{</span>lengths<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb27-384"><a href="#cb27-384" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Max:    </span><span class="sc">{</span>lengths<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
-<span id="cb27-385"><a href="#cb27-385" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
-<span id="cb27-386"><a href="#cb27-386" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Input:  </span><span class="sc">{</span><span class="bu">len</span>(gdf_centerlines)<span class="sc">:,}</span><span class="ss"> candidate components"</span>)</span>
-<span id="cb27-387"><a href="#cb27-387" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span>n_road_snapped<span class="sc">:,}</span><span class="ss"> snapped road nodes (</span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> coordinate-resolved)"</span>)</span>
-<span id="cb27-388"><a href="#cb27-388" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes snapped"</span>)</span>
-<span id="cb27-389"><a href="#cb27-389" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_ext_snapped)<span class="sc">:,}</span><span class="ss"> external station nodes snapped"</span>)</span>
-<span id="cb27-390"><a href="#cb27-390" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Output: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> pieces → </span><span class="sc">{</span>PATHS[<span class="st">'out_link_pieces'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb27-391"><a href="#cb27-391" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_snapped)<span class="sc">:,}</span><span class="ss"> CC attachment nodes → </span><span class="sc">{</span>PATHS[<span class="st">'in_node_snapped'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss"> (layer: cc_nodes_snapped)"</span>)</span>
-<span id="cb27-392"><a href="#cb27-392" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"        </span><span class="sc">{</span><span class="bu">len</span>(gdf_ext_snapped)<span class="sc">:,}</span><span class="ss"> external station nodes → </span><span class="sc">{</span>PATHS[<span class="st">'in_node_snapped'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss"> (layer: ext_nodes_snapped)"</span>)</span>
-<span id="cb27-393"><a href="#cb27-393" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb27-394"><a href="#cb27-394" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-397"><a href="#cb27-397" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb27-398"><a href="#cb27-398" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb27-399"><a href="#cb27-399" aria-hidden="true" tabindex="-1"></a>gdf_pieces.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span>
-<span id="cb27-400"><a href="#cb27-400" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb27-369"><a href="#cb27-369" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb27-370"><a href="#cb27-370" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb27-371"><a href="#cb27-371" aria-hidden="true" tabindex="-1"></a>gdf_pieces.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span>
+<span id="cb27-372"><a href="#cb27-372" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->

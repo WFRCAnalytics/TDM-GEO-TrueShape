@@ -423,7 +423,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="imports" class="level3">
 <h3 class="anchored" data-anchor-id="imports">Imports</h3>
-<div id="6d3c3c41" class="cell" data-execution_count="1">
+<div id="8ce8774b" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -459,7 +459,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="configuration" class="level3">
 <h3 class="anchored" data-anchor-id="configuration">Configuration</h3>
-<div id="3790ef40" class="cell" data-execution_count="2">
+<div id="f0b2fe0b" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -491,7 +491,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="2" class="anchored" data-anchor-id="load-data"><span class="header-section-number">2</span> Load Data</h2>
 <section id="roadway-centerlines" class="level3">
 <h3 class="anchored" data-anchor-id="roadway-centerlines">Roadway Centerlines</h3>
-<div id="6ac77d40" class="cell" data-execution_count="3">
+<div id="b5bf7080" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Cleaned and attributed centerlines produced by 00_data_preparation.qmd.</span></span>
@@ -504,7 +504,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>Centerlines: 7,642 features | CRS: EPSG:26912</code></pre>
 </div>
 </div>
-<div id="aa5cbb56" class="cell" data-execution_count="4">
+<div id="684b321e" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gdf_centerlines.head(<span class="dv">1000</span>).explore()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -513,7 +513,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="network-links-and-nodes" class="level3">
 <h3 class="anchored" data-anchor-id="network-links-and-nodes">Network Links and Nodes</h3>
-<div id="08ddbf6b" class="cell" data-execution_count="5">
+<div id="998db8fc" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Active 2027 links, excluding HOV / Managed Lane / Managed Lane Access (FT 37-39).</span></span>
@@ -533,7 +533,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 Nodes: 21,953</code></pre>
 </div>
 </div>
-<div id="a3506171" class="cell" data-execution_count="6">
+<div id="f9d29832" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>gdf_links.head(<span class="dv">1000</span>).explore()</span>
@@ -544,7 +544,7 @@ Nodes: 21,953</code></pre>
 <section id="gtfs-rail-stops" class="level3">
 <h3 class="anchored" data-anchor-id="gtfs-rail-stops">GTFS Rail Stops</h3>
 <p>Filter GTFS stops to Light Rail (TRAX, route_type 0) and Commuter Rail (FrontRunner, route_type 2) only, walking the routes → trips → stop_times chain.</p>
-<div id="5e5b132c" class="cell" data-execution_count="7">
+<div id="a83325a4" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>feed <span class="op">=</span> gk.read_feed(PATHS[<span class="st">"in_gtfs"</span>], dist_units<span class="op">=</span><span class="st">"km"</span>)</span>
@@ -566,7 +566,7 @@ Nodes: 21,953</code></pre>
 <pre><code>Rail stops: 130 of 5,499 total stops</code></pre>
 </div>
 </div>
-<div id="17a8cd0b" class="cell" data-execution_count="8">
+<div id="3c5e601d" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>gdf_rail_stops.explore()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -581,7 +581,7 @@ Nodes: 21,953</code></pre>
 <h3 class="anchored" data-anchor-id="a1-functional-type-flags">A1 — Functional Type Flags</h3>
 <p><code>nodes_on(gdf_nodes, gdf_links, ft_codes)</code> returns True for any node whose N appears as endpoint A or B of at least one link whose FT code is in <code>ft_codes</code>.</p>
 <p>Flags are <strong>non-exclusive</strong> — a node touching both a freeway and a ramp link will be True for both <code>Freeway</code> and <code>Ramp</code>. Mutual exclusion is enforced later in the topology cascade (§A3).</p>
-<div id="95893eed" class="cell" data-execution_count="9">
+<div id="c7b76ab3" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Three mutually exclusive TDM link classes (2027 network year) ─────────</span></span>
@@ -683,7 +683,7 @@ Links by class — Freeway: 1,874  | Ramp: 1,341  | Surface: 24,886</code></pre>
 <p><code>count_neighbors</code> adds <code>NeighborCount</code> — the number of <strong>distinct</strong> neighboring nodes. This is the topologically correct pseudonode test: <code>LinkCount</code> breaks on bidirectional roads stored as two directional records (a pseudonode appears 4 times → LinkCount=4, not 2), while NeighborCount is always 2 for a true shape vertex regardless of storage convention.</p>
 <p>A node is an <code>is_pseudo</code> shape vertex if and only if all three conditions hold: 1. <strong>NeighborCount == 2</strong> — lies on a single path between two real junctions. 2. <strong>LinkFTCount == 1</strong> — all connected links share the same exact FT code. A node where FT changes (e.g.&nbsp;FT 32→33) has a real physical endpoint in the centerline data and must be sent to snapping. 3. <strong>LinkLNCount == 1</strong> — all connected links carry the same lane count. A lane-drop or lane-add node must not be dissolved away, as doing so would erase a model attribute boundary that affects TDM impedance.</p>
 <p><code>assign_node_directions</code> produces two direction columns (see docstring): - <code>link_directions</code> — freeway-priority cascade; used in passes (a) and (c). - <code>fw_directions</code> — freeway links only, majority-vote; used in pass (b) gore nodes.</p>
-<div id="03bd1b9f" class="cell" data-execution_count="10">
+<div id="4612f502" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes <span class="op">=</span> count_links(gdf_nodes, gdf_links)</span>
@@ -772,7 +772,7 @@ LN-transition nodes sent to snapping (NeighborCount==2, uniform FT, diff LN): 13
 is_topo_passthrough (NeighborCount==2, any FT/LN/class): 9,167  ← Stage 3 dissolve set (broader than is_pseudo by 282)</code></pre>
 </div>
 </div>
-<div id="6afc8444" class="cell" data-execution_count="11">
+<div id="00754d26" class="cell" data-execution_count="11">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Link-count distribution chart</span></span>
@@ -837,7 +837,7 @@ is_topo_passthrough (NeighborCount==2, any FT/LN/class): 9,167  ← Stage 3 diss
 <h3 class="anchored" data-anchor-id="a3-node-topology-classification">A3 — Node Topology Classification</h3>
 <p>Eight mutually-exclusive <code>node_type</code> labels. Transit is evaluated first and takes priority over all road-class combinations. The remaining seven labels derive from the full combinatorics of the (Freeway, Ramp, Surface) flags.</p>
 <p>HOV/managed-lane nodes (FT 37-39) were filtered at load time, so they contribute no flags; those nodes fall to “surface” and are not snapped. Pseudonodes (LinkCount == 2) are shape vertices with no physical counterpart.</p>
-<div id="db94e609" class="cell" data-execution_count="12">
+<div id="cc89abf3" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>no_pseudo <span class="op">=</span> <span class="op">~</span>gdf_nodes[<span class="st">"is_pseudo"</span>]</span>
@@ -882,7 +882,7 @@ fwy           70
 gore_sf       14</code></pre>
 </div>
 </div>
-<div id="037e5b53" class="cell" data-execution_count="13">
+<div id="dd0d87d0" class="cell" data-execution_count="13">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Optional: inspect node flags and directions</span></span>
@@ -1070,7 +1070,7 @@ gore_sf       14</code></pre>
 </div>
 </div>
 </div>
-<div id="14bb16a9" class="cell" data-execution_count="14">
+<div id="6de6d95e" class="cell" data-execution_count="14">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="op">=</span> PATHS[<span class="st">"out_node_classified"</span>]</span>
@@ -1090,7 +1090,7 @@ gore_sf       14</code></pre>
 <p>The endpoint layer makes topology and direction assignments explicit and inspectable in QGIS <strong>before</strong> any snapping happens. The full workflow is: B1 filter to active segments → B2 classify segments → B3 extract endpoints → B4 deduplicate → B5 assign directions → B6 assign ep_type → B7 export.</p>
 <section id="b1-filter-to-active-segments" class="level3">
 <h3 class="anchored" data-anchor-id="b1-filter-to-active-segments">B1 — Filter to Active Segments</h3>
-<div id="238f8aa9" class="cell" data-execution_count="15">
+<div id="e34d3ff9" class="cell" data-execution_count="15">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Retired/Planned segments and DupRoute aliases were excluded at data-prep time.</span></span>
@@ -1125,7 +1125,7 @@ gore_sf       14</code></pre>
   [5]    Facility type     " " = mainline, "R" = ramp, "C" = collector-distributor
   [6:]   Sequence/suffix   varies</code></pre>
 <p>These flags flow into every endpoint pool and type-tier decision, making this the <strong>primary place to audit</strong> when snapping results look wrong.</p>
-<div id="be84c5b2" class="cell" data-execution_count="16">
+<div id="71366291" class="cell" data-execution_count="16">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Controlled-access corridors in the Wasatch Front study area ───────────</span></span>
@@ -1211,7 +1211,7 @@ gore_sf       14</code></pre>
 <section id="b3-extract-raw-endpoints" class="level3">
 <h3 class="anchored" data-anchor-id="b3-extract-raw-endpoints">B3 — Extract Raw Endpoints</h3>
 <p>Extract the start and end point of every active segment into a flat GeoDataFrame (two rows per segment). Carries <code>FULLNAME</code>, <code>DOT_RTNAME</code>, and the three topology flags forward for direction resolution and deduplication downstream.</p>
-<div id="209d93f4" class="cell" data-execution_count="17">
+<div id="12c4cdbc" class="cell" data-execution_count="17">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Explode MultiLineString → LineString so get_point works correctly</span></span>
@@ -1257,7 +1257,7 @@ Raw endpoint records: 15,284  (2 × 7,642 segments)</code></pre>
 <section id="b4-deduplicate-by-tolerance-based-clustering" class="level3">
 <h3 class="anchored" data-anchor-id="b4-deduplicate-by-tolerance-based-clustering">B4 — Deduplicate by Tolerance-Based Clustering</h3>
 <p>Cluster raw endpoints by true single-linkage distance (<code>cluster_endpoints</code>, <code>ENDPOINT_CLUSTER_TOLERANCE_M</code> = 1cm) rather than a rounded-coordinate grid bucket — two points 2mm apart that happen to round into different 1cm grid cells (e.g.&nbsp;<code>10.004999</code> → <code>10.00</code> vs <code>10.005001</code> → <code>10.01</code>) are now correctly merged. Aggregate type flags with OR — a cluster is <code>is_freeway=True</code> if any freeway segment terminates there. The output geometry keeps the exact (unrounded) coordinate of one contributing raw endpoint rather than reconstructing a point from the rounded key, so <code>gdf_ep_unique</code> — and every node later snapped onto it — stays bit-exact with a real <code>CandidateTDMRoadLinks</code> vertex instead of sitting on a 1cm quantization grid. <code>x_round</code>/<code>y_round</code> are still carried through (first raw point) for QGIS inspection and for <code>link_utils.resolve_snap_coords</code>’s downstream nearest-vertex lookup, which is out of scope for this change.</p>
-<div id="43e21fb0" class="cell" data-execution_count="18">
+<div id="8b2aa5c5" class="cell" data-execution_count="18">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>gdf_ep_raw[<span class="st">"cluster_id"</span>] <span class="op">=</span> cluster_endpoints(</span>
@@ -1332,7 +1332,7 @@ Unique endpoints: 5,195
 <section id="b5-assign-endpoint-directions" class="level3">
 <h3 class="anchored" data-anchor-id="b5-assign-endpoint-directions">B5 — Assign Endpoint Directions</h3>
 <p><code>assign_endpoint_directions</code> calls <code>_resolve_direction</code> per unique coordinate, aggregating direction from all contributing raw segments with freeway-first priority.</p>
-<div id="b85860b0" class="cell" data-execution_count="19">
+<div id="f86acc18" class="cell" data-execution_count="19">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>gdf_ep_unique <span class="op">=</span> assign_endpoint_directions(gdf_ep_unique, gdf_ep_raw)</span>
@@ -1349,7 +1349,7 @@ Endpoints direction-agnostic: 2,890</code></pre>
 <section id="b6-assign-endpoint-type" class="level3">
 <h3 class="anchored" data-anchor-id="b6-assign-endpoint-type">B6 — Assign Endpoint Type</h3>
 <p>Six mutually-exclusive <code>ep_type</code> labels derived from the three boolean flags, mirroring the <code>node_type</code> cascade so type-tier matching compares like with like. <code>gore</code> is checked first — a point where freeway and ramp both terminate is always a gore regardless of surface contact.</p>
-<div id="89a8bf03" class="cell" data-execution_count="20">
+<div id="e2c2e9cb" class="cell" data-execution_count="20">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>fw <span class="op">=</span> gdf_ep_unique[<span class="st">"is_freeway"</span>]</span>
@@ -1383,7 +1383,7 @@ fwy_sf     297
 fwy        240</code></pre>
 </div>
 </div>
-<div id="b47bac27" class="cell" data-execution_count="21">
+<div id="6d345026" class="cell" data-execution_count="21">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>gdf_ep_unique[[<span class="st">"x_round"</span>, <span class="st">"y_round"</span>, <span class="st">"is_freeway"</span>, <span class="st">"is_interchange"</span>, <span class="st">"is_surface"</span>,</span>
@@ -1617,7 +1617,7 @@ fwy        240</code></pre>
 <section id="b7-export-endpoint-layer-for-qgis-inspection" class="level3">
 <h3 class="anchored" data-anchor-id="b7-export-endpoint-layer-for-qgis-inspection">B7 — Export Endpoint Layer for QGIS Inspection</h3>
 <p>Verify before running any snapping: - Freeway-only endpoints correctly identified (no ramp/CD bleeds) - Gore endpoints at physical mainline/ramp junctions - Direction strings match expected cardinal for each location</p>
-<div id="ed228950" class="cell" data-execution_count="22">
+<div id="5677978f" class="cell" data-execution_count="22">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>debug_path <span class="op">=</span> PATHS[<span class="st">"out_debug"</span>]</span>
@@ -1635,7 +1635,7 @@ fwy        240</code></pre>
 <section id="part-c-interchange-node-direction-enrichment" class="level2" data-number="5">
 <h2 data-number="5" class="anchored" data-anchor-id="part-c-interchange-node-direction-enrichment"><span class="header-section-number">5</span> Part C — Interchange Node Direction Enrichment</h2>
 <p>For interchange-only nodes (pass c), the directional signal is inherited one hop from adjacent freeway mainline links. This enrichment is done <strong>explicitly here</strong> (not hidden inside <code>snap_nodes</code>) so the lookup table is inspectable.</p>
-<div id="7f6a92c1" class="cell" data-execution_count="23">
+<div id="a2e4cc7f" class="cell" data-execution_count="23">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Build a flat edge list: (node_N, FT, DIRECTION) — vectorised via pd.concat</span></span>
@@ -1678,7 +1678,7 @@ fwy        240</code></pre>
 <section id="d1-freeway-and-interchange-snapping" class="level3">
 <h3 class="anchored" data-anchor-id="d1-freeway-and-interchange-snapping">D1 — Freeway and Interchange Snapping</h3>
 <p>Four passes in topology-priority order: (a) pure freeway, (a2) at-grade freeway crossings, (b) gore/gore_sf, (c) mid-ramp. All include <code>fwy_sf</code> in the D1 debug export so at-grade crossing snaps can be verified before running surface snapping.</p>
-<div id="be3a7e5f" class="cell" data-execution_count="24">
+<div id="400fe9f3" class="cell" data-execution_count="24">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Endpoint pools ────────────────────────────────────────────────────────</span></span>
@@ -1762,7 +1762,7 @@ Pass (c)  nodes — ramp:    204
   ramp_sf → D2 surface:   320</code></pre>
 </div>
 </div>
-<div id="7405c077" class="cell" data-execution_count="25">
+<div id="a6679026" class="cell" data-execution_count="25">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Pre-snap distance check ────────────────────────────────────────────────</span></span>
@@ -1799,7 +1799,7 @@ Pass (c)  nodes — ramp:    204
   &gt; 300m: 66  (5%)</code></pre>
 </div>
 </div>
-<div id="2645626d" class="cell" data-execution_count="26">
+<div id="5b2a30bf" class="cell" data-execution_count="26">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped <span class="op">=</span> gdf_nodes.copy()</span>
@@ -1886,7 +1886,7 @@ Pass (c)  nodes — ramp:    204
 </section>
 <section id="d1-summary" class="level3">
 <h3 class="anchored" data-anchor-id="d1-summary">D1 Summary</h3>
-<div id="2b008e26" class="cell" data-execution_count="27">
+<div id="58f5e1c4" class="cell" data-execution_count="27">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>FWY_IC_RULES <span class="op">=</span> [<span class="st">"Freeway_Only"</span>, <span class="st">"Freeway_Surface"</span>, <span class="st">"Freeway_Gore"</span>, <span class="st">"Interchange_Only"</span>]</span>
@@ -1940,7 +1940,7 @@ Expected recycling to D2 surface pass:
   gore_sf:  1  (at-grade interchanges that failed pass (b))</code></pre>
 </div>
 </div>
-<div id="0d1a2234" class="cell" data-execution_count="28">
+<div id="d63fc4e8" class="cell" data-execution_count="28">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Folium validation map — Freeway + Interchange snapping</span></span>
@@ -2017,7 +2017,7 @@ Expected recycling to D2 surface pass:
 <section id="d2-surface-snapping" class="level3">
 <h3 class="anchored" data-anchor-id="d2-surface-snapping">D2 — Surface Snapping</h3>
 <p>All nodes with surface-class links that were not snapped in earlier passes land here. This includes: pure <code>surface</code> nodes, <code>ramp_sf</code> (ramp terminals), any <code>fwy_sf</code> that exceeded the pass (a2) threshold (no fwy-class endpoint within range), and any <code>gore_sf</code> that failed pass (b). <code>link_directions</code> carries the cardinal signal from all connected links.</p>
-<div id="8bd014f6" class="cell" data-execution_count="29">
+<div id="86c04141" class="cell" data-execution_count="29">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Surface pool: surface, ramp_sf, fwy_sf, and gore endpoints.</span></span>
@@ -2039,7 +2039,7 @@ Expected recycling to D2 surface pass:
   gore:         773</code></pre>
 </div>
 </div>
-<div id="6d5d749b" class="cell" data-execution_count="30">
+<div id="95eb80d0" class="cell" data-execution_count="30">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co"># surface_mask: any node with Surface=True that wasn't snapped in an earlier pass.</span></span>
@@ -2079,7 +2079,7 @@ Expected recycling to D2 surface pass:
          → 2,564 snapped | 668 exceeded 400m threshold</code></pre>
 </div>
 </div>
-<div id="471f55d7" class="cell" data-execution_count="31">
+<div id="122f085c" class="cell" data-execution_count="31">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>surf_dists <span class="op">=</span> gdf_nodes_snapped.loc[gdf_nodes_snapped[<span class="st">"snap_rule"</span>] <span class="op">==</span> <span class="st">"Surface"</span>, <span class="st">"snap_distance_m"</span>]</span>
@@ -2097,7 +2097,7 @@ Expected recycling to D2 surface pass:
   200-400m:99</code></pre>
 </div>
 </div>
-<div id="8a151dba" class="cell" data-execution_count="32">
+<div id="4923ba4f" class="cell" data-execution_count="32">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Folium validation map — Surface snapping</span></span>
@@ -2155,7 +2155,7 @@ Expected recycling to D2 surface pass:
 <section id="d3-transit-snapping" class="level3">
 <h3 class="anchored" data-anchor-id="d3-transit-snapping">D3 — Transit Snapping</h3>
 <p>FixedTransit nodes snap to Light Rail (TRAX) and Commuter Rail (FrontRunner) stops. Bus stops are excluded. Twin platforms merged to station centroid.</p>
-<div id="d499d9e7" class="cell" data-execution_count="33">
+<div id="5f25274d" class="cell" data-execution_count="33">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb56"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Merge co-located platforms (same stop_name) to a single centroid.</span></span>
@@ -2186,7 +2186,7 @@ Expected recycling to D2 surface pass:
 <pre><code>Grouped rail stops: 76</code></pre>
 </div>
 </div>
-<div id="2ec10432" class="cell" data-execution_count="34">
+<div id="1ad081ac" class="cell" data-execution_count="34">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb58"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>transit_mask <span class="op">=</span> gdf_nodes_snapped[<span class="st">"node_type"</span>] <span class="op">==</span> <span class="st">"transit"</span></span>
@@ -2206,7 +2206,7 @@ Expected recycling to D2 surface pass:
          → 70 snapped | 545 exceeded 200m threshold</code></pre>
 </div>
 </div>
-<div id="d0e34e18" class="cell" data-execution_count="35">
+<div id="8ba9690c" class="cell" data-execution_count="35">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb60"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>transit_dists <span class="op">=</span> gdf_nodes_snapped.loc[</span>
@@ -2269,7 +2269,7 @@ Expected recycling to D2 surface pass:
 </tr>
 </tbody>
 </table>
-<div id="f436ad19" class="cell" data-execution_count="36">
+<div id="37c9d225" class="cell" data-execution_count="36">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb62"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="co"># All successfully snapped nodes across every pass</span></span>
@@ -2339,7 +2339,7 @@ Expected recycling to D2 surface pass:
 </section>
 <section id="overall-snap-summary" class="level2" data-number="8">
 <h2 data-number="8" class="anchored" data-anchor-id="overall-snap-summary"><span class="header-section-number">8</span> Overall Snap Summary</h2>
-<div id="c79f9b2d" class="cell" data-execution_count="37">
+<div id="164c824f" class="cell" data-execution_count="37">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb64"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Results by snap rule:"</span>)</span>
@@ -2369,7 +2369,7 @@ Exceeded threshold: 1,352
 Not attempted:      17,055</code></pre>
 </div>
 </div>
-<div id="a703f1da" class="cell" data-execution_count="38">
+<div id="caa0193b" class="cell" data-execution_count="38">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb66"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Exceeded-threshold detail table</span></span>
@@ -2539,7 +2539,7 @@ Not attempted:      17,055</code></pre>
 </div>
 <section id="conflation-performance-kpis-and-ecdf" class="level3">
 <h3 class="anchored" data-anchor-id="conflation-performance-kpis-and-ecdf">Conflation Performance — KPIs and ECDF</h3>
-<div id="49891848" class="cell" data-execution_count="39">
+<div id="e5b1013c" class="cell" data-execution_count="39">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb67"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a>snapped_nodes <span class="op">=</span> gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>]]</span>
@@ -2572,7 +2572,7 @@ Surface                     2564            4.4        53.3       395.9
 Nodes exceeding threshold: 1352</code></pre>
 </div>
 </div>
-<div id="6d4b496f" class="cell" data-execution_count="40">
+<div id="83425424" class="cell" data-execution_count="40">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb69"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a>COLOR_MAP <span class="op">=</span> {</span>
@@ -2617,7 +2617,7 @@ Nodes exceeding threshold: 1352</code></pre>
 </section>
 <section id="export" class="level3">
 <h3 class="anchored" data-anchor-id="export">Export</h3>
-<div id="ca28c600" class="cell" data-execution_count="41">
+<div id="a5d6d509" class="cell" data-execution_count="41">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb70"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="op">=</span> PATHS[<span class="st">"out_node_snapped"</span>]</span>
@@ -2634,7 +2634,7 @@ Nodes exceeding threshold: 1352</code></pre>
 <h3 class="anchored" data-anchor-id="cc-attachment-nodes">CC Attachment Nodes</h3>
 <p>Centroid connector attachment nodes are the network-side endpoints of FT_2027 = 1 (centroid connector) links — the taps where zone centroids connect to the road network. Zone centroids themselves (N &lt; 3600) are excluded; only the network attachment nodes (N ≥ 3600) are retained.</p>
 <p>These nodes are snapped to the nearest physical centerline <strong>vertex</strong> (not segment endpoint) using a simple STRtree nearest-vertex lookup — no direction filtering, no greedy assignment. The result is written as a second layer in <code>nodes_snapped.gpkg</code> so Stage 2 can use them as additional centerline split points.</p>
-<div id="54c10477" class="cell" data-execution_count="42">
+<div id="4d8fbc69" class="cell" data-execution_count="42">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb72"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a>gdf_cc_links <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_network_links"</span>], where<span class="op">=</span><span class="st">"FT_2027 = 1"</span>)</span>
@@ -2651,26 +2651,26 @@ Nodes exceeding threshold: 1352</code></pre>
 CC attachment nodes (N ≥ 3600): 6,539</code></pre>
 </div>
 </div>
-<div id="9a2c32b2" class="cell" data-execution_count="43">
+<div id="553fe262" class="cell" data-execution_count="43">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb74"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped <span class="op">=</span> snap_cc_nodes(gdf_cc_nodes.to_crs(CRS_UTM), gdf_centerlines)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb74"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped <span class="op">=</span> snap_cc_nodes(gdf_cc_nodes.to_crs(CRS_UTM), gdf_centerlines, max_snap_dist_m<span class="op">=</span><span class="fl">100.0</span>)</span>
 <span id="cb74-2"><a href="#cb74-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb74-3"><a href="#cb74-3" aria-hidden="true" tabindex="-1"></a>n_resolved   <span class="op">=</span> gdf_cc_snapped[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
 <span id="cb74-4"><a href="#cb74-4" aria-hidden="true" tabindex="-1"></a>n_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_cc_snapped) <span class="op">-</span> n_resolved</span>
 <span id="cb74-5"><a href="#cb74-5" aria-hidden="true" tabindex="-1"></a>dist <span class="op">=</span> gdf_cc_snapped.loc[gdf_cc_snapped[<span class="st">"snap_resolved"</span>], <span class="st">"snap_dist_m"</span>]</span>
-<span id="cb74-6"><a href="#cb74-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Resolved: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> | Unresolved (&gt; 500 m): </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb74-6"><a href="#cb74-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Resolved: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> | Unresolved (&gt; 100 m): </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss">"</span>)</span>
 <span id="cb74-7"><a href="#cb74-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Snap distance (m): median=</span><span class="sc">{</span>dist<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss"> | P90=</span><span class="sc">{</span>dist<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss"> | max=</span><span class="sc">{</span>dist<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
 <span id="cb74-8"><a href="#cb74-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb74-9"><a href="#cb74-9" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped.to_crs(CRS_UTM).to_file(out_path, layer<span class="op">=</span><span class="st">"cc_nodes_snapped"</span>, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
 <span id="cb74-10"><a href="#cb74-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"CC attachment nodes saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss"> (layer: cc_nodes_snapped)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Resolved: 5,979 | Unresolved (&gt; 500 m): 560
-Snap distance (m): median=3.2 | P90=157.0 | max=499.9</code></pre>
+<pre><code>Resolved: 5,287 | Unresolved (&gt; 100 m): 1,252
+Snap distance (m): median=2.6 | P90=12.9 | max=99.5</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>D:\GitHub\TDM-GEO-TrueShape\_src\node_utils.py:1026: UserWarning: snap_cc_nodes: 560 CC attachment node(s) had no centerline within 500.0 m — x_snap/y_snap left NaN.
+<pre><code>D:\GitHub\TDM-GEO-TrueShape\_src\node_utils.py:1026: UserWarning: snap_cc_nodes: 1252 CC attachment node(s) had no centerline within 100.0 m — x_snap/y_snap left NaN.
   warnings.warn(</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
@@ -2681,8 +2681,8 @@ Snap distance (m): median=3.2 | P90=157.0 | max=499.9</code></pre>
 <section id="external-station-nodes" class="level3">
 <h3 class="anchored" data-anchor-id="external-station-nodes">External Station Nodes</h3>
 <p>External station nodes (<code>EXTERNAL_ = 1</code> on the node table, N 3601–3629) are gateway points where the model network intentionally truncates at the edge of the modelled region — canyon passes, state lines (e.g.&nbsp;“I-15 to Tremonton”, “SR 190 Guardsman Pass”). Like CC attachment nodes, they are not reliably handled by the direction-aware greedy snapper, so they get the same simple nearest-vertex treatment and are written as a third <code>nodes_snapped.gpkg</code> layer for Stage 2 to use as additional split points.</p>
-<p>The same 500 m default cutoff as CC nodes is kept deliberately tight, not loosened: several external nodes sit 1–13 km from any WF-county centerline (true remote boundary points where our centerline extract simply doesn’t reach), and snapping those to whatever vertex happens to be nearest would be a misleading match rather than a real one — better left unresolved.</p>
-<div id="6ed29446" class="cell" data-execution_count="44">
+<p>The same 100 m cutoff as CC nodes is kept deliberately tight: several external nodes sit 1–13 km from any WF-county centerline (true remote boundary points where our centerline extract simply doesn’t reach), and snapping those to whatever vertex happens to be nearest would be a misleading match rather than a real one — better left unresolved.</p>
+<div id="248de4c0" class="cell" data-execution_count="44">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb78"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb78-1"><a href="#cb78-1" aria-hidden="true" tabindex="-1"></a>gdf_ext_nodes <span class="op">=</span> gdf_nodes[gdf_nodes[<span class="st">"EXTERNAL_"</span>] <span class="op">==</span> <span class="dv">1</span>].copy()</span>
@@ -2692,62 +2692,28 @@ Snap distance (m): median=3.2 | P90=157.0 | max=499.9</code></pre>
 <pre><code>External station nodes (EXTERNAL_ = 1): 29</code></pre>
 </div>
 </div>
-<div id="2e6be8ce" class="cell" data-execution_count="45">
+<div id="8fda785b" class="cell" data-execution_count="45">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb80"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb80-1"><a href="#cb80-1" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped <span class="op">=</span> snap_cc_nodes(gdf_ext_nodes.to_crs(CRS_UTM), gdf_centerlines)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb80"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb80-1"><a href="#cb80-1" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped <span class="op">=</span> snap_cc_nodes(gdf_ext_nodes.to_crs(CRS_UTM), gdf_centerlines, max_snap_dist_m<span class="op">=</span><span class="fl">100.0</span>)</span>
 <span id="cb80-2"><a href="#cb80-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb80-3"><a href="#cb80-3" aria-hidden="true" tabindex="-1"></a>n_resolved   <span class="op">=</span> gdf_ext_snapped[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
 <span id="cb80-4"><a href="#cb80-4" aria-hidden="true" tabindex="-1"></a>n_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_ext_snapped) <span class="op">-</span> n_resolved</span>
 <span id="cb80-5"><a href="#cb80-5" aria-hidden="true" tabindex="-1"></a>dist <span class="op">=</span> gdf_ext_snapped.loc[gdf_ext_snapped[<span class="st">"snap_resolved"</span>], <span class="st">"snap_dist_m"</span>]</span>
-<span id="cb80-6"><a href="#cb80-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Resolved: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> | Unresolved (&gt; 500 m): </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb80-6"><a href="#cb80-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Resolved: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> | Unresolved (&gt; 100 m): </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss">"</span>)</span>
 <span id="cb80-7"><a href="#cb80-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Snap distance (m): median=</span><span class="sc">{</span>dist<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss"> | P90=</span><span class="sc">{</span>dist<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss"> | max=</span><span class="sc">{</span>dist<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
 <span id="cb80-8"><a href="#cb80-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb80-9"><a href="#cb80-9" aria-hidden="true" tabindex="-1"></a><span class="co"># QA flag: nodes &gt;100 m from the nearest centerline are suspect regardless of</span></span>
-<span id="cb80-10"><a href="#cb80-10" aria-hidden="true" tabindex="-1"></a><span class="co"># whether they cleared the 500 m resolve cutoff — a true external station</span></span>
-<span id="cb80-11"><a href="#cb80-11" aria-hidden="true" tabindex="-1"></a><span class="co"># should sit right at the edge of the road network, not far off it. A large</span></span>
-<span id="cb80-12"><a href="#cb80-12" aria-hidden="true" tabindex="-1"></a><span class="co"># gap here usually means the node's true position falls outside our</span></span>
-<span id="cb80-13"><a href="#cb80-13" aria-hidden="true" tabindex="-1"></a><span class="co"># centerline extract (e.g. an out-of-county boundary point never merged in),</span></span>
-<span id="cb80-14"><a href="#cb80-14" aria-hidden="true" tabindex="-1"></a><span class="co"># not a genuine snap.</span></span>
-<span id="cb80-15"><a href="#cb80-15" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped[<span class="st">"far_flag"</span>] <span class="op">=</span> gdf_ext_snapped[<span class="st">"snap_dist_m"</span>] <span class="op">&gt;</span> <span class="dv">100</span></span>
-<span id="cb80-16"><a href="#cb80-16" aria-hidden="true" tabindex="-1"></a>n_far <span class="op">=</span> <span class="bu">int</span>(gdf_ext_snapped[<span class="st">"far_flag"</span>].<span class="bu">sum</span>())</span>
-<span id="cb80-17"><a href="#cb80-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Flagged (&gt; 100 m from nearest centerline): </span><span class="sc">{</span>n_far<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span><span class="bu">len</span>(gdf_ext_snapped)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb80-18"><a href="#cb80-18" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_far:</span>
-<span id="cb80-19"><a href="#cb80-19" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(</span>
-<span id="cb80-20"><a href="#cb80-20" aria-hidden="true" tabindex="-1"></a>        gdf_ext_snapped.loc[gdf_ext_snapped[<span class="st">"far_flag"</span>], [<span class="st">"N"</span>, <span class="st">"snap_dist_m"</span>, <span class="st">"snap_resolved"</span>]]</span>
-<span id="cb80-21"><a href="#cb80-21" aria-hidden="true" tabindex="-1"></a>        .sort_values(<span class="st">"snap_dist_m"</span>, ascending<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb80-22"><a href="#cb80-22" aria-hidden="true" tabindex="-1"></a>        .to_string(index<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb80-23"><a href="#cb80-23" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb80-24"><a href="#cb80-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb80-25"><a href="#cb80-25" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped.to_crs(CRS_UTM).to_file(out_path, layer<span class="op">=</span><span class="st">"ext_nodes_snapped"</span>, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
-<span id="cb80-26"><a href="#cb80-26" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">External station nodes saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss"> (layer: ext_nodes_snapped)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb80-9"><a href="#cb80-9" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped.to_crs(CRS_UTM).to_file(out_path, layer<span class="op">=</span><span class="st">"ext_nodes_snapped"</span>, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
+<span id="cb80-10"><a href="#cb80-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">External station nodes saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss"> (layer: ext_nodes_snapped)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Resolved: 22 | Unresolved (&gt; 500 m): 7
-Snap distance (m): median=39.0 | P90=205.3 | max=374.2
-
-Flagged (&gt; 100 m from nearest centerline): 15 / 29
-   N  snap_dist_m  snap_resolved
-3625 12719.659089          False
-3624 10381.699689          False
-3619  5086.464169          False
-3618  3579.272778          False
-3605  1913.079115          False
-3602  1858.403752          False
-3603   537.784637          False
-3621   374.246165           True
-3620   301.251612           True
-3627   207.802130           True
-3626   182.841333           True
-3628   158.050301           True
-3617   156.961757           True
-3611   151.030461           True
-3616   141.895999           True
+<pre><code>Resolved: 14 | Unresolved (&gt; 100 m): 15
+Snap distance (m): median=20.4 | P90=49.7 | max=77.9
 
 External station nodes saved to: _data\processed\nodes_snapped.gpkg (layer: ext_nodes_snapped)</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>D:\GitHub\TDM-GEO-TrueShape\_src\node_utils.py:1026: UserWarning: snap_cc_nodes: 7 CC attachment node(s) had no centerline within 500.0 m — x_snap/y_snap left NaN.
+<pre><code>D:\GitHub\TDM-GEO-TrueShape\_src\node_utils.py:1026: UserWarning: snap_cc_nodes: 15 CC attachment node(s) had no centerline within 100.0 m — x_snap/y_snap left NaN.
   warnings.warn(</code></pre>
 </div>
 </div>
@@ -4621,12 +4587,12 @@ External station nodes saved to: _data\processed\nodes_snapped.gpkg (layer: ext_
 <span id="cb83-1480"><a href="#cb83-1480" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb83-1481"><a href="#cb83-1481" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb83-1484"><a href="#cb83-1484" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb83-1485"><a href="#cb83-1485" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped <span class="op">=</span> snap_cc_nodes(gdf_cc_nodes.to_crs(CRS_UTM), gdf_centerlines)</span>
+<span id="cb83-1485"><a href="#cb83-1485" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped <span class="op">=</span> snap_cc_nodes(gdf_cc_nodes.to_crs(CRS_UTM), gdf_centerlines, max_snap_dist_m<span class="op">=</span><span class="fl">100.0</span>)</span>
 <span id="cb83-1486"><a href="#cb83-1486" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb83-1487"><a href="#cb83-1487" aria-hidden="true" tabindex="-1"></a>n_resolved   <span class="op">=</span> gdf_cc_snapped[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
 <span id="cb83-1488"><a href="#cb83-1488" aria-hidden="true" tabindex="-1"></a>n_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_cc_snapped) <span class="op">-</span> n_resolved</span>
 <span id="cb83-1489"><a href="#cb83-1489" aria-hidden="true" tabindex="-1"></a>dist <span class="op">=</span> gdf_cc_snapped.loc[gdf_cc_snapped[<span class="st">"snap_resolved"</span>], <span class="st">"snap_dist_m"</span>]</span>
-<span id="cb83-1490"><a href="#cb83-1490" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Resolved: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> | Unresolved (&gt; 500 m): </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb83-1490"><a href="#cb83-1490" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Resolved: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> | Unresolved (&gt; 100 m): </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss">"</span>)</span>
 <span id="cb83-1491"><a href="#cb83-1491" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Snap distance (m): median=</span><span class="sc">{</span>dist<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss"> | P90=</span><span class="sc">{</span>dist<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss"> | max=</span><span class="sc">{</span>dist<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
 <span id="cb83-1492"><a href="#cb83-1492" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb83-1493"><a href="#cb83-1493" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped.to_crs(CRS_UTM).to_file(out_path, layer<span class="op">=</span><span class="st">"cc_nodes_snapped"</span>, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
@@ -4643,11 +4609,11 @@ External station nodes saved to: _data\processed\nodes_snapped.gpkg (layer: ext_
 <span id="cb83-1504"><a href="#cb83-1504" aria-hidden="true" tabindex="-1"></a>simple nearest-vertex treatment and are written as a third <span class="in">`nodes_snapped.gpkg`</span></span>
 <span id="cb83-1505"><a href="#cb83-1505" aria-hidden="true" tabindex="-1"></a>layer for Stage 2 to use as additional split points.</span>
 <span id="cb83-1506"><a href="#cb83-1506" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb83-1507"><a href="#cb83-1507" aria-hidden="true" tabindex="-1"></a>The same 500 m default cutoff as CC nodes is kept deliberately tight, not</span>
-<span id="cb83-1508"><a href="#cb83-1508" aria-hidden="true" tabindex="-1"></a>loosened: several external nodes sit 1–13 km from any WF-county centerline</span>
-<span id="cb83-1509"><a href="#cb83-1509" aria-hidden="true" tabindex="-1"></a>(true remote boundary points where our centerline extract simply doesn't</span>
-<span id="cb83-1510"><a href="#cb83-1510" aria-hidden="true" tabindex="-1"></a>reach), and snapping those to whatever vertex happens to be nearest would be</span>
-<span id="cb83-1511"><a href="#cb83-1511" aria-hidden="true" tabindex="-1"></a>a misleading match rather than a real one — better left unresolved.</span>
+<span id="cb83-1507"><a href="#cb83-1507" aria-hidden="true" tabindex="-1"></a>The same 100 m cutoff as CC nodes is kept deliberately tight: several</span>
+<span id="cb83-1508"><a href="#cb83-1508" aria-hidden="true" tabindex="-1"></a>external nodes sit 1–13 km from any WF-county centerline (true remote</span>
+<span id="cb83-1509"><a href="#cb83-1509" aria-hidden="true" tabindex="-1"></a>boundary points where our centerline extract simply doesn't reach), and</span>
+<span id="cb83-1510"><a href="#cb83-1510" aria-hidden="true" tabindex="-1"></a>snapping those to whatever vertex happens to be nearest would be a</span>
+<span id="cb83-1511"><a href="#cb83-1511" aria-hidden="true" tabindex="-1"></a>misleading match rather than a real one — better left unresolved.</span>
 <span id="cb83-1512"><a href="#cb83-1512" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb83-1515"><a href="#cb83-1515" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
 <span id="cb83-1516"><a href="#cb83-1516" aria-hidden="true" tabindex="-1"></a>gdf_ext_nodes <span class="op">=</span> gdf_nodes[gdf_nodes[<span class="st">"EXTERNAL_"</span>] <span class="op">==</span> <span class="dv">1</span>].copy()</span>
@@ -4655,33 +4621,17 @@ External station nodes saved to: _data\processed\nodes_snapped.gpkg (layer: ext_
 <span id="cb83-1518"><a href="#cb83-1518" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb83-1519"><a href="#cb83-1519" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb83-1522"><a href="#cb83-1522" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb83-1523"><a href="#cb83-1523" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped <span class="op">=</span> snap_cc_nodes(gdf_ext_nodes.to_crs(CRS_UTM), gdf_centerlines)</span>
+<span id="cb83-1523"><a href="#cb83-1523" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped <span class="op">=</span> snap_cc_nodes(gdf_ext_nodes.to_crs(CRS_UTM), gdf_centerlines, max_snap_dist_m<span class="op">=</span><span class="fl">100.0</span>)</span>
 <span id="cb83-1524"><a href="#cb83-1524" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb83-1525"><a href="#cb83-1525" aria-hidden="true" tabindex="-1"></a>n_resolved   <span class="op">=</span> gdf_ext_snapped[<span class="st">"snap_resolved"</span>].<span class="bu">sum</span>()</span>
 <span id="cb83-1526"><a href="#cb83-1526" aria-hidden="true" tabindex="-1"></a>n_unresolved <span class="op">=</span> <span class="bu">len</span>(gdf_ext_snapped) <span class="op">-</span> n_resolved</span>
 <span id="cb83-1527"><a href="#cb83-1527" aria-hidden="true" tabindex="-1"></a>dist <span class="op">=</span> gdf_ext_snapped.loc[gdf_ext_snapped[<span class="st">"snap_resolved"</span>], <span class="st">"snap_dist_m"</span>]</span>
-<span id="cb83-1528"><a href="#cb83-1528" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Resolved: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> | Unresolved (&gt; 500 m): </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb83-1528"><a href="#cb83-1528" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Resolved: </span><span class="sc">{</span>n_resolved<span class="sc">:,}</span><span class="ss"> | Unresolved (&gt; 100 m): </span><span class="sc">{</span>n_unresolved<span class="sc">:,}</span><span class="ss">"</span>)</span>
 <span id="cb83-1529"><a href="#cb83-1529" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Snap distance (m): median=</span><span class="sc">{</span>dist<span class="sc">.</span>median()<span class="sc">:.1f}</span><span class="ss"> | P90=</span><span class="sc">{</span>dist<span class="sc">.</span>quantile(<span class="fl">0.90</span>)<span class="sc">:.1f}</span><span class="ss"> | max=</span><span class="sc">{</span>dist<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.1f}</span><span class="ss">"</span>)</span>
 <span id="cb83-1530"><a href="#cb83-1530" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb83-1531"><a href="#cb83-1531" aria-hidden="true" tabindex="-1"></a><span class="co"># QA flag: nodes &gt;100 m from the nearest centerline are suspect regardless of</span></span>
-<span id="cb83-1532"><a href="#cb83-1532" aria-hidden="true" tabindex="-1"></a><span class="co"># whether they cleared the 500 m resolve cutoff — a true external station</span></span>
-<span id="cb83-1533"><a href="#cb83-1533" aria-hidden="true" tabindex="-1"></a><span class="co"># should sit right at the edge of the road network, not far off it. A large</span></span>
-<span id="cb83-1534"><a href="#cb83-1534" aria-hidden="true" tabindex="-1"></a><span class="co"># gap here usually means the node's true position falls outside our</span></span>
-<span id="cb83-1535"><a href="#cb83-1535" aria-hidden="true" tabindex="-1"></a><span class="co"># centerline extract (e.g. an out-of-county boundary point never merged in),</span></span>
-<span id="cb83-1536"><a href="#cb83-1536" aria-hidden="true" tabindex="-1"></a><span class="co"># not a genuine snap.</span></span>
-<span id="cb83-1537"><a href="#cb83-1537" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped[<span class="st">"far_flag"</span>] <span class="op">=</span> gdf_ext_snapped[<span class="st">"snap_dist_m"</span>] <span class="op">&gt;</span> <span class="dv">100</span></span>
-<span id="cb83-1538"><a href="#cb83-1538" aria-hidden="true" tabindex="-1"></a>n_far <span class="op">=</span> <span class="bu">int</span>(gdf_ext_snapped[<span class="st">"far_flag"</span>].<span class="bu">sum</span>())</span>
-<span id="cb83-1539"><a href="#cb83-1539" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Flagged (&gt; 100 m from nearest centerline): </span><span class="sc">{</span>n_far<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span><span class="bu">len</span>(gdf_ext_snapped)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb83-1540"><a href="#cb83-1540" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_far:</span>
-<span id="cb83-1541"><a href="#cb83-1541" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(</span>
-<span id="cb83-1542"><a href="#cb83-1542" aria-hidden="true" tabindex="-1"></a>        gdf_ext_snapped.loc[gdf_ext_snapped[<span class="st">"far_flag"</span>], [<span class="st">"N"</span>, <span class="st">"snap_dist_m"</span>, <span class="st">"snap_resolved"</span>]]</span>
-<span id="cb83-1543"><a href="#cb83-1543" aria-hidden="true" tabindex="-1"></a>        .sort_values(<span class="st">"snap_dist_m"</span>, ascending<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb83-1544"><a href="#cb83-1544" aria-hidden="true" tabindex="-1"></a>        .to_string(index<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb83-1545"><a href="#cb83-1545" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb83-1546"><a href="#cb83-1546" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb83-1547"><a href="#cb83-1547" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped.to_crs(CRS_UTM).to_file(out_path, layer<span class="op">=</span><span class="st">"ext_nodes_snapped"</span>, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
-<span id="cb83-1548"><a href="#cb83-1548" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">External station nodes saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss"> (layer: ext_nodes_snapped)"</span>)</span>
-<span id="cb83-1549"><a href="#cb83-1549" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb83-1531"><a href="#cb83-1531" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped.to_crs(CRS_UTM).to_file(out_path, layer<span class="op">=</span><span class="st">"ext_nodes_snapped"</span>, driver<span class="op">=</span><span class="st">"GPKG"</span>)</span>
+<span id="cb83-1532"><a href="#cb83-1532" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">External station nodes saved to: </span><span class="sc">{</span>out_path<span class="sc">}</span><span class="ss"> (layer: ext_nodes_snapped)"</span>)</span>
+<span id="cb83-1533"><a href="#cb83-1533" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->

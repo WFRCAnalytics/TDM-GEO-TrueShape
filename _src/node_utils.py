@@ -51,7 +51,7 @@ Public API
     snap_transit(gdf_nodes, gdf_stops, node_mask, max_distance_m, ...) -> GeoDataFrame
         Snap transit nodes to nearest GTFS stop (no direction matching).
 
-    snap_cc_nodes(gdf_cc_nodes, gdf_centerlines, max_snap_dist_m=500) -> GeoDataFrame
+    snap_cc_nodes(gdf_cc_nodes, gdf_centerlines, max_snap_dist_m=100) -> GeoDataFrame
         Snap centroid connector attachment nodes to the nearest centerline vertex.
         Nearest-vertex STRtree lookup; no direction filtering. Nodes beyond
         max_snap_dist_m receive NaN x_snap/y_snap and snap_resolved=False.
@@ -968,7 +968,7 @@ def snap_transit(
 def snap_cc_nodes(
     gdf_cc_nodes: gpd.GeoDataFrame,
     gdf_centerlines: gpd.GeoDataFrame,
-    max_snap_dist_m: float = 500.0,
+    max_snap_dist_m: float = 100.0,
 ) -> gpd.GeoDataFrame:
     """
     Snap centroid connector attachment nodes to the nearest point on the
@@ -996,7 +996,7 @@ def snap_cc_nodes(
         Centerline layer to snap onto.
     max_snap_dist_m : float
         Distance cap in metres. Nodes farther than this from any centerline
-        are flagged unresolved (x_snap/y_snap left NaN). Default 500 m.
+        are flagged unresolved (x_snap/y_snap left NaN). Default 100 m.
 
     Returns
     -------
