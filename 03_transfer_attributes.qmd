@@ -143,27 +143,44 @@ print(f"Snap coord lookup: {len(node_coord_lookup):,} entries")
 print(f"Reverse coord→node lookup: {len(coord_to_node):,} entries")
 ```
 
+CC attachment nodes and external station nodes add their own coordinates
+here too, restricted to `use_as_split` (computed in
+`01_node_classification.qmd`: resolved within 100 m, and not already snapped
+by the main pipeline above). `02_create_link.qmd` Part C splits
+`link_pieces.gpkg` at exactly this same set, using the same `x_snap`/`y_snap`
+values rounded the same way — so a piece boundary exists for every one of
+these coordinates to match against. Nodes that don't resolve, or that
+coincide with a node already snapped by the main pipeline, are left out
+entirely (no coordinate, no split, same as any other unsnapped node).
+
+```{python}
+gdf_cc_snapped  = gpd.read_file(PATHS["in_node_snapped"], layer="cc_nodes_snapped").to_crs(CRS_UTM)
+gdf_ext_snapped = gpd.read_file(PATHS["in_node_snapped"], layer="ext_nodes_snapped").to_crs(CRS_UTM)
+
+attach_coord_lookup: dict[int, tuple[float, float]] = {
+    int(row["N"]): (round(float(row["x_snap"]), 2), round(float(row["y_snap"]), 2))
+    for _, row in pd.concat([
+        gdf_cc_snapped[gdf_cc_snapped["use_as_split"]],
+        gdf_ext_snapped[gdf_ext_snapped["use_as_split"]],
+    ]).iterrows()
+}
+
+node_coord_lookup.update(attach_coord_lookup)
+coord_to_node.update({v: k for k, v in attach_coord_lookup.items()})
+snapped_node_ids |= set(attach_coord_lookup)
+
+print(f"CC attachment + external station split points added: {len(attach_coord_lookup):,}")
+print(f"Snap coord lookup now: {len(node_coord_lookup):,} entries")
+```
+
 ```{python}
 gdf_nodes_classified = gpd.read_file(PATHS["in_node_classified"]).to_crs(CRS_UTM)
 pseudo_ids = set(gdf_nodes_classified.loc[gdf_nodes_classified["is_topo_passthrough"], "N"].astype(int))
 
 n_pseudo_snapped = len(pseudo_ids & snapped_node_ids)
 print(f"Topological pass-through nodes (NeighborCount==2, any FT/LN/class): {len(pseudo_ids):,}")
-print(f"  of which already snapped (unexpected, should be ~0): {n_pseudo_snapped:,}")
+print(f"  of which already snapped (expect only pre-existing ~0 cases; CC/external mid-link nodes were already patched to False in 01_node_classification.qmd): {n_pseudo_snapped:,}")
 ```
-
-CC attachment nodes and external station nodes are intentionally excluded
-from `snapped_node_ids`/`coord_to_node` — `02_create_link.qmd` no longer
-splits `link_pieces.gpkg` at their positions (see that notebook's Part C),
-so there is no piece boundary for their coordinates to match. They need no
-separate addition to `pseudo_ids`, either: a CC node with exactly two
-real-network neighbors is already `is_topo_passthrough` regardless of its
-CC status (that flag is purely `NeighborCount==2`), and a CC node that is
-also a real 3+-neighbor junction should stay a hard chain boundary, same
-as every other junction — `dissolve_pseudonodes`'s preferred-else-
-first-found edge choice is only guaranteed correct where there is exactly
-one way through. External station nodes remain hard chain boundaries
-until they get their own split-and-match pass.
 
 ```{python}
 # Spot-check: round-trip a handful of known snapped nodes through both lookups.

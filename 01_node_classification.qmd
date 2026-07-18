@@ -1379,30 +1379,51 @@ Centroid connector attachment nodes are the network-side endpoints of FT_2027 = 
 network. Zone centroids themselves (N < 3600) are excluded; only the network
 attachment nodes (N ≥ 3600) are retained.
 
-These nodes are snapped to the nearest physical centerline **vertex** (not
-segment endpoint) using a simple STRtree nearest-vertex lookup — no direction
-filtering, no greedy assignment. The result is written as a second layer in
-`nodes_snapped.gpkg` so Stage 2 can use them as additional centerline split points.
+These nodes are snapped to the nearest **point** on the nearest physical
+centerline (perpendicular projection, not nearest vertex or endpoint) using a
+simple STRtree lookup — no direction filtering, no greedy assignment.
+Centroid connectors essentially never attach to freeway mainline (checked
+directly: 23 of several thousand real-road links touching a CC attachment
+node are FT 31/33/35, the mainline codes), so the undirected divided-highway
+collision risk that rules out this approach for road-node snapping doesn't
+apply here. The result is written as a second layer in `nodes_snapped.gpkg`.
+
+A CC attachment node sometimes already coincides with a real junction that
+the direction-aware greedy snapper above already placed — `already_snapped`
+flags those directly against this notebook's own `gdf_nodes_snapped` output
+(the `snapped` column), not inferred from anything else. `use_as_split =
+snap_resolved & ~already_snapped` is the one column Stage 2/3 actually
+consume: reusing an already-snapped node's independently-computed nearest-
+point coordinate here would plant a second, slightly different split a few
+cm away from the real one, producing a sliver instead of a clean cut.
+Unresolved nodes (> 100 m) are simply excluded — same as any other unsnapped
+node, no special handling.
 
 ```{python}
 gdf_cc_links = gpd.read_file(PATHS["in_network_links"], where="FT_2027 = 1")
 cc_node_ids = set(gdf_cc_links["A"]) | set(gdf_cc_links["B"])
 print(f"Centroid connector links: {len(gdf_cc_links):,} | unique node IDs: {len(cc_node_ids):,}")
 
+main_snapped_ids = set(gdf_nodes_snapped.loc[gdf_nodes_snapped["snapped"].fillna(False), "N"])
+
 gdf_cc_nodes = gdf_nodes[
     gdf_nodes["N"].isin(cc_node_ids) & (gdf_nodes["N"] >= 3600)
 ].copy()
+gdf_cc_nodes["already_snapped"] = gdf_cc_nodes["N"].isin(main_snapped_ids)
 print(f"CC attachment nodes (N ≥ 3600): {len(gdf_cc_nodes):,}")
+print(f"  already snapped by the main pipeline: {gdf_cc_nodes['already_snapped'].sum():,}")
 ```
 
 ```{python}
 gdf_cc_snapped = snap_cc_nodes(gdf_cc_nodes.to_crs(CRS_UTM), gdf_centerlines, max_snap_dist_m=100.0)
+gdf_cc_snapped["use_as_split"] = gdf_cc_snapped["snap_resolved"] & ~gdf_cc_snapped["already_snapped"]
 
 n_resolved   = gdf_cc_snapped["snap_resolved"].sum()
 n_unresolved = len(gdf_cc_snapped) - n_resolved
 dist = gdf_cc_snapped.loc[gdf_cc_snapped["snap_resolved"], "snap_dist_m"]
 print(f"Resolved: {n_resolved:,} | Unresolved (> 100 m): {n_unresolved:,}")
 print(f"Snap distance (m): median={dist.median():.1f} | P90={dist.quantile(0.90):.1f} | max={dist.max():.1f}")
+print(f"New split points (resolved, not already snapped): {gdf_cc_snapped['use_as_split'].sum():,}")
 
 gdf_cc_snapped.to_crs(CRS_UTM).to_file(out_path, layer="cc_nodes_snapped", driver="GPKG")
 print(f"CC attachment nodes saved to: {out_path} (layer: cc_nodes_snapped)")
@@ -1413,31 +1434,69 @@ print(f"CC attachment nodes saved to: {out_path} (layer: cc_nodes_snapped)")
 External station nodes (`EXTERNAL_ = 1` on the node table, N 3601–3629) are
 gateway points where the model network intentionally truncates at the edge
 of the modelled region — canyon passes, state lines (e.g. "I-15 to
-Tremonton", "SR 190 Guardsman Pass"). Like CC attachment nodes, they are not
-reliably handled by the direction-aware greedy snapper, so they get the same
-simple nearest-vertex treatment and are written as a third `nodes_snapped.gpkg`
-layer for Stage 2 to use as additional split points.
+Tremonton", "SR 190 Guardsman Pass"). Like CC attachment nodes, they get the
+same nearest-point-on-line treatment (not nearest-vertex) and the same
+`already_snapped`/`use_as_split` columns, and are written as a third
+`nodes_snapped.gpkg` layer.
 
 The same 100 m cutoff as CC nodes is kept deliberately tight: several
 external nodes sit 1–13 km from any WF-county centerline (true remote
 boundary points where our centerline extract simply doesn't reach), and
-snapping those to whatever vertex happens to be nearest would be a
-misleading match rather than a real one — better left unresolved.
+snapping those to whatever point happens to be nearest would be a misleading
+match rather than a real one — better left unresolved (excluded, same as any
+other unsnapped node).
 
 ```{python}
 gdf_ext_nodes = gdf_nodes[gdf_nodes["EXTERNAL_"] == 1].copy()
+gdf_ext_nodes["already_snapped"] = gdf_ext_nodes["N"].isin(main_snapped_ids)
 print(f"External station nodes (EXTERNAL_ = 1): {len(gdf_ext_nodes):,}")
+print(f"  already snapped by the main pipeline: {gdf_ext_nodes['already_snapped'].sum():,}")
 ```
 
 ```{python}
 gdf_ext_snapped = snap_cc_nodes(gdf_ext_nodes.to_crs(CRS_UTM), gdf_centerlines, max_snap_dist_m=100.0)
+gdf_ext_snapped["use_as_split"] = gdf_ext_snapped["snap_resolved"] & ~gdf_ext_snapped["already_snapped"]
 
 n_resolved   = gdf_ext_snapped["snap_resolved"].sum()
 n_unresolved = len(gdf_ext_snapped) - n_resolved
 dist = gdf_ext_snapped.loc[gdf_ext_snapped["snap_resolved"], "snap_dist_m"]
 print(f"Resolved: {n_resolved:,} | Unresolved (> 100 m): {n_unresolved:,}")
 print(f"Snap distance (m): median={dist.median():.1f} | P90={dist.quantile(0.90):.1f} | max={dist.max():.1f}")
+print(f"New split points (resolved, not already snapped): {gdf_ext_snapped['use_as_split'].sum():,}")
 
 gdf_ext_snapped.to_crs(CRS_UTM).to_file(out_path, layer="ext_nodes_snapped", driver="GPKG")
 print(f"\nExternal station nodes saved to: {out_path} (layer: ext_nodes_snapped)")
+```
+
+### Re-flagging Mid-Link Attachment Nodes as Hard Boundaries
+
+`NeighborCount` (Part A, top of this notebook) is computed from the
+FT_2027-filtered link table, so a CC node's FT=1 spur is invisible to it. When
+the model inserts a CC/external attachment node strictly between two
+intersections — coding the through road as two separate link rows,
+`intersection1 → node` and `node → intersection2` — that node sees only its
+two real-road neighbors and looks like an ordinary shape point:
+`is_topo_passthrough = True`. `03_transfer_attributes.qmd`'s pass-through
+dissolve then silently walks through it, merging both halves into one chain
+with no split at the node's true location and no separate attribute transfer
+for either half. `use_as_split` (computed above) is exactly the set of nodes
+where this applies: resolved, and not already snapped/handled elsewhere. A
+node already at a real junction already has `is_topo_passthrough = False` and
+needs no change.
+
+```{python}
+attach_ids = set(gdf_cc_snapped.loc[gdf_cc_snapped["use_as_split"], "N"]) | \
+             set(gdf_ext_snapped.loc[gdf_ext_snapped["use_as_split"], "N"])
+
+was_mid_link_passthrough = gdf_nodes["N"].isin(attach_ids) & gdf_nodes["is_topo_passthrough"]
+n_patched = int(was_mid_link_passthrough.sum())
+gdf_nodes.loc[was_mid_link_passthrough, "is_topo_passthrough"] = False
+
+gdf_nodes.to_crs(CRS_UTM).to_file(PATHS["out_node_classified"], driver="GPKG")
+print(
+    f"Patched is_topo_passthrough=False for {n_patched:,} mid-link CC/external "
+    f"attachment node(s) (of {len(attach_ids):,} new split points total — the "
+    f"rest already sat at a real junction and needed no change)."
+)
+print(f"Re-exported {PATHS['out_node_classified']} with the patch.")
 ```

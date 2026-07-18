@@ -1,7 +1,7 @@
 ---
 title: Create True-Shape Links
 subtitle: Redissolving candidate centerlines and splitting only at snapped model nodes to produce true-shape link pieces
-description: CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts; level isolation prevents GEOS from spuriously noding elevated roads against at-grade crossings), then same-route chains split by an incidental junction — a VERT_LEVEL boundary (e.g. a freeway climbing onto its own flyover) or an ordinary at-grade branch point with no TDM model node (e.g. a through-route crossed by an unrelated street not in the model) — are restitched, then the result is split only at snapped WFRC road model-node positions to produce the raw building-block pieces for true-shape link conflation. CC attachment and external station nodes are excluded from this split (folded in separately later). Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, VERT_LEVEL, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks — VERT_LEVEL there is informational only, not a matching key.
+description: CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts; level isolation prevents GEOS from spuriously noding elevated roads against at-grade crossings), then same-route chains split by an incidental junction — a VERT_LEVEL boundary (e.g. a freeway climbing onto its own flyover) or an ordinary at-grade branch point with no TDM model node (e.g. a through-route crossed by an unrelated street not in the model) — are restitched, then the result is split at snapped WFRC road model-node positions plus CC-attachment/external-station node positions (only where resolved and not already snapped by the main pipeline, to avoid slivers) to produce the raw building-block pieces for true-shape link conflation. Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, VERT_LEVEL, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks — VERT_LEVEL there is informational only, not a matching key.
 author:
  - name: Pukar Bhandari
    email: pukar.bhandari@wfrc.utah.gov
@@ -217,6 +217,26 @@ snap_points_exact = [
 print(f"Split points prepared: {len(snap_points_exact):,}")
 ```
 
+CC attachment and external station nodes add their own split points, gated
+by `use_as_split` (computed in `01_node_classification.qmd`): resolved within
+100 m, and not already snapped by the main pipeline (that case already has
+an authoritative split point above — reusing this independently-computed
+nearest-point coordinate for the same node would plant a second, slightly
+different split a few cm away and produce a sliver instead of a clean cut).
+
+```{python}
+cc_points_exact = [
+    Point(row["x_snap"], row["y_snap"])
+    for _, row in gdf_cc_snapped[gdf_cc_snapped["use_as_split"]].iterrows()
+]
+ext_points_exact = [
+    Point(row["x_snap"], row["y_snap"])
+    for _, row in gdf_ext_snapped[gdf_ext_snapped["use_as_split"]].iterrows()
+]
+print(f"CC attachment split points:    {len(cc_points_exact):,}")
+print(f"External station split points: {len(ext_points_exact):,}")
+```
+
 ---
 
 ## Part B2 — Restitch Same-Route Junctions
@@ -291,25 +311,23 @@ exclusively by:
   `gdf_fulldissolve_restitched`.
 
 CC attachment nodes (`cc_nodes_snapped`) and external station nodes
-(`ext_nodes_snapped`) are deliberately **not** used as split points here.
-`snap_cc_nodes()` computes their position independently (nearest-line
-projection from the node's own raw coordinate, uncapped), which can land far
-from the node's true location — e.g. a TAZ centroid connector projecting
-330 m onto an unrelated freeway mainline — planting a phantom split in the
-middle of an otherwise-continuous physical piece. Centroid connector and
-external station nodes will be split into the true-shape network as a
-separate, later pass instead of being folded into this one.
+(`ext_nodes_snapped`) are also used as split points here, but only the
+`use_as_split` subset — resolved within 100 m and not already snapped by the
+main pipeline (see Part B and `01_node_classification.qmd`). Unresolved
+nodes are left out entirely, same as any other unsnapped node: no coordinate,
+no split, no change from today's behavior for that node.
 
 No lineage keys are carried through this split (`id_cols=()`) — a redissolved
 row no longer maps 1:1 to a single original `OBJECTID`. Lineage/display
 attributes are reattached afterward via midpoint join (Part D).
 
 ```{python}
-all_snap_points = snap_points_exact
+all_snap_points = snap_points_exact + cc_points_exact + ext_points_exact
 print(
-    f"Split points: {len(snap_points_exact):,} (model nodes). "
-    f"CC attachment ({len(gdf_cc_snapped):,}) and external station "
-    f"({len(gdf_ext_snapped):,}) nodes excluded — split separately later."
+    f"Split points: {len(snap_points_exact):,} model nodes "
+    f"+ {len(cc_points_exact):,} CC attachment "
+    f"+ {len(ext_points_exact):,} external station "
+    f"= {len(all_snap_points):,} total"
 )
 ```
 
@@ -422,11 +440,9 @@ print(f"  Max:    {lengths.max():.1f}")
 print()
 print(f"Input:  {len(gdf_centerlines):,} candidate components")
 print(f"        {n_road_snapped:,} snapped road nodes ({n_resolved:,} coordinate-resolved)")
-print(f"        {len(gdf_cc_snapped):,} CC attachment nodes snapped")
-print(f"        {len(gdf_ext_snapped):,} external station nodes snapped")
+print(f"        {len(gdf_cc_snapped):,} CC attachment nodes ({len(cc_points_exact):,} used as split points)")
+print(f"        {len(gdf_ext_snapped):,} external station nodes ({len(ext_points_exact):,} used as split points)")
 print(f"Output: {len(gdf_pieces):,} pieces → {PATHS['out_link_pieces'].name}")
-print(f"        {len(gdf_cc_snapped):,} CC attachment nodes → {PATHS['in_node_snapped'].name} (layer: cc_nodes_snapped)")
-print(f"        {len(gdf_ext_snapped):,} external station nodes → {PATHS['in_node_snapped'].name} (layer: ext_nodes_snapped)")
 ```
 
 ```{python}
