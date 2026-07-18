@@ -1,7 +1,7 @@
 ---
 title: Create True-Shape Links
 subtitle: Redissolving candidate centerlines and splitting only at snapped model nodes to produce true-shape link pieces
-description: CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts; level isolation prevents GEOS from spuriously noding elevated roads against at-grade crossings), then same-route chains split only by an incidental level boundary (e.g. a freeway climbing onto its own flyover) are restitched, then the result is split only at snapped WFRC road model-node positions to produce the raw building-block pieces for true-shape link conflation. CC attachment and external station nodes are excluded from this split (folded in separately later). Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, VERT_LEVEL, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks — VERT_LEVEL there is informational only, not a matching key.
+description: CandidateTDMRoadLinks is fully re-dissolved into maximal topological chains per VERT_LEVEL (undoing incidental arcpy junction cuts; level isolation prevents GEOS from spuriously noding elevated roads against at-grade crossings), then same-route chains split by an incidental junction — a VERT_LEVEL boundary (e.g. a freeway climbing onto its own flyover) or an ordinary at-grade branch point with no TDM model node (e.g. a through-route crossed by an unrelated street not in the model) — are restitched, then the result is split only at snapped WFRC road model-node positions to produce the raw building-block pieces for true-shape link conflation. CC attachment and external station nodes are excluded from this split (folded in separately later). Lineage/display attributes (OBJECTID, UNIQUE_ID, DOT_FCLASS, VERT_LEVEL, etc.) are reattached onto each piece via a midpoint-nearest join against CandidateTDMRoadLinks — VERT_LEVEL there is informational only, not a matching key.
 author:
  - name: Pukar Bhandari
    email: pukar.bhandari@wfrc.utah.gov
@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path.cwd()))
 from _src.link_utils import resolve_snap_coords, split_candidate_links
 from _src.centerline_utils import (
     dissolve_and_singlepart,
-    restitch_vert_level_transitions,
+    restitch_route_through_junctions,
     transfer_attributes_by_midpoint,
 )
 ```
@@ -219,28 +219,36 @@ print(f"Split points prepared: {len(snap_points_exact):,}")
 
 ---
 
-## Part B2 — Restitch Same-Route VERT_LEVEL Transitions
+## Part B2 — Restitch Same-Route Junctions
 
-Part A's per-level dissolve leaves one specific kind of incidental split
-behind: where the *same* physical route continues across an elevation
-change (e.g. a freeway mainline climbing onto its own flyover), the two
-sides were dissolved in different level groups and so remain separate
-chains touching at a single point, even though nothing marks a real
-boundary there. Since bridges/flyovers have no physical model node where
-they rise off the ground, that point would otherwise survive all the way
-into the final pieces as a phantom split.
+Part A's dissolve only auto-merges through a true degree-2 point, so it
+leaves two kinds of incidental split behind, both of which strand a piece
+boundary with no corresponding TDM model node:
 
-`restitch_vert_level_transitions` finds exactly this pattern — a coordinate
-shared by precisely two chain endpoints from two different levels — and
-merges the pair only when both sides agree on `DOT_RTNAME` and `POSTTYPE`
-(same route, same facility class — e.g. FWY-to-FWY, not a ramp joining the
-mainline) at that point, and only when the point isn't itself a snapped
-model node (those must stay hard boundaries). Everything else — a
-different route merely crossing at a different elevation, a ramp/CD
-junction, a genuine 3-way branch — is left split, exactly as before.
+- **VERT_LEVEL boundaries** — where the *same* physical route continues
+  across an elevation change (e.g. a freeway mainline climbing onto its own
+  flyover), the two sides were dissolved in different level groups and so
+  remain separate chains touching at a single point. Bridges/flyovers have
+  no physical model node where they rise off the ground.
+- **Ordinary at-grade branch points** — wherever 3+ chain-ends meet,
+  dissolve leaves the point split even if it's really just one through-route
+  crossed by an unrelated street that isn't in the TDM network at all. This
+  turns out to be the common case: e.g. HWY 186 running through as a single
+  continuous corridor from 900 E to 1300 E is spuriously cut where 1100 E
+  crosses it, even though 1100 E carries no TDM link and no model node sits
+  at that crossing.
+
+`restitch_route_through_junctions` finds every coordinate shared by 2+
+distinct chains and merges any pair that agrees on `DOT_RTNAME` and
+`POSTTYPE` (same route, same facility class) there, regardless of whether
+the mismatch came from a VERT_LEVEL difference or an ordinary junction —
+and regardless of how many other, non-matching chains also touch that same
+point (a crossing street stays split; only the matching through-route pair
+merges). Points that are themselves a snapped model node are never
+restitched — those must stay hard boundaries.
 
 ```{python}
-gdf_fulldissolve_restitched = restitch_vert_level_transitions(
+gdf_fulldissolve_restitched = restitch_route_through_junctions(
     gdf_fulldissolve,
     "dissolve_level",
     gdf_centerlines,
@@ -250,10 +258,11 @@ gdf_fulldissolve_restitched = restitch_vert_level_transitions(
     point_tolerance=0.05,
 )
 attrs = gdf_fulldissolve_restitched.attrs
-print(f"Cross-level touch points found: {attrs['n_candidates']:,}")
-print(f"  excluded (at a snapped node):     {attrs['n_excluded']:,}")
-print(f"  route-identity mismatch (left split): {attrs['n_identity_mismatch']:,}")
-print(f"  restitched (same route, merged):  {attrs['n_merged']:,} edges -> {attrs['n_components_merged']:,} chains")
+print(f"Junction points found (2+ chains touching): {attrs['n_candidate_points']:,}")
+print(f"  excluded (at a snapped node):          {attrs['n_excluded']:,}")
+print(f"  candidate chain pairs considered:      {attrs['n_candidate_pairs']:,}")
+print(f"  route-identity mismatch (left split):  {attrs['n_identity_mismatch']:,}")
+print(f"  restitched (same route, merged):       {attrs['n_merged']:,} edges -> {attrs['n_components_merged']:,} chains")
 print(f"Chains: {len(gdf_fulldissolve):,} -> {len(gdf_fulldissolve_restitched):,}")
 ```
 
@@ -272,13 +281,14 @@ assert diff_m < 1.0, "Restitch changed total network length — investigate befo
 `gdf_fulldissolve_restitched` (Part A + B2) — not the original
 `CandidateTDMRoadLinks` rows — is split only at snapped road model-node
 positions, so piece boundaries come exclusively from road-node snapping,
-never from incidental arcpy junction cuts or an incidental VERT_LEVEL
-boundary on the same route. Points that project to within 0.1 mm of a
-component's existing endpoint are skipped (already a boundary). After all
-splits, each resulting piece is bounded exclusively by:
+never from incidental arcpy junction cuts or an incidental same-route
+junction (VERT_LEVEL boundary or unrelated at-grade crossing). Points that
+project to within 0.1 mm of a component's existing endpoint are skipped
+(already a boundary). After all splits, each resulting piece is bounded
+exclusively by:
 - a snapped model node position, or
-- a genuine branch point or unreconciled route/level boundary already
-  present in `gdf_fulldissolve_restitched`.
+- a genuine branch/route-identity-mismatch junction already present in
+  `gdf_fulldissolve_restitched`.
 
 CC attachment nodes (`cc_nodes_snapped`) and external station nodes
 (`ext_nodes_snapped`) are deliberately **not** used as split points here.
@@ -346,17 +356,19 @@ gdf_pieces = gpd.GeoDataFrame(
 `VERT_LEVEL` of whichever `CandidateTDMRoadLinks` row lands nearest this
 piece's midpoint, nothing more. `VERT_LEVEL` is used upstream only as a
 dissolve-grouping key (Part A, to keep GEOS from noding elevated roads
-against every at-grade crossing) and as one of two identity checks that
-gate a same-route restitch (Part B2, alongside `POSTTYPE`) — it is never
-used as a snap-coordinate key, a split key, or in
-`03_transfer_attributes.qmd`'s A/B chain matching. A piece can legitimately
-span a real elevation change with no split between — e.g. a freeway
-climbing onto a flyover — once Part B2 has restitched that specific
-transition. In that case the single `VERT_LEVEL` value carried onto the
-piece just reflects whichever side of the climb the midpoint happens to
-fall on; it is kept for future convenience (e.g. if the true-shape TDM link
-output later wants a `VERT_LEVEL` column) and should not be read as
-authoritative for the whole piece.
+against every at-grade crossing, and Part B2, to look up each chain's own
+route identity within its own level) — it is never itself an identity
+check, a snap-coordinate key, a split key, or used in
+`03_transfer_attributes.qmd`'s A/B chain matching (that gate is
+`DOT_RTNAME` + `POSTTYPE`, see Part B2). A piece can legitimately span a
+real elevation change or an ordinary street crossing with no split between
+— e.g. a freeway climbing onto a flyover, or HWY 186 running straight
+through where 1100 E crosses it — once Part B2 has restitched that
+specific junction. In that case the single `VERT_LEVEL` value carried onto
+the piece just reflects whichever side of the junction the midpoint
+happens to fall on; it is kept for future convenience (e.g. if the
+true-shape TDM link output later wants a `VERT_LEVEL` column) and should
+not be read as authoritative for the whole piece.
 
 `CandidateTDMRoadLinks` contains a small number of standalone sub-centimetre
 "stub" features (max ~6 mm, confirmed by direct `OBJECTID` lookup) — digitizing

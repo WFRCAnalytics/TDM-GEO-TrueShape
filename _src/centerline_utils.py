@@ -36,15 +36,17 @@ Public API
         For each cleaned geometry compute its midpoint, nearest-join to
         original_gdf, and append cols. Returns cleaned_gdf with cols appended.
 
-    restitch_vert_level_transitions(gdf_fulldissolve, chain_level_col,
+    restitch_route_through_junctions(gdf_fulldissolve, chain_level_col,
             gdf_centerlines, source_level_col, identity_cols, exclude_points,
             point_tolerance=0.05) -> GeoDataFrame
-        Reconnect chains dissolved separately per VERT_LEVEL across their own
-        level boundary when they are the same physical route continuing
-        through an elevation change (e.g. a freeway climbing onto its own
-        flyover), without reintroducing the GEOS cross-line-crossing noding
-        that dissolving across all levels in one pass would cause. Returns
-        geometry only; result.attrs carries match/merge counts.
+        Reconnect dissolved chains across any junction where dissolve left a
+        hard boundary but both sides are the same physical route -- a
+        VERT_LEVEL boundary (e.g. a freeway climbing onto its own flyover) or
+        an ordinary at-grade branch point (e.g. a through-route spuriously cut
+        by an unrelated cross street with no TDM model node there), without
+        reintroducing the GEOS cross-line-crossing noding that dissolving
+        across all levels in one pass would cause. Returns geometry only;
+        result.attrs carries match/merge counts.
 """
 
 from __future__ import annotations
@@ -353,7 +355,7 @@ def transfer_attributes_by_midpoint(
     return result
 
 
-def restitch_vert_level_transitions(
+def restitch_route_through_junctions(
     gdf_fulldissolve: gpd.GeoDataFrame,
     chain_level_col: str,
     gdf_centerlines: gpd.GeoDataFrame,
@@ -363,35 +365,46 @@ def restitch_vert_level_transitions(
     point_tolerance: float = 0.05,
 ) -> gpd.GeoDataFrame:
     """
-    Reconnect per-VERT_LEVEL dissolved chains across their own level boundary
-    when they are the same physical route continuing through an elevation
-    change, e.g. a freeway mainline climbing onto its own flyover.
+    Reconnect dissolved chains across any junction where dissolve left a hard
+    boundary but both sides are the same physical route -- a VERT_LEVEL
+    boundary (e.g. a freeway mainline climbing onto its own flyover) or an
+    ordinary at-grade branch point (e.g. a through-route spuriously cut by an
+    unrelated cross street that has no TDM model node there, such as 1100 E
+    crossing the HWY 186 / 500 S corridor).
 
-    dissolve_and_singlepart must be run once per VERT_LEVEL, never across all
-    levels in one pass -- unary_union on LineStrings nodes every crossing
-    point, not just shared endpoints, so a single global dissolve spuriously
-    splits every elevated road against every at-grade street it merely
-    passes over (verified empirically: it produces MORE chains than the raw
-    ungrouped input, not fewer). That per-level isolation is what leaves a
-    same-route elevation change looking like two separate chains touching at
-    a single point -- this function undoes only that specific case.
+    dissolve_and_singlepart only auto-merges through a true degree-2 point.
+    Any point where 3+ chain-ends meet, or where 2 chain-ends come from
+    different VERT_LEVELs (dissolve is deliberately per-level-isolated -- see
+    dissolve_and_singlepart's docstring), is left as a hard boundary even when
+    it isn't a real branch for a given route. Empirically this is the common
+    case, not the rare one: of every branch point in this network, most are a
+    single through-route crossed by one unrelated street with no model node
+    of its own.
 
-    A restitch candidate is a coordinate shared by exactly two chain
-    endpoints from two *different* `chain_level_col` values (a same-level
-    2-way touch would already have been merged inside dissolve_and_singlepart,
-    so this case only arises at a level boundary by construction; groups of
-    size != 2, or where both entries share a level, are left alone). Each
-    side's nearest gdf_centerlines row -- searched within its own
-    `source_level_col` value only -- must agree, non-null, on every column in
-    `identity_cols` (route identity, e.g. DOT_RTNAME); otherwise the touch is
-    treated as an incidental different-route crossing and left split. Points
-    within `point_tolerance` of any `exclude_points` entry (snapped
-    model-node positions) are never restitched -- those must remain hard
-    split boundaries regardless of identity.
+    A restitch candidate is any coordinate shared by 2+ distinct chains. Each
+    chain-end's route identity is looked up as the nearest gdf_centerlines row
+    *within that chain's own* `chain_level_col` / `source_level_col` value, so
+    a genuinely elevated road is never identity-matched against an unrelated
+    at-grade road it happens to pass near. Two chains touching at the same
+    point are merged only when they agree, non-null, on every column in
+    `identity_cols` (route identity, e.g. DOT_RTNAME + POSTTYPE); everything
+    else -- a different route merely crossing, a genuine fork/branch -- is
+    left split. Points within `point_tolerance` of any `exclude_points` entry
+    (snapped model-node positions) are never restitched.
 
-    Chains connected through more than one level transition (e.g. a stacked
-    interchange climbing through levels 0 -> 1 -> 2) are grouped via
-    connected components and re-dissolved together.
+    A small number of junctions have more than one identity-matching pair at
+    the same point (e.g. a stacked/looping structure). These are not
+    specially disambiguated: every matching pair becomes a graph edge, and the
+    whole connected group is re-dissolved together. This is safe because
+    dissolve_and_singlepart's linemerge only ever joins through an actual
+    degree-2 point -- a genuinely ambiguous 3+-way meeting falls back to
+    "leave split" on its own (verified against real ambiguous junctions in
+    this network: re-dissolving them changes nothing).
+
+    Chains connected through more than one junction (e.g. a route crossing
+    several unrelated streets in a row, or a stacked interchange climbing
+    through several VERT_LEVELs) are grouped via connected components and
+    re-dissolved together.
 
     Parameters
     ----------
@@ -412,16 +425,18 @@ def restitch_vert_level_transitions(
     exclude_points : list[Point]
         Coordinates that must remain hard boundaries (snapped model nodes).
     point_tolerance : float
-        Matching tolerance in metres for exclude_points and identity lookup.
+        Matching tolerance in metres for exclude_points.
 
     Returns
     -------
     GeoDataFrame
         geometry only, one row per (possibly restitched) chain.
-        result.attrs: n_candidates, n_excluded, n_identity_mismatch, n_merged
-        (count of restitch edges actually applied), n_components_merged
-        (count of resulting multi-chain groups, <= n_merged when a group
-        spans more than one transition).
+        result.attrs: n_candidate_points (junctions with 2+ chains),
+        n_excluded (at a snapped node), n_candidate_pairs (all pairs
+        considered across those junctions), n_identity_mismatch, n_merged
+        (distinct edges actually applied), n_components_merged (resulting
+        multi-chain groups, <= n_merged when a group spans more than one
+        junction).
     """
     n = len(gdf_fulldissolve)
     geoms = gdf_fulldissolve.geometry.tolist()
@@ -436,24 +451,18 @@ def restitch_vert_level_transitions(
         endpoint_groups[start_key].append(i)
         endpoint_groups[end_key].append(i)
 
-    candidates: list[tuple[tuple[float, float], int, int]] = []
-    for key, idxs in endpoint_groups.items():
-        if len(idxs) != 2:
-            continue
-        a, b = idxs
-        if a == b or levels[a] == levels[b]:
-            continue
-        candidates.append((key, a, b))
+    junctions = {key: idxs for key, idxs in endpoint_groups.items() if len(idxs) >= 2}
 
     result_attrs = {
-        "n_candidates": len(candidates),
+        "n_candidate_points": len(junctions),
         "n_excluded": 0,
+        "n_candidate_pairs": 0,
         "n_identity_mismatch": 0,
         "n_merged": 0,
         "n_components_merged": 0,
     }
 
-    if not candidates:
+    if not junctions:
         result = gpd.GeoDataFrame(geometry=geoms, crs=gdf_fulldissolve.crs)
         result.attrs.update(result_attrs)
         return result
@@ -469,49 +478,51 @@ def restitch_vert_level_transitions(
                 return True
         return False
 
-    kept: list[tuple[tuple[float, float], int, int]] = []
-    for key, a, b in candidates:
+    kept: dict[tuple[float, float], list[int]] = {}
+    for key, idxs in junctions.items():
         if _is_excluded(Point(key)):
             result_attrs["n_excluded"] += 1
         else:
-            kept.append((key, a, b))
+            kept[key] = idxs
 
-    # ── Look up route identity at each candidate point, per source level ─────
-    merge_edges: list[tuple[int, int]] = []
+    # ── Look up each chain's route identity, within its own dissolve level ───
+    identity: dict[int, tuple] = {}
     if kept:
-        from_pts = gpd.GeoDataFrame(
-            geometry=[Point(k) for k, a, b in kept], crs=gdf_fulldissolve.crs
+        chain_ids = sorted({i for idxs in kept.values() for i in idxs})
+        mid_gdf = gpd.GeoDataFrame(
+            {"_chain_i": chain_ids, "_level": [levels[i] for i in chain_ids]},
+            geometry=[geoms[i].interpolate(0.5, normalized=True) for i in chain_ids],
+            crs=gdf_fulldissolve.crs,
         )
-        nearest_by_level: dict = {}
-        for lvl in pd.unique(gdf_centerlines[source_level_col]):
+        for lvl in pd.unique(mid_gdf["_level"]):
             sub = gdf_centerlines.loc[
-                gdf_centerlines[source_level_col] == lvl,
-                ["geometry", *identity_cols],
+                gdf_centerlines[source_level_col] == lvl, ["geometry", *identity_cols]
             ]
             if sub.empty:
                 continue
-            joined = gpd.sjoin_nearest(
-                from_pts, sub, how="left", distance_col="_restitch_d"
-            )
+            rows = mid_gdf[mid_gdf["_level"] == lvl]
+            joined = gpd.sjoin_nearest(rows, sub, how="left", distance_col="_restitch_d")
             joined = joined[~joined.index.duplicated(keep="first")]
-            nearest_by_level[lvl] = joined.reset_index(drop=True)
+            for _, row in joined.iterrows():
+                identity[int(row["_chain_i"])] = tuple(row[c] for c in identity_cols)
 
-        for i, (key, a, b) in enumerate(kept):
-            lvl_a, lvl_b = levels[a], levels[b]
-            ra = nearest_by_level.get(lvl_a)
-            rb = nearest_by_level.get(lvl_b)
-            if ra is None or rb is None:
-                result_attrs["n_identity_mismatch"] += 1
-                continue
-            ra_row, rb_row = ra.iloc[i], rb.iloc[i]
-            same = all(
-                pd.notna(ra_row[c]) and pd.notna(rb_row[c]) and ra_row[c] == rb_row[c]
-                for c in identity_cols
-            )
-            if same:
-                merge_edges.append((a, b))
-            else:
-                result_attrs["n_identity_mismatch"] += 1
+    # ── Candidate pairs within each junction: same identity, different chain ─
+    merge_edges: list[tuple[int, int]] = []
+    seen_pairs: set[tuple[int, int]] = set()
+    for key, idxs in kept.items():
+        distinct = sorted(set(idxs))
+        for a_pos in range(len(distinct)):
+            for b_pos in range(a_pos + 1, len(distinct)):
+                a, b = distinct[a_pos], distinct[b_pos]
+                result_attrs["n_candidate_pairs"] += 1
+                id_a, id_b = identity.get(a), identity.get(b)
+                if id_a is not None and id_a == id_b and all(pd.notna(v) for v in id_a):
+                    pair = (a, b)
+                    if pair not in seen_pairs:
+                        seen_pairs.add(pair)
+                        merge_edges.append(pair)
+                else:
+                    result_attrs["n_identity_mismatch"] += 1
 
     result_attrs["n_merged"] = len(merge_edges)
 

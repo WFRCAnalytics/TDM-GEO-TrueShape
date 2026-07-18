@@ -393,7 +393,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="imports" class="level3">
 <h3 class="anchored" data-anchor-id="imports">Imports</h3>
-<div id="2543c49b" class="cell" data-execution_count="1">
+<div id="38b9169e" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> json</span>
@@ -414,7 +414,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="configuration" class="level3">
 <h3 class="anchored" data-anchor-id="configuration">Configuration</h3>
-<div id="d6ae6891" class="cell" data-execution_count="2">
+<div id="d29961f3" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -438,7 +438,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="model-links" class="level3">
 <h3 class="anchored" data-anchor-id="model-links">Model Links</h3>
 <p>Filtered the same way <code>01_node_classification.qmd</code> filters when it computes <code>NeighborCount</code>/<code>is_topo_passthrough</code>: <code>LN_2027 &gt; 0 AND FT_2027 NOT IN (1, 37, 38, 39)</code>. Centroid connectors (FT=1) and non-physical HOV/Managed- Access links (FT=37,38,39) are excluded outright; everything else must additionally have at least one lane by 2027 to count as part of today’s (or 2027’s) connectivity graph — a link coded zero-lane in 2027 doesn’t yet exist as a driveable connection, even if a physical centerline sits near its geometry. This match matters beyond just filtering consistently: if this notebook’s dissolve graph could see an edge that <code>01</code> didn’t count, a node <code>01</code> classified pass-through (<code>NeighborCount==2</code>) could turn out to have a 3rd, LN=0 neighbor here — and <code>dissolve_pseudonodes</code>’s walk, trusting the <code>NeighborCount==2</code> guarantee, would silently take the wrong edge through it. <code>LN_2027</code>/<code>FT_2027</code> themselves are reported unchanged on matched output — this only affects whether a chain counts as connected, not what gets displayed.</p>
-<div id="7d60cb6c" class="cell" data-execution_count="3">
+<div id="92cea133" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>gdf_links <span class="op">=</span> gpd.read_file(</span>
@@ -484,7 +484,7 @@ FT_2027
 <p>Stage 2 guarantees every <code>link_pieces.gpkg</code> boundary is already a snap point, so Stage 3 needs <em>which</em> nodes are snapped (split points) versus not. For the “not” side, <code>is_topo_passthrough</code> from <code>nodes_classified.gpkg</code> (<code>NeighborCount==2</code>, regardless of FT, lane count, or link-class/designation uniformity) is safe to silently walk through and absorb into a multi-hop chain in Part A — a node with exactly two distinct neighbors has exactly one way to continue through it, full stop, no matter what changes there on the model side. An unsnapped node that fails even that (3+ neighbors — a real junction) is <em>not</em> pass-through: <code>dissolve_pseudonodes</code>’s single-preferred-edge walk has no reliable way to know which of several real branches continues the correct chain, so treating every unsnapped node as pass-through (as an earlier version of this notebook did) silently produced wrong-branch chains at those nodes. Only 2-neighbor nodes are dissolved through; any 3+-neighbor unsnapped node is left as a hard chain boundary, and pieces touching it honestly fail to match rather than getting attributed from a guessed direction.</p>
 <p>This is deliberately broader than <code>is_pseudo</code> (which additionally requires uniform FT and uniform lane count, because it also gates Stage 1 snapping eligibility — a snap <em>target</em> needs that stricter guarantee). Stage 3 only needs the topological guarantee: real FT-transition, lane-transition, and link-class-transition nodes have no physical vertex of their own in the UGRC/UDOT centerlines (arcpy only cuts at genuine junctions), so treating them as hard chain boundaries here — while <code>is_pseudo</code> correctly still sends them to snapping in <code>01_node_classification.qmd</code> — was silently splitting one physical piece across a model chain boundary the physical network was never actually cut at. See <code>_plan/freeway-endpoint-pool-diagnosis.md</code> and the node-30208 (Antelope Island Causeway) example that first surfaced this.</p>
 <p><code>FixedTransit_Rail</code>-snapped nodes are excluded from <code>snapped_node_ids</code> — they attach to GTFS rail infrastructure, not road centerlines, so they were never road-piece split points in Stage 2 either (<code>02_create_link.qmd</code> applies the same exclusion).</p>
-<div id="7bca2069" class="cell" data-execution_count="4">
+<div id="e8054a6a" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
@@ -515,7 +515,7 @@ Snap coord lookup: 3,476 entries
 Reverse coord→node lookup: 3,476 entries</code></pre>
 </div>
 </div>
-<div id="026bf899" class="cell" data-execution_count="5">
+<div id="edd0cf31" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_classified <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_classified"</span>]).to_crs(CRS_UTM)</span>
@@ -531,7 +531,7 @@ Reverse coord→node lookup: 3,476 entries</code></pre>
 </div>
 </div>
 <p>CC attachment nodes and external station nodes are intentionally excluded from <code>snapped_node_ids</code>/<code>coord_to_node</code> — <code>02_create_link.qmd</code> no longer splits <code>link_pieces.gpkg</code> at their positions (see that notebook’s Part C), so there is no piece boundary for their coordinates to match. They need no separate addition to <code>pseudo_ids</code>, either: a CC node with exactly two real-network neighbors is already <code>is_topo_passthrough</code> regardless of its CC status (that flag is purely <code>NeighborCount==2</code>), and a CC node that is also a real 3+-neighbor junction should stay a hard chain boundary, same as every other junction — <code>dissolve_pseudonodes</code>’s preferred-else- first-found edge choice is only guaranteed correct where there is exactly one way through. External station nodes remain hard chain boundaries until they get their own split-and-match pass.</p>
-<div id="50176bc9" class="cell" data-execution_count="6">
+<div id="161f28ce" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Spot-check: round-trip a handful of known snapped nodes through both lookups.</span></span>
@@ -543,22 +543,22 @@ Reverse coord→node lookup: 3,476 entries</code></pre>
 <span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"N=</span><span class="sc">{</span>n<span class="sc">}</span><span class="ss"> -&gt; </span><span class="sc">{</span>coord<span class="sc">}</span><span class="ss"> -&gt; N=</span><span class="sc">{</span>back<span class="sc">}</span><span class="ss">  </span><span class="sc">{</span><span class="st">'OK'</span> <span class="cf">if</span> back <span class="op">==</span> n <span class="cf">else</span> <span class="st">'MISMATCH'</span><span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>N=90068 -&gt; (439809.94, 4511506.44) -&gt; N=90068  OK
-N=22718 -&gt; (423629.31, 4495959.6) -&gt; N=22718  OK
-N=25715 -&gt; (425997.31, 4512799.2) -&gt; N=25715  OK</code></pre>
+<pre><code>N=27178 -&gt; (424085.62, 4537694.76) -&gt; N=27178  OK
+N=66768 -&gt; (444407.81, 4451742.7) -&gt; N=66768  OK
+N=29258 -&gt; (418875.0, 4571911.4) -&gt; N=29258  OK</code></pre>
 </div>
 </div>
 </section>
 <section id="link-pieces" class="level3">
 <h3 class="anchored" data-anchor-id="link-pieces">Link Pieces</h3>
-<div id="883be27b" class="cell" data-execution_count="7">
+<div id="de5d9ca5" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>gdf_pieces <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_link_pieces"</span>]).to_crs(CRS_UTM)</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Link pieces: </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss"> | CRS: </span><span class="sc">{</span>gdf_pieces<span class="sc">.</span>crs<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Link pieces: 7,400 | CRS: EPSG:26912</code></pre>
+<pre><code>Link pieces: 6,633 | CRS: EPSG:26912</code></pre>
 </div>
 </div>
 <hr>
@@ -569,7 +569,7 @@ N=25715 -&gt; (425997.31, 4512799.2) -&gt; N=25715  OK</code></pre>
 <p>Collapse chains of model links connected through <strong>pass-through nodes</strong> — the topological pass-through set (<code>pass_through_ids = pseudo_ids - snapped_node_ids</code>; the subtraction is defensive, these nodes are never snapped by design — see <code>01_node_classification.qmd</code>’s <code>is_topo_passthrough</code>). A node only qualifies if it has exactly two distinct neighbors (<code>NeighborCount==2</code>) — that alone is the guarantee the walk needs to be safe: at a 2-neighbor node there is exactly one way to continue the chain, so <code>dissolve_pseudonodes</code>’s preferred-else-first-found edge choice can’t pick wrong, regardless of whether FT, lane count, or link class (freeway/ramp/ surface designation) changes there. Only a real 3+-way junction — where topology alone can’t say which branch continues the same physical road — is <strong>not</strong> pass-through here: it’s a hard chain boundary, same as a snapped node. Pieces whose real physical boundary sits at such a junction will fail to match (<code>endpoints_only</code>/<code>a_only</code>/<code>b_only</code>) rather than silently being attributed via a guessed branch.</p>
 <p>Each dissolved chain spans from one snapped node (or real junction) to another; pass-through nodes along the way are absorbed regardless of any attribute change there. Every model link attribute column (besides <code>A</code>, <code>B</code>, geometry) rides along onto the dissolved output, taken from each chain’s first constituent link — this default is only provisional here; Part C replaces it with a nearest-centroid resolution for multi-constituent chains.</p>
 <p>Unlike the old strict-pseudonode set, <code>FT_2027</code>/<code>LN_2027</code> uniformity across a chain’s constituents is <strong>no longer</strong> guaranteed by construction — a chain can now legitimately walk through a real FT- or lane-transition node. <code>invariant_cols=()</code> reflects that: both columns go through the same disagreement check as everything else, and a disagreement is expected and informational (Part C’s nearest-centroid resolution is what actually decides which constituent’s attributes a given physical piece gets), not a bug.</p>
-<div id="773b0277" class="cell" data-execution_count="8">
+<div id="d0defeb2" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>pass_through_ids <span class="op">=</span> pseudo_ids <span class="op">-</span> snapped_node_ids</span>
@@ -581,7 +581,7 @@ N=25715 -&gt; (425997.31, 4512799.2) -&gt; N=25715  OK</code></pre>
 Pass-through (unsnapped) ids: 9,068</code></pre>
 </div>
 </div>
-<div id="54aa4077" class="cell" data-execution_count="9">
+<div id="bdbd269c" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Dissolving pass-through chains …"</span>)</span>
@@ -617,11 +617,11 @@ n_constituents
 Multi-constituent chains: 8,058 (69.9%)</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>C:\Users\Pukar.Bhandari\AppData\Local\Temp\ipykernel_6360\2691584342.py:2: UserWarning: dissolve_pseudonodes: 8058 multi-constituent chain(s) had at least one non-uniform attribute column across 141 column(s); each chain's first constituent value was kept. See result.attrs['disagreement_counts'] for a per-column breakdown.
+<pre><code>C:\Users\Pukar.Bhandari\AppData\Local\Temp\ipykernel_15492\2691584342.py:2: UserWarning: dissolve_pseudonodes: 8058 multi-constituent chain(s) had at least one non-uniform attribute column across 141 column(s); each chain's first constituent value was kept. See result.attrs['disagreement_counts'] for a per-column breakdown.
   gdf_dissolved = dissolve_pseudonodes(gdf_links, pass_through_ids, invariant_cols=())</code></pre>
 </div>
 </div>
-<div id="a8c440d3" class="cell" data-execution_count="10">
+<div id="c6e2fc45" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>disagreement_counts <span class="op">=</span> gdf_dissolved.attrs.get(<span class="st">"disagreement_counts"</span>, {})</span>
@@ -786,7 +786,7 @@ Multi-constituent chains: 8,058 (69.9%)</code></pre>
 <li>Look up each piece’s <code>A_piece</code>/<code>B_piece</code> node id from its rounded start/end coordinate via <code>coord_to_node</code> (built in Part A’s node-loading section). A piece with an unsnapped endpoint (e.g.&nbsp;a network-boundary edge) simply gets a null on that side — that’s expected, not an error.</li>
 <li><code>merge1</code> matches pieces drawn in the <em>same</em> direction as a dissolved chain (<code>A_piece,B_piece == A,B</code> — “forward”). <code>merge2</code> matches pieces drawn in the <em>opposite</em> direction (<code>B_piece,A_piece == A,B</code> — “reverse”). Both can legitimately match the same physical piece: a typical two-way street is coded as two separate model-link rows (one per direction), each dissolving to its own <code>A,B</code> chain, so one physical piece produces <strong>two</strong> output rows — one per direction. A one-way road (e.g.&nbsp;a freeway, already digitized as a separate line per direction) matches only one side, producing one row.</li>
 </ol>
-<div id="a31d016f" class="cell" data-execution_count="11">
+<div id="45153525" class="cell" data-execution_count="11">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>gdf_pieces[<span class="st">"A_piece"</span>] <span class="op">=</span> pd.Series(</span>
@@ -817,17 +817,17 @@ Multi-constituent chains: 8,058 (69.9%)</code></pre>
 <span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gdf_pieces[<span class="st">"endpoint_status"</span>].value_counts().to_string())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Pieces with snapped A endpoint:     5,661 / 7,400
-Pieces with snapped B endpoint:     5,641 / 7,400
-Pieces with both endpoints snapped: 4,741 / 7,400
+<pre><code>Pieces with snapped A endpoint:     5,658 / 6,633
+Pieces with snapped B endpoint:     5,646 / 6,633
+Pieces with both endpoints snapped: 5,107 / 6,633
 endpoint_status
-both_snapped    4741
-a_only           920
-b_only           900
-neither          839</code></pre>
+both_snapped    5107
+a_only           551
+b_only           539
+neither          436</code></pre>
 </div>
 </div>
-<div id="c5a918ae" class="cell" data-execution_count="12">
+<div id="568986a5" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Only both-snapped pieces can possibly match an (A,B) chain — gdf_dissolved's</span></span>
@@ -859,12 +859,12 @@ neither          839</code></pre>
 <span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Pieces matched in both directions (two-way streets): </span><span class="sc">{</span>n_dual<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Matched rows: 7,348  (forward 3,834 + reverse 3,514)
-Distinct pieces matched: 4,111 / 7,400
-Pieces matched in both directions (two-way streets): 3,210</code></pre>
+<pre><code>Matched rows: 7,812  (forward 4,079 + reverse 3,733)
+Distinct pieces matched: 4,378 / 6,633
+Pieces matched in both directions (two-way streets): 3,407</code></pre>
 </div>
 </div>
-<div id="41412086" class="cell" data-execution_count="13">
+<div id="968ec0e4" class="cell" data-execution_count="13">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Spot-check: a piece matched in both directions should show opposite A/B per row.</span></span>
@@ -874,8 +874,8 @@ Pieces matched in both directions (two-way streets): 3,210</code></pre>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code> piece_id  A_piece  B_piece     A     B piece_direction
-      258    65035    71000 65035 71000         forward
-      258    65035    71000 71000 65035         reverse</code></pre>
+     5481    65648    65650 65648 65650         forward
+     5481    65648    65650 65650 65648         reverse</code></pre>
 </div>
 </div>
 <hr>
@@ -883,7 +883,7 @@ Pieces matched in both directions (two-way streets): 3,210</code></pre>
 <section id="part-c-nearest-constituent-attribute-resolution" class="level2" data-number="5">
 <h2 data-number="5" class="anchored" data-anchor-id="part-c-nearest-constituent-attribute-resolution"><span class="header-section-number">5</span> Part C — Nearest-Constituent Attribute Resolution</h2>
 <p><code>matched</code> can legitimately contain more than one candidate chain for the same <code>(piece_id, piece_direction)</code> — not only because a chain’s own <code>constituent_ab_pairs</code> may span multiple original hops, but because <code>gdf_dissolved</code> itself can contain multiple distinct chains sharing the same <code>(A,B)</code>: self-loop branches (different loop roads that both start and end at the same real node) and genuine parallel paths (a direct link and a separate multi-hop alternate between the same two snapped nodes) both produce this. Node ids alone can’t disambiguate either case — only geometry can. A single rule handles both: explode every candidate chain’s constituent hops, join each hop to <code>gdf_links</code> for its attributes and geometry, measure distance from the piece’s centroid to each hop, and keep the global nearest hop per <code>(piece_id, piece_direction)</code> group. This simultaneously selects the correct candidate chain <em>and</em> the correct constituent’s attributes within it — a single-constituent, single-candidate group has exactly one hop and trivially “wins” regardless of distance.</p>
-<div id="564e8dae" class="cell" data-execution_count="14">
+<div id="bda1d9f7" class="cell" data-execution_count="14">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>matched <span class="op">=</span> matched.reset_index(drop<span class="op">=</span><span class="va">True</span>)</span>
@@ -916,10 +916,10 @@ Pieces matched in both directions (two-way streets): 3,210</code></pre>
 <span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Exploded constituent-hop candidates: 17,507 (from 7,348 matched chain rows, 7,330 distinct piece/direction groups)</code></pre>
+<pre><code>Exploded constituent-hop candidates: 18,685 (from 7,812 matched chain rows, 7,794 distinct piece/direction groups)</code></pre>
 </div>
 </div>
-<div id="7883647b" class="cell" data-execution_count="15">
+<div id="2cca3874" class="cell" data-execution_count="15">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>group_sizes <span class="op">=</span> exploded.groupby([<span class="st">"piece_id"</span>, <span class="st">"piece_direction"</span>]).size()</span>
@@ -932,11 +932,11 @@ Pieces matched in both directions (two-way streets): 3,210</code></pre>
 <span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(resolved_attrs) <span class="op">==</span> <span class="bu">len</span>(group_sizes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>(piece_id, piece_direction) groups with &gt;1 candidate hop/chain: 5,337 / 7,330
-Resolved rows: 7,330 (one per piece/direction group, as expected)</code></pre>
+<pre><code>(piece_id, piece_direction) groups with &gt;1 candidate hop/chain: 5,664 / 7,794
+Resolved rows: 7,794 (one per piece/direction group, as expected)</code></pre>
 </div>
 </div>
-<div id="063f2449" class="cell" data-execution_count="16">
+<div id="0cfff7f9" class="cell" data-execution_count="16">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Solo-candidate groups (no ambiguity) must always keep their only hop.</span></span>
@@ -947,11 +947,11 @@ Resolved rows: 7,330 (one per piece/direction group, as expected)</code></pre>
 <span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  all present unchanged in resolved_attrs: </span><span class="sc">{</span>solo_rows<span class="sc">.</span>index<span class="sc">.</span>isin(best_idx)<span class="sc">.</span><span class="bu">all</span>()<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Solo-candidate groups: 1,993
+<pre><code>Solo-candidate groups: 2,130
   all present unchanged in resolved_attrs: True</code></pre>
 </div>
 </div>
-<div id="944a4c18" class="cell" data-execution_count="17">
+<div id="c85cba0d" class="cell" data-execution_count="17">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Spot-check the 4 pieces identified during T7 verification as having &gt;2 raw</span></span>
@@ -964,13 +964,13 @@ Resolved rows: 7,330 (one per piece/direction group, as expected)</code></pre>
 <span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"piece_id=</span><span class="sc">{</span>pid<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>raw_n<span class="sc">}</span><span class="ss"> raw candidate rows -&gt; </span><span class="sc">{</span><span class="bu">len</span>(sub)<span class="sc">}</span><span class="ss"> resolved row(s) [</span><span class="sc">{</span>hops<span class="sc">}</span><span class="ss">]"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>piece_id=1443: 2 raw candidate rows -&gt; 2 resolved row(s) [forward:(29188,29190), reverse:(29190,29188)]
-piece_id=336: 0 raw candidate rows -&gt; 0 resolved row(s) []
+<pre><code>piece_id=1443: 2 raw candidate rows -&gt; 2 resolved row(s) [forward:(29216,29228), reverse:(29228,29216)]
+piece_id=336: 2 raw candidate rows -&gt; 2 resolved row(s) [forward:(22385,22347), reverse:(22347,22385)]
 piece_id=11353: 0 raw candidate rows -&gt; 0 resolved row(s) []
-piece_id=1264: 0 raw candidate rows -&gt; 0 resolved row(s) []</code></pre>
+piece_id=1264: 2 raw candidate rows -&gt; 2 resolved row(s) [forward:(29637,29642), reverse:(29642,29637)]</code></pre>
 </div>
 </div>
-<div id="a71ed18c" class="cell" data-execution_count="18">
+<div id="e42d4c06" class="cell" data-execution_count="18">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Attach piece geometry/lineage + chain-level bookkeeping back onto the</span></span>
@@ -995,7 +995,7 @@ piece_id=1264: 0 raw candidate rows -&gt; 0 resolved row(s) []</code></pre>
 <span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_matched_resolved: </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_resolved)<span class="sc">:,}</span><span class="ss"> rows | null geometries: </span><span class="sc">{</span>gdf_matched_resolved<span class="sc">.</span>geometry<span class="sc">.</span>isna()<span class="sc">.</span><span class="bu">sum</span>()<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>gdf_matched_resolved: 7,330 rows | null geometries: 0</code></pre>
+<pre><code>gdf_matched_resolved: 7,794 rows | null geometries: 0</code></pre>
 </div>
 </div>
 <hr>
@@ -1003,7 +1003,7 @@ piece_id=1264: 0 raw candidate rows -&gt; 0 resolved row(s) []</code></pre>
 <section id="part-d-assemble-final-output-and-export" class="level2" data-number="6">
 <h2 data-number="6" class="anchored" data-anchor-id="part-d-assemble-final-output-and-export"><span class="header-section-number">6</span> Part D — Assemble Final Output and Export</h2>
 <p>Every piece’s geometry is retained regardless of match outcome — pieces with no matching chain (unsnapped endpoint, or a snapped endpoint pair with no corresponding model-link chain) keep exactly one row with blank attribute columns and <code>trueshape_method="unattributed"</code>. <strong>No synthetic/straight-line geometry is ever generated</strong> — this was the old BFS mechanism’s failure mode and the entire reason for this rewrite.</p>
-<div id="6cd8ddd4" class="cell" data-execution_count="19">
+<div id="31f7c1ad" class="cell" data-execution_count="19">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Drop T8's internal computation-only columns before export.</span></span>
@@ -1032,8 +1032,8 @@ piece_id=1264: 0 raw candidate rows -&gt; 0 resolved row(s) []</code></pre>
 <span id="cb36-24"><a href="#cb36-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Unmatched pieces: </span><span class="sc">{</span><span class="bu">len</span>(gdf_unmatched)<span class="sc">:,}</span><span class="ss"> / </span><span class="sc">{</span><span class="bu">len</span>(gdf_pieces)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Matched pieces:   4,111 / 7,400
-Unmatched pieces: 3,289 / 7,400</code></pre>
+<pre><code>Matched pieces:   4,378 / 6,633
+Unmatched pieces: 2,255 / 6,633</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
 <pre><code>D:\GitHub\TDM-GEO-TrueShape\.venv\Lib\site-packages\geopandas\geodataframe.py:1969: PerformanceWarning: DataFrame is highly fragmented.  This is usually the result of calling `frame.insert` many times, which has poor performance.  Consider joining all columns at once using pd.concat(axis=1) instead. To get a de-fragmented frame, use `newframe = frame.copy()`
@@ -1214,7 +1214,7 @@ D:\GitHub\TDM-GEO-TrueShape\.venv\Lib\site-packages\geopandas\geodataframe.py:19
   super().__setitem__(key, value)</code></pre>
 </div>
 </div>
-<div id="6e8d8a55" class="cell" data-execution_count="20">
+<div id="5deb931b" class="cell" data-execution_count="20">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>gdf_trueshape <span class="op">=</span> pd.concat([gdf_matched_final, gdf_unmatched], ignore_index<span class="op">=</span><span class="va">True</span>)</span>
@@ -1230,18 +1230,18 @@ D:\GitHub\TDM-GEO-TrueShape\.venv\Lib\site-packages\geopandas\geodataframe.py:19
 <span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_trueshape.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>gdf_trueshape: 10,619 rows
-  = 7,330 matched + 3,289 unmatched
-  vs. 7,400 pieces + 3,219 dual-direction extras
+<pre><code>gdf_trueshape: 10,049 rows
+  = 7,794 matched + 2,255 unmatched
+  vs. 6,633 pieces + 3,416 dual-direction extras
 Null geometries: 0</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>C:\Users\Pukar.Bhandari\AppData\Local\Temp\ipykernel_6360\3721082179.py:1: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+<pre><code>C:\Users\Pukar.Bhandari\AppData\Local\Temp\ipykernel_15492\3721082179.py:1: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
   gdf_trueshape = pd.concat([gdf_matched_final, gdf_unmatched], ignore_index=True)</code></pre>
 </div>
 </div>
 <p>Combine <code>trueshape_method</code> and <code>endpoint_status</code> into a single QA field for map symbology. <code>trueshape_method == "matched"</code> is always a strict subset of <code>endpoint_status == "both_snapped"</code> (Part B’s merge only ever runs against the both-snapped subset of pieces), so the two collapse into five non-overlapping categories with no ambiguous case:</p>
-<div id="1ccda3bc" class="cell" data-execution_count="21">
+<div id="873dbc62" class="cell" data-execution_count="21">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>gdf_trueshape[<span class="st">"qa_status"</span>] <span class="op">=</span> np.select(</span>
@@ -1258,18 +1258,18 @@ Null geometries: 0</code></pre>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>qa_status
-matched           7330
-a_only             920
-b_only             900
-neither            839
-endpoints_only     630</code></pre>
+matched           7794
+endpoints_only     729
+a_only             551
+b_only             539
+neither            436</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
 <pre><code>D:\GitHub\TDM-GEO-TrueShape\.venv\Lib\site-packages\geopandas\geodataframe.py:1969: PerformanceWarning: DataFrame is highly fragmented.  This is usually the result of calling `frame.insert` many times, which has poor performance.  Consider joining all columns at once using pd.concat(axis=1) instead. To get a de-fragmented frame, use `newframe = frame.copy()`
   super().__setitem__(key, value)</code></pre>
 </div>
 </div>
-<div id="9d156f1e" class="cell" data-execution_count="22">
+<div id="a203b2b0" class="cell" data-execution_count="22">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="op">=</span> PATHS[<span class="st">"out_links_trueshape"</span>]</span>
@@ -1285,7 +1285,7 @@ endpoints_only     630</code></pre>
 </section>
 <section id="summary" class="level2" data-number="7">
 <h2 data-number="7" class="anchored" data-anchor-id="summary"><span class="header-section-number">7</span> Summary</h2>
-<div id="0329662e" class="cell" data-execution_count="23">
+<div id="fa784494" class="cell" data-execution_count="23">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"=== Stage 3 Summary ==="</span>)</span>
@@ -1319,27 +1319,27 @@ endpoints_only     630</code></pre>
 Input:  28,101 model links (FT_2027 not in 1,37,38,39,50,70,80,90)
         9,068 pass-through (unsnapped) node ids absorbed into chains
         11,532 dissolved chains
-        7,400 physical link pieces (link_pieces.gpkg)
-Output: 10,619 rows → links_trueshape.gpkg
+        6,633 physical link pieces (link_pieces.gpkg)
+Output: 10,049 rows → links_trueshape.gpkg
 
 Method breakdown:
 trueshape_method
-matched         7330
-unattributed    3289
+matched         7794
+unattributed    2255
 
 Endpoint-status breakdown (all pieces, regardless of match outcome):
 endpoint_status
-both_snapped    7960
-a_only           920
-b_only           900
-neither          839
+both_snapped    8523
+a_only           551
+b_only           539
+neither          436
 
-Coverage by length: 6,351,513 m matched / 9,217,645 m total (68.9%)
+Coverage by length: 6,789,208 m matched / 9,393,625 m total (72.3%)
 
 Constituent count (matched rows only):
-count    7330.0
+count    7794.0
 mean        2.4
-std         1.6
+std         1.7
 min         1.0
 25%         1.0
 50%         2.0
@@ -1349,7 +1349,7 @@ max        18.0
 dissolve_pseudonodes disagreement_counts: 141 column(s) affected (informational only — not used for final attributes, see Part C)</code></pre>
 </div>
 </div>
-<div id="1bb07db7" class="cell" data-execution_count="24">
+<div id="f5608fc9" class="cell" data-execution_count="24">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>gdf_trueshape[gdf_trueshape[<span class="st">"trueshape_method"</span>] <span class="op">==</span> <span class="st">"matched"</span>].explore(</span>
