@@ -64,6 +64,13 @@ Public API
     filter_ep_claimed(gdf_ep, claimed_coords) -> GeoDataFrame
         Remove endpoint rows already claimed in prior passes so the same
         physical endpoint cannot be assigned to two nodes across separate passes.
+
+    resolve_node_coordinates(gdf_nodes, snap_sources) -> (coord_lookup, tier_lookup)
+        Resolve a final (x, y) for every node via an ordered priority cascade
+        over an arbitrary list of snap-result sources, falling back to the
+        raw model coordinate for any node none of them cover. Generic over
+        the number/kind of sources so a future snapping improvement or a new
+        node class is just one more list entry, not a code change.
 """
 
 import re
@@ -1076,6 +1083,71 @@ def filter_ep_claimed(
         return gdf_ep
     keep = ~gdf_ep["ep_uid"].isin(claimed_coords)
     return gdf_ep[keep].copy()
+
+
+# =============================================================================
+# Final export — coordinate resolution
+# =============================================================================
+
+
+def resolve_node_coordinates(
+    gdf_nodes: gpd.GeoDataFrame,
+    snap_sources: list[tuple[str, gpd.GeoDataFrame, str, str, str]],
+) -> tuple[dict[int, tuple[float, float]], dict[int, str]]:
+    """
+    Resolve a final (x, y) for every node in gdf_nodes via an ordered
+    priority cascade over an arbitrary list of snap-result sources.
+
+    Every node starts at its raw model coordinate (tier "raw"). Each entry
+    in `snap_sources` is then applied in order and overwrites the coordinate
+    (and tier label) for any node id it covers -- so list sources
+    lowest-priority first, highest-priority last (last write wins). A node
+    absent from every source simply keeps whatever tier already resolved it
+    (raw, at minimum) -- this is what lets an unsnapped node, or a node type
+    with no snap source at all yet, fall through safely.
+
+    This is the same cascade used internally by
+    link_utils.build_centroid_connector_links, generalized so any other
+    consumer -- e.g. a full-network node export -- can resolve coordinates
+    for the entire node table, and so adding a future snap source (an
+    improved snapping pass, a new node class) means appending one list entry
+    rather than touching this function.
+
+    Parameters
+    ----------
+    gdf_nodes : GeoDataFrame
+        Full raw node table. Must have N and point geometry -- the
+        always-available tier-0 fallback.
+    snap_sources : list of (tier_name, gdf, id_col, x_col, y_col)
+        Ordered lowest-to-highest priority. `gdf[id_col]` gives the node N
+        each row resolves; `gdf[x_col]` / `gdf[y_col]` give its resolved
+        coordinate. Pre-filter each gdf to only its resolved/successful rows
+        before passing it in (e.g. `df[df["snap_resolved"]]`) -- this
+        function applies every row it is given, unconditionally.
+
+    Returns
+    -------
+    (coord_lookup, tier_lookup) : dict[int, (float, float)], dict[int, str]
+        Both keyed by node N. Every node in gdf_nodes is guaranteed a
+        "raw"-tier entry at minimum.
+    """
+    coord_lookup: dict[int, tuple[float, float]] = {}
+    tier_lookup: dict[int, str] = {}
+
+    def _apply_tier(node_ids, xs, ys, tier: str) -> None:
+        for n, x, y in zip(node_ids, xs, ys):
+            coord_lookup[int(n)] = (float(x), float(y))
+            tier_lookup[int(n)] = tier
+
+    raw_xy = shapely.get_coordinates(gdf_nodes.geometry.values)
+    _apply_tier(gdf_nodes["N"], raw_xy[:, 0], raw_xy[:, 1], "raw")
+
+    for tier_name, gdf, id_col, x_col, y_col in snap_sources:
+        if len(gdf) == 0:
+            continue
+        _apply_tier(gdf[id_col], gdf[x_col], gdf[y_col], tier_name)
+
+    return coord_lookup, tier_lookup
 
 
 # =============================================================================
