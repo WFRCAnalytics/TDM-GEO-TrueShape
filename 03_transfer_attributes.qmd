@@ -157,9 +157,43 @@ these coordinates to match against. Nodes that don't resolve, or that
 coincide with a node already snapped by the main pipeline, are left out
 entirely (no coordinate, no split, same as any other unsnapped node).
 
+CC/external connectors that land inline on a single rail mode (no real
+junction — `LinkFTCount == 1 & LinkLNCount == 1` restricted to
+`FixedTransit` nodes, computed and patched to `is_topo_passthrough = True`
+in `01_node_classification.qmd`) must not be re-added to `snapped_node_ids`
+here either. That set is unioned into `snapped_node_ids` unconditionally
+below; without this exclusion, a rail-inline CC/ext node would be forced
+back into `snapped_node_ids` regardless of the `01_node_classification.qmd`
+patch, re-imposing exactly the hard chain boundary that patch was meant to
+remove — undoing the fix that lets Stage 3's dissolve span the same
+station-to-station range the physical rail piece (`02_create_link.qmd`
+Part F) already spans. The same uniformity check (not just its
+degree-2-restricted `is_pseudo` subset) also covers genuine 3+-neighbor
+rail junctions (wyes/crossovers) that `01_node_classification.qmd` force-set
+to `is_topo_passthrough = True` — those were never in `cc_ext_split_ids` to
+begin with, so this intersection is a no-op for them; they rely entirely on
+`pseudo_ids` (below) picking up `is_topo_passthrough` from
+`nodes_classified.gpkg` directly.
+
 ```{python}
+gdf_nodes_classified = gpd.read_file(PATHS["in_node_classified"]).to_crs(CRS_UTM)
+
 gdf_cc_snapped  = gpd.read_file(PATHS["in_node_snapped"], layer="cc_nodes_snapped").to_crs(CRS_UTM)
 gdf_ext_snapped = gpd.read_file(PATHS["in_node_snapped"], layer="ext_nodes_snapped").to_crs(CRS_UTM)
+
+cc_ext_split_ids = (
+    set(gdf_cc_snapped.loc[gdf_cc_snapped["use_as_split"], "N"].astype(int))
+    | set(gdf_ext_snapped.loc[gdf_ext_snapped["use_as_split"], "N"].astype(int))
+)
+rail_inline_cc_ext_ids = set(
+    gdf_nodes_classified.loc[
+        gdf_nodes_classified["N"].isin(cc_ext_split_ids)
+        & (gdf_nodes_classified["LinkFTCount"] == 1)
+        & (gdf_nodes_classified["LinkLNCount"] == 1)
+        & gdf_nodes_classified["FixedTransit"],
+        "N",
+    ].astype(int)
+)
 
 attach_coord_lookup: dict[int, tuple[float, float]] = {
     int(row["N"]): (round(float(row["x_snap"]), 2), round(float(row["y_snap"]), 2))
@@ -167,6 +201,7 @@ attach_coord_lookup: dict[int, tuple[float, float]] = {
         gdf_cc_snapped[gdf_cc_snapped["use_as_split"]],
         gdf_ext_snapped[gdf_ext_snapped["use_as_split"]],
     ]).iterrows()
+    if int(row["N"]) not in rail_inline_cc_ext_ids
 }
 
 node_coord_lookup.update(attach_coord_lookup)
@@ -174,11 +209,11 @@ coord_to_node.update({v: k for k, v in attach_coord_lookup.items()})
 snapped_node_ids |= set(attach_coord_lookup)
 
 print(f"CC attachment + external station split points added: {len(attach_coord_lookup):,}")
+print(f"  ({len(rail_inline_cc_ext_ids):,} rail-inline CC/external node(s) excluded — left as ordinary pass-through)")
 print(f"Snap coord lookup now: {len(node_coord_lookup):,} entries")
 ```
 
 ```{python}
-gdf_nodes_classified = gpd.read_file(PATHS["in_node_classified"]).to_crs(CRS_UTM)
 pseudo_ids = set(gdf_nodes_classified.loc[gdf_nodes_classified["is_topo_passthrough"], "N"].astype(int))
 
 n_pseudo_snapped = len(pseudo_ids & snapped_node_ids)

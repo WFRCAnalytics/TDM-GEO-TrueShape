@@ -1628,6 +1628,43 @@ sees only its two rail neighbors and looks like an ordinary pass-through
 point, but it's now a genuine split point for the rail pieces built in
 `02_create_link.qmd`'s Part F — so it's folded into the same patch below.
 
+CC/external connectors that land *on the rail lines themselves* (not
+stations — WFRC's MasterNet wires a number of TAZ centroid connectors
+directly onto an ordinary mid-corridor rail node, e.g. representing walk/
+park-and-ride access to a nearby line), and genuine multi-neighbor rail
+junctions (wyes, crossovers, double-track switches — see below), are the
+two cases excluded from this patch. A curb-cut on a surface street is a
+genuine physical interruption — both halves legitimately get their own
+attribution and vertex. A rail corridor has no equivalent interruption: a
+centroid connector is a zonal-access edge, not a boarding point, and a
+track junction with no real GTFS station on it is not a passenger-facing
+split either, so the physical track runs straight through uninterrupted in
+both cases (`02_create_link.qmd`'s Part F never cuts the canonical GTFS
+shape there, only at real stations). Patching these nodes to hard
+boundaries anyway forces a split in the *model* chain at a point the
+*physical* piece was never split — the piece's real endpoints (two actual
+stations) can then never coordinate-match any dissolved chain, showing up
+as `endpoints_only`/`a_only`/`b_only` on every affected route segment.
+
+`LinkFTCount == 1 & LinkLNCount == 1` restricted to `FixedTransit` nodes
+(Part A2's uniformity check, computed for every node regardless of
+neighbor count) safely identifies "every connected link is the same rail
+mode at the same lane count" — a node bridging rail with a different link
+class, or two different rail FT codes (e.g. where light rail and commuter
+rail interline), fails this check and is correctly left as a hard
+boundary. Unlike `is_pseudo`, this doesn't also require `NeighborCount ==
+2`, so it additionally catches genuine 3+-neighbor rail junctions (a wye,
+a double-track crossover, a turnback) where the model network forks but
+the canonical GTFS shape doesn't — those still need `is_topo_passthrough`
+force-set to `True` (not just excluded from the hard-boundary patch below)
+since a real junction never starts out `NeighborCount == 2`.
+`dissolve_pseudonodes` (`_src/link_utils.py`) resolves the resulting
+multi-way ambiguity geometrically: at any pass-through node with more than
+one forward continuation, it picks the straightest one (smallest turn
+angle from the incoming bearing) — validated against all 50 such rail
+junctions network-wide, only 7 of which even have a second-best option
+within 40° of the best, i.e. this is never a close call.
+
 ```{python}
 rail_snapped_ids = set(
     gdf_nodes_snapped.loc[
@@ -1635,21 +1672,53 @@ rail_snapped_ids = set(
         "N",
     ]
 )
-attach_ids = (
+cc_ext_ids = (
     set(gdf_cc_snapped.loc[gdf_cc_snapped["use_as_split"], "N"])
     | set(gdf_ext_snapped.loc[gdf_ext_snapped["use_as_split"], "N"])
-    | rail_snapped_ids
 )
+
+rail_homogeneous_ids = set(
+    gdf_nodes.loc[
+        gdf_nodes["FixedTransit"]
+        & (gdf_nodes["LinkFTCount"] == 1)
+        & (gdf_nodes["LinkLNCount"] == 1)
+        & ~gdf_nodes["N"].isin(rail_snapped_ids),
+        "N",
+    ]
+)
+rail_inline_cc_ext_ids = cc_ext_ids & rail_homogeneous_ids
+rail_junction_ids = set(
+    gdf_nodes.loc[
+        gdf_nodes["N"].isin(rail_homogeneous_ids) & (gdf_nodes["NeighborCount"] > 2),
+        "N",
+    ]
+)
+attach_ids = (cc_ext_ids - rail_inline_cc_ext_ids) | rail_snapped_ids
 
 was_mid_link_passthrough = gdf_nodes["N"].isin(attach_ids) & gdf_nodes["is_topo_passthrough"]
 n_patched = int(was_mid_link_passthrough.sum())
 gdf_nodes.loc[was_mid_link_passthrough, "is_topo_passthrough"] = False
+
+was_junction_upgrade = gdf_nodes["N"].isin(rail_junction_ids) & ~gdf_nodes["is_topo_passthrough"]
+n_junction_upgraded = int(was_junction_upgrade.sum())
+gdf_nodes.loc[was_junction_upgrade, "is_topo_passthrough"] = True
 
 gdf_nodes.to_crs(CRS_UTM).to_file(PATHS["out_node_classified"], driver="GPKG")
 print(
     f"Patched is_topo_passthrough=False for {n_patched:,} mid-link CC/external/rail "
     f"attachment node(s) (of {len(attach_ids):,} new split points total — the "
     f"rest already sat at a real junction and needed no change)."
+)
+print(
+    f"Excluded {len(rail_inline_cc_ext_ids):,} CC/external connector node(s) that land "
+    f"inline on a single rail mode with no real junction — left as ordinary "
+    f"pass-through so the rail model chain isn't split where the physical "
+    f"GTFS piece never was."
+)
+print(
+    f"Patched is_topo_passthrough=True for {n_junction_upgraded:,} of {len(rail_junction_ids):,} "
+    f"genuine multi-neighbor rail junction(s) (uniform FT/LN, not a real station) — "
+    f"dissolve now walks through them via straightest-continuation geometry."
 )
 print(f"Re-exported {PATHS['out_node_classified']} with the patch.")
 ```

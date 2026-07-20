@@ -344,11 +344,36 @@ def dissolve_pseudonodes(
     Uses a directed MultiDiGraph so that opposite-direction links (A→P and P→A)
     on the same road segment produce two separate chains (A→B and B→A) rather
     than collapsing into a single self-loop.
+
+    At a pass-through node with more than one valid forward continuation (only
+    possible when `pass_through_ids` is broadened beyond strict degree-2
+    pseudonodes), the walk picks the geometrically straightest continuation
+    (smallest turn angle from the incoming bearing) rather than an arbitrary
+    graph-iteration-order edge. This is a no-op for ordinary degree-2
+    pseudonodes, which never have more than one non-backtrack candidate.
     """
     transfer_cols = [c for c in gdf_links.columns if c not in ("A", "B", "geometry")]
     col_pos = {c: i for i, c in enumerate(transfer_cols)}
     values = gdf_links[transfer_cols].to_numpy(dtype=object)
     invariant_set = set(invariant_cols)
+    geoms = gdf_links["geometry"].to_numpy()
+
+    def _bearing(p0: tuple[float, float], p1: tuple[float, float]) -> float:
+        return np.degrees(np.arctan2(p1[1] - p0[1], p1[0] - p0[0])) % 360
+
+    def _in_bearing(row_idx: int) -> float:
+        # Direction of travel arriving at the edge's B endpoint (last segment).
+        coords = shapely.get_coordinates(geoms[row_idx])
+        return _bearing(tuple(coords[-2]), tuple(coords[-1]))
+
+    def _out_bearing(row_idx: int) -> float:
+        # Direction of travel departing the edge's A endpoint (first segment).
+        coords = shapely.get_coordinates(geoms[row_idx])
+        return _bearing(tuple(coords[0]), tuple(coords[1]))
+
+    def _turn_angle(in_bearing: float, out_bearing: float) -> float:
+        d = abs(out_bearing - in_bearing) % 360
+        return min(d, 360 - d)
 
     G: nx.MultiDiGraph = nx.MultiDiGraph()
     for row_idx, (_, row) in enumerate(gdf_links.iterrows()):
@@ -384,18 +409,36 @@ def dissolve_pseudonodes(
                 # of the edge just traversed is a distinct edge to a node other
                 # than `start`, so it would otherwise look like valid forward
                 # progress and send the walk straight back the way it came.
-                next_found = None
+                #
+                # A true degree-2 pseudonode only ever has one non-backtrack
+                # candidate, so the tie-break below is a no-op for every
+                # pass-through node this function has ever been called on
+                # historically. It only activates for a pass_through_ids set
+                # broadened to real multi-neighbor junctions (e.g. rail wyes/
+                # crossovers where the physical GTFS shape runs straight
+                # through with no corresponding split) -- there, the straightest
+                # continuation (smallest turn angle from the incoming bearing)
+                # is preferred over an arbitrary graph-iteration-order pick.
+                candidates = []
                 fallback = None
                 for _, cnbr, ckey, cedata in G.out_edges(curr, keys=True, data=True):
                     cek = (curr, cnbr, ckey)
                     if cek in visited_edges:
                         continue
                     if cnbr != prev:
-                        next_found = (cnbr, cedata, cek)
-                        break
-                    if fallback is None:
+                        candidates.append((cnbr, cedata, cek))
+                    elif fallback is None:
                         fallback = (cnbr, cedata, cek)
-                if next_found is None:
+
+                if len(candidates) > 1:
+                    in_bearing = _in_bearing(chain_row_idxs[-1])
+                    next_found = min(
+                        candidates,
+                        key=lambda c: _turn_angle(in_bearing, _out_bearing(c[1]["row_idx"])),
+                    )
+                elif candidates:
+                    next_found = candidates[0]
+                else:
                     next_found = fallback
                 if next_found is None:
                     break

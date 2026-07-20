@@ -396,7 +396,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="imports" class="level3">
 <h3 class="anchored" data-anchor-id="imports">Imports</h3>
-<div id="23373d31" class="cell" data-execution_count="1">
+<div id="ebc14223" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -419,7 +419,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="configuration" class="level3">
 <h3 class="anchored" data-anchor-id="configuration">Configuration</h3>
-<div id="612388e1" class="cell" data-execution_count="2">
+<div id="a0150f5b" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -462,7 +462,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="candidate-centerlines" class="level3">
 <h3 class="anchored" data-anchor-id="candidate-centerlines">Candidate Centerlines</h3>
 <p><code>CandidateTDMRoadLinks.gpkg</code> (built in <code>00_data_preparation.qmd</code>) is already filtered and dissolved, but it is also pre-cut at arcpy-style junction points — including incidental boundaries between freeway/ramp/CD rows and surface-street rows wherever they merely touch, not just at genuine multi-way branches. Part A below re-dissolves these rows into maximal chains so that every split point in the final pieces (Part C) comes only from snapping, not from <code>CandidateTDMRoadLinks</code>’s own pre-existing cuts.</p>
-<div id="ff086b10" class="cell" data-execution_count="3">
+<div id="9d39aaec" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>gdf_centerlines <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_centerlines"</span>]).to_crs(CRS_UTM)</span>
@@ -476,7 +476,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="snapped-nodes" class="level3">
 <h3 class="anchored" data-anchor-id="snapped-nodes">Snapped Nodes</h3>
-<div id="78263f20" class="cell" data-execution_count="4">
+<div id="00e9a7a7" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
@@ -495,7 +495,7 @@ CC attachment nodes: 6,539
 External station nodes: 29</code></pre>
 </div>
 </div>
-<div id="bad06ee7" class="cell" data-execution_count="5">
+<div id="f4dfcd96" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>]].explore()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -508,7 +508,7 @@ External station nodes: 29</code></pre>
 <h2 data-number="3" class="anchored" data-anchor-id="part-a-full-network-redissolve"><span class="header-section-number">3</span> Part A — Full Network Redissolve</h2>
 <p><code>CandidateTDMRoadLinks</code> is already pre-cut at arcpy-style junction points (see <code>00_data_preparation.qmd</code>’s <code>rcl_merge</code>), including boundaries between freeway/ramp/CD rows and surface-street rows wherever they merely touch — not just at genuine multi-way branches. To make the final true-shape split points come <strong>only</strong> from snapped model nodes, every row is re-dissolved into maximal topological chains (genuine branch points, where 3+ lines share an endpoint, still remain hard boundaries after dissolve; only incidental class-boundary splits are undone).</p>
 <p><code>VERT_LEVEL</code> isolation is preserved here, but only to prevent a specific GEOS behavior: <code>unary_union</code> on LineStrings doesn’t just merge lines that share an endpoint — it <strong>nodes every crossing point</strong>, inserting a new vertex (and therefore a new potential break) anywhere two lines cross in the middle, even when nothing physically connects there. Per-level isolation is what stops every elevated road from being spuriously noded against every at-grade street it merely passes over. A same-level-only merge was verified against a same-network global merge: global dissolve produced <em>more</em> chains (9,368) than even the raw ungrouped candidate rows (7,642) — i.e.&nbsp;net fragmentation, not consolidation — confirming this is a real effect at scale here, not a theoretical one. Freeway rows and surface-street rows are still dissolved together <em>within</em> a level — only the incidental class-boundary splits are undone; genuine branch points (3+ lines sharing an endpoint) remain hard boundaries after dissolve either way.</p>
-<div id="267b4dff" class="cell" data-execution_count="6">
+<div id="29ea05bf" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>vert_levels <span class="op">=</span> <span class="bu">sorted</span>(gdf_centerlines[<span class="st">"VERT_LEVEL"</span>].dropna().unique())</span>
@@ -542,7 +542,7 @@ Total: 7,642 candidate rows -&gt; 7,141 redissolved chains</code></pre>
 </div>
 </div>
 <p>Sanity check: dissolve only merges touching lines into longer chains — it never adds or removes length. Total length before and after must match.</p>
-<div id="a80be5b4" class="cell" data-execution_count="7">
+<div id="ac27faac" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>len_before <span class="op">=</span> gdf_centerlines.geometry.length.<span class="bu">sum</span>()</span>
@@ -565,7 +565,7 @@ Difference:          0.000 m</code></pre>
 <h2 data-number="4" class="anchored" data-anchor-id="part-b-resolve-snap-coordinates"><span class="header-section-number">4</span> Part B — Resolve Snap Coordinates</h2>
 <p><code>nodes_snapped.gpkg</code> stores <code>snapped_x_round / snapped_y_round</code> rounded to 2 decimal places (cm precision). Splitting and M-value operations require coordinates that exactly match a vertex stored in the centerline geometry. For each snapped node, this step finds the nearest unique centerline vertex within 5 cm and records its full-precision coordinate.</p>
 <p>FixedTransit_Rail nodes are excluded — they snap to GTFS rail infrastructure (CRT stations, LRT midpoints), not to road centerlines, so they are never road centerline split points.</p>
-<div id="305406bf" class="cell" data-execution_count="8">
+<div id="0739266b" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>gdf_nodes_road <span class="op">=</span> gdf_nodes_snapped[</span>
@@ -586,7 +586,7 @@ Difference:          0.000 m</code></pre>
 <pre><code>Coordinate resolution: 3,476 resolved | 0 unresolved</code></pre>
 </div>
 </div>
-<div id="633dadfc" class="cell" data-execution_count="9">
+<div id="dfaf3fc1" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n_unresolved <span class="op">&gt;</span> <span class="dv">0</span>:</span>
@@ -598,7 +598,7 @@ Difference:          0.000 m</code></pre>
 </details>
 </div>
 <p>Build the list of exact-coordinate Points used as split locations.</p>
-<div id="a96ff9c2" class="cell" data-execution_count="10">
+<div id="fef4bd3b" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>resolved_mask <span class="op">=</span> gdf_nodes_resolved[<span class="st">"snap_resolved"</span>]</span>
@@ -613,7 +613,7 @@ Difference:          0.000 m</code></pre>
 </div>
 </div>
 <p>CC attachment and external station nodes add their own split points, gated by <code>use_as_split</code> (computed in <code>01_node_classification.qmd</code>): resolved within 100 m, and not already snapped by the main pipeline (that case already has an authoritative split point above — reusing this independently-computed nearest-point coordinate for the same node would plant a second, slightly different split a few cm away and produce a sliver instead of a clean cut).</p>
-<div id="7d20884c" class="cell" data-execution_count="11">
+<div id="44f26617" class="cell" data-execution_count="11">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>cc_points_exact <span class="op">=</span> [</span>
@@ -642,7 +642,7 @@ External station split points: 14</code></pre>
 <li><strong>Ordinary at-grade branch points</strong> — wherever 3+ chain-ends meet, dissolve leaves the point split even if it’s really just one through-route crossed by an unrelated street that isn’t in the TDM network at all. This turns out to be the common case: e.g.&nbsp;HWY 186 running through as a single continuous corridor from 900 E to 1300 E is spuriously cut where 1100 E crosses it, even though 1100 E carries no TDM link and no model node sits at that crossing.</li>
 </ul>
 <p><code>restitch_route_through_junctions</code> finds every coordinate shared by 2+ distinct chains and merges any pair that agrees on <code>DOT_RTNAME</code> and <code>POSTTYPE</code> (same route, same facility class) there, regardless of whether the mismatch came from a VERT_LEVEL difference or an ordinary junction — and regardless of how many other, non-matching chains also touch that same point (a crossing street stays split; only the matching through-route pair merges). Points that are themselves a snapped model node are never restitched — those must stay hard boundaries.</p>
-<div id="fd40abab" class="cell" data-execution_count="12">
+<div id="76793cc1" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>gdf_fulldissolve_restitched <span class="op">=</span> restitch_route_through_junctions(</span>
@@ -671,7 +671,7 @@ External station split points: 14</code></pre>
 Chains: 7,141 -&gt; 6,160</code></pre>
 </div>
 </div>
-<div id="015cb7b4" class="cell" data-execution_count="13">
+<div id="ddbe5cae" class="cell" data-execution_count="13">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>len_before <span class="op">=</span> gdf_fulldissolve.geometry.length.<span class="bu">sum</span>()</span>
@@ -691,7 +691,7 @@ Chains: 7,141 -&gt; 6,160</code></pre>
 <p><code>gdf_fulldissolve_restitched</code> (Part A + B2) — not the original <code>CandidateTDMRoadLinks</code> rows — is split only at snapped road model-node positions, so piece boundaries come exclusively from road-node snapping, never from incidental arcpy junction cuts or an incidental same-route junction (VERT_LEVEL boundary or unrelated at-grade crossing). Points that project to within 0.1 mm of a component’s existing endpoint are skipped (already a boundary). After all splits, each resulting piece is bounded exclusively by: - a snapped model node position, or - a genuine branch/route-identity-mismatch junction already present in <code>gdf_fulldissolve_restitched</code>.</p>
 <p>CC attachment nodes (<code>cc_nodes_snapped</code>) and external station nodes (<code>ext_nodes_snapped</code>) are also used as split points here, but only the <code>use_as_split</code> subset — resolved within 100 m and not already snapped by the main pipeline (see Part B and <code>01_node_classification.qmd</code>). Unresolved nodes are left out entirely, same as any other unsnapped node: no coordinate, no split, no change from today’s behavior for that node.</p>
 <p>No lineage keys are carried through this split (<code>id_cols=()</code>) — a redissolved row no longer maps 1:1 to a single original <code>OBJECTID</code>. Lineage/display attributes are reattached afterward via midpoint join (Part D).</p>
-<div id="eb44a3b8" class="cell" data-execution_count="14">
+<div id="5df305f0" class="cell" data-execution_count="14">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>all_snap_points <span class="op">=</span> snap_points_exact <span class="op">+</span> cc_points_exact <span class="op">+</span> ext_points_exact</span>
@@ -706,7 +706,7 @@ Chains: 7,141 -&gt; 6,160</code></pre>
 <pre><code>Split points: 3,476 model nodes + 4,577 CC attachment + 14 external station = 8,067 total</code></pre>
 </div>
 </div>
-<div id="986c2b48" class="cell" data-execution_count="15">
+<div id="ed32c6f5" class="cell" data-execution_count="15">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Splitting </span><span class="sc">{</span><span class="bu">len</span>(gdf_fulldissolve_restitched)<span class="sc">:,}</span><span class="ss"> redissolved chains at </span><span class="sc">{</span><span class="bu">len</span>(all_snap_points)<span class="sc">:,}</span><span class="ss"> points …"</span>)</span>
@@ -723,7 +723,7 @@ Pieces after split: 11,199</code></pre>
 <section id="part-d-build-pieces-layer-and-reattach-lineage" class="level2" data-number="7">
 <h2 data-number="7" class="anchored" data-anchor-id="part-d-build-pieces-layer-and-reattach-lineage"><span class="header-section-number">7</span> Part D — Build Pieces Layer and Reattach Lineage</h2>
 <p>Extract start/end endpoint coordinates for each piece (rounded to 2 dp for matching against <code>snapped_x_round / snapped_y_round</code> in the next stage). Since splitting now runs against the redissolved+restitched <code>gdf_fulldissolve_restitched</code> layer, a piece no longer maps 1:1 to a single original <code>CandidateTDMRoadLinks</code> <code>OBJECTID</code> — lineage/display attributes (<code>TRANSFER_COLS</code>) are reattached via the same midpoint-nearest-join approach <code>00_data_preparation.qmd</code> uses to transfer attributes from raw centerlines onto <code>CandidateTDMRoadLinks</code> in the first place, this time from <code>CandidateTDMRoadLinks</code> onto each piece.</p>
-<div id="d714224f" class="cell" data-execution_count="16">
+<div id="ccfc2b2e" class="cell" data-execution_count="16">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>pieces <span class="op">=</span> gdf_pieces_split.geometry.tolist()</span>
@@ -746,7 +746,7 @@ Pieces after split: 11,199</code></pre>
 </div>
 <p><code>VERT_LEVEL</code> in the reattached output is informational only — it is the <code>VERT_LEVEL</code> of whichever <code>CandidateTDMRoadLinks</code> row lands nearest this piece’s midpoint, nothing more. <code>VERT_LEVEL</code> is used upstream only as a dissolve-grouping key (Part A, to keep GEOS from noding elevated roads against every at-grade crossing, and Part B2, to look up each chain’s own route identity within its own level) — it is never itself an identity check, a snap-coordinate key, a split key, or used in <code>03_transfer_attributes.qmd</code>’s A/B chain matching (that gate is <code>DOT_RTNAME</code> + <code>POSTTYPE</code>, see Part B2). A piece can legitimately span a real elevation change or an ordinary street crossing with no split between — e.g.&nbsp;a freeway climbing onto a flyover, or HWY 186 running straight through where 1100 E crosses it — once Part B2 has restitched that specific junction. In that case the single <code>VERT_LEVEL</code> value carried onto the piece just reflects whichever side of the junction the midpoint happens to fall on; it is kept for future convenience (e.g.&nbsp;if the true-shape TDM link output later wants a <code>VERT_LEVEL</code> column) and should not be read as authoritative for the whole piece.</p>
 <p><code>CandidateTDMRoadLinks</code> contains a small number of standalone sub-centimetre “stub” features (max ~6 mm, confirmed by direct <code>OBJECTID</code> lookup) — digitizing artifacts, not anything this pipeline creates. Because <code>split_candidate_links</code> never cuts a component shorter than its 0.5 m <code>_EPS</code>, each stub passes through whole as its own piece; since both of its (near-identical) endpoints round to the same snapped-node coordinate, Stage 3 later resolves <code>A_piece == B_piece</code> for it — a spurious self-loop. Genuine physical loop roads (cloverleaf/collector loops that legitimately start and end at the same point) are tens of metres to several kilometres long, so a <code>length_m &lt; 1 m</code> gate removes only the artifacts.</p>
-<div id="f9696be9" class="cell" data-execution_count="17">
+<div id="e8e346b0" class="cell" data-execution_count="17">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>n_before_drop <span class="op">=</span> <span class="bu">len</span>(gdf_pieces)</span>
@@ -782,7 +782,7 @@ Pieces with a null transferred attribute: 1,279 / 11,184</code></pre>
 <section id="part-e-centroid-connector-links" class="level2" data-number="8">
 <h2 data-number="8" class="anchored" data-anchor-id="part-e-centroid-connector-links"><span class="header-section-number">8</span> Part E — Centroid Connector Links</h2>
 <p><code>FT_2027 == 1</code> model links are TAZ-centroid, external-station, and transit- station connectors, not physical roadway – no centerline underlies them, so none of Parts A-D’s redissolve/split/match machinery applies. Each is already a straight two-vertex tether in the raw model; the only change here is rebuilding that tether from each node’s <em>resolved</em> position instead of its raw one, using the same node-coordinate cascade already computed above (main network snap -&gt; CC/external nearest-point snap -&gt; raw model coordinate as the final fallback). A true TAZ centroid never appears in any snapped-node table, so it always keeps its original, fixed coordinate; the network-side node moves to wherever it was actually snapped.</p>
-<div id="9a8da522" class="cell" data-execution_count="18">
+<div id="b4c6ad47" class="cell" data-execution_count="18">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>gdf_network_nodes <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_network_nodes"</span>]).to_crs(CRS_UTM)</span>
@@ -793,7 +793,7 @@ Pieces with a null transferred attribute: 1,279 / 11,184</code></pre>
 <pre><code>Centroid connector links (FT_2027 = 1): 18,406</code></pre>
 </div>
 </div>
-<div id="e1cec00c" class="cell" data-execution_count="19">
+<div id="cc24a59f" class="cell" data-execution_count="19">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>gdf_centroid_connectors <span class="op">=</span> build_centroid_connector_links(</span>
@@ -819,7 +819,7 @@ cc_snapped          6915
 network_snapped      894</code></pre>
 </div>
 </div>
-<div id="35fbcfba" class="cell" data-execution_count="20">
+<div id="82f6c767" class="cell" data-execution_count="20">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>PATHS[<span class="st">"out_centroid_connectors"</span>].parent.mkdir(parents<span class="op">=</span><span class="va">True</span>, exist_ok<span class="op">=</span><span class="va">True</span>)</span>
@@ -836,7 +836,7 @@ network_snapped      894</code></pre>
 <h2 data-number="9" class="anchored" data-anchor-id="part-f-transit-rail-link-pieces"><span class="header-section-number">9</span> Part F — Transit (Rail) Link Pieces</h2>
 <p>Physical light-rail (TRAX + S-Line) and commuter-rail (FrontRunner) track — one canonical (longest) GTFS shape per route, selected in <code>01_node_classification.qmd</code>’s GTFS Rail Shapes section (<code>rail_shapes_dissolved.gpkg</code>) — is split only at snapped <code>FixedTransit_Rail</code> station-node positions, the rail counterpart to Parts A-D above. No GEOS dissolve/restitch pass (Part A/B2’s road machinery) is used or needed here: unlike <code>CandidateTDMRoadLinks</code>, GTFS shapes are not pre-cut at incidental arcpy junctions, and — critically — topologically re-noding multiple near-duplicate GTFS shape traces of the same physical track (or even a single shape alone, which can be non-<code>simple</code> from GPS noise) was tested and shatters a route into hundreds of spurious fragments with no corresponding station. Splitting each route’s own canonical shape independently sidesteps this entirely: routes that share physical trackage (e.g.&nbsp;TRAX Blue/Red downtown) simply produce their own separate, near- duplicate overlapping pieces — the same pattern already used for a two-way street digitized as two directional rows.</p>
 <p>Unlike road split points, no <code>resolve_snap_coords</code>-style exact-vertex lookup is needed either: each station’s <code>snapped_x_round</code>/<code>snapped_y_round</code> was produced in D3 by projecting the station directly onto its mode’s canonical route shape(s), so it already lies on the line up to the same sub-centimetre rounding noise the road pipeline tolerates — <code>split_ candidate_links</code>’s own M-value projection (<code>line.project(pt)</code>) re-snaps it onto the line before cutting, no separate resolution step required, and works correctly even on a non-simple line since it cuts by arc-length position, not topology.</p>
-<div id="1f614257" class="cell" data-execution_count="21">
+<div id="03f4cfca" class="cell" data-execution_count="21">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>gdf_rail_dissolved <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_rail_shapes_dissolved"</span>]).to_crs(CRS_UTM)</span>
@@ -850,7 +850,7 @@ light_rail       4
 commuter_rail    1</code></pre>
 </div>
 </div>
-<div id="9b732779" class="cell" data-execution_count="22">
+<div id="663495ca" class="cell" data-execution_count="22">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>gdf_rail_stations <span class="op">=</span> gdf_nodes_snapped[</span>
@@ -867,7 +867,7 @@ commuter_rail    1</code></pre>
 </div>
 </div>
 <p><code>mode</code> is carried straight through the split via <code>id_cols</code> — a rail piece always maps 1:1 back to a single canonical route shape (no dissolve pass merges shapes across the split), so no midpoint-join reattachment is needed for it.</p>
-<div id="9e977d17" class="cell" data-execution_count="23">
+<div id="5e64c700" class="cell" data-execution_count="23">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>gdf_rail_pieces_split <span class="op">=</span> split_candidate_links(</span>
@@ -879,7 +879,7 @@ commuter_rail    1</code></pre>
 <pre><code>Rail pieces after split: 91</code></pre>
 </div>
 </div>
-<div id="d996b4a2" class="cell" data-execution_count="24">
+<div id="5eca72f1" class="cell" data-execution_count="24">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>rail_pieces_geom <span class="op">=</span> gdf_rail_pieces_split.geometry.tolist()</span>
@@ -914,7 +914,7 @@ commuter_rail    16</code></pre>
 <section id="part-g-combine-and-export-pieces" class="level2" data-number="10">
 <h2 data-number="10" class="anchored" data-anchor-id="part-g-combine-and-export-pieces"><span class="header-section-number">10</span> Part G — Combine and Export Pieces</h2>
 <p>Road pieces (Part D) and rail pieces (Part F) share the same downstream match against model links in <code>03_transfer_attributes.qmd</code> — both are matched purely by <code>(A, B)</code> snapped-node coordinate pairs, regardless of <code>FT_2027</code> code or mode — so they are written to a single <code>link_pieces.gpkg</code>. <code>TRANSFER_COLS</code> (road lineage) are absent on rail pieces and <code>mode</code> is absent on road pieces; <code>pd.concat</code> fills the gaps with null, which is correct — a rail piece has no <code>DOT_RTNAME</code>/<code>VERT_LEVEL</code> and a road piece has no rail <code>mode</code>.</p>
-<div id="4962c4e9" class="cell" data-execution_count="25">
+<div id="903f2002" class="cell" data-execution_count="25">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>gdf_pieces_combined <span class="op">=</span> gpd.GeoDataFrame(</span>
@@ -938,7 +938,7 @@ commuter_rail    16</code></pre>
 </section>
 <section id="summary" class="level2" data-number="11">
 <h2 data-number="11" class="anchored" data-anchor-id="summary"><span class="header-section-number">11</span> Summary</h2>
-<div id="0542bc20" class="cell" data-execution_count="26">
+<div id="c3b4feef" class="cell" data-execution_count="26">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> gdf_pieces[<span class="st">"length_m"</span>]</span>
@@ -974,7 +974,7 @@ Output: 11,275 pieces → link_pieces.gpkg
         18,406 centroid connector links → centroid_connectors.gpkg</code></pre>
 </div>
 </div>
-<div id="15061052" class="cell" data-execution_count="27">
+<div id="ec781759" class="cell" data-execution_count="27">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>gdf_pieces_combined.explore(column<span class="op">=</span><span class="st">"length_m"</span>, cmap<span class="op">=</span><span class="st">"viridis"</span>, tooltip<span class="op">=</span>[<span class="st">"piece_id"</span>, <span class="st">"length_m"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
