@@ -42,6 +42,7 @@ PATHS = {
     "in_node_snapped": Path("_data/processed/nodes_snapped.gpkg"),
     "in_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
     "in_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
+    "in_rail_shapes_dissolved": Path("_data/processed/rail_shapes_dissolved.gpkg"),
     "out_link_pieces": Path("_data/processed/link_pieces.gpkg"),
     "out_centroid_connectors": Path("_data/processed/centroid_connectors.gpkg"),
 }
@@ -342,7 +343,7 @@ print(f"Pieces after split: {len(gdf_pieces_split):,}")
 
 ---
 
-## Part D — Build Pieces Layer, Reattach Lineage, and Export
+## Part D — Build Pieces Layer and Reattach Lineage
 
 Extract start/end endpoint coordinates for each piece (rounded to 2 dp for
 matching against `snapped_x_round / snapped_y_round` in the next stage). Since
@@ -423,11 +424,11 @@ gdf_pieces = transfer_attributes_by_midpoint(gdf_pieces, gdf_centerlines, TRANSF
 
 n_null = gdf_pieces[TRANSFER_COLS].isna().any(axis=1).sum()
 print(f"Pieces with a null transferred attribute: {n_null:,} / {len(gdf_pieces):,}")
-
-PATHS["out_link_pieces"].parent.mkdir(parents=True, exist_ok=True)
-gdf_pieces.to_file(PATHS["out_link_pieces"], driver="GPKG")
-print(f"Exported {len(gdf_pieces):,} pieces → {PATHS['out_link_pieces']}")
 ```
+
+Export happens once, in Part G, after Part F's rail pieces are built and
+concatenated in alongside these roadway pieces — both populations share the
+same `link_pieces.gpkg` output.
 
 ---
 
@@ -469,6 +470,116 @@ print(f"Exported {len(gdf_centroid_connectors):,} centroid connector links → {
 
 ---
 
+## Part F — Transit (Rail) Link Pieces
+
+Physical light-rail (TRAX + S-Line) and commuter-rail (FrontRunner) track —
+one canonical (longest) GTFS shape per route, selected in
+`01_node_classification.qmd`'s GTFS Rail Shapes section
+(`rail_shapes_dissolved.gpkg`) — is split only at snapped
+`FixedTransit_Rail` station-node positions, the rail counterpart to Parts
+A-D above. No GEOS dissolve/restitch pass (Part A/B2's road machinery) is
+used or needed here: unlike `CandidateTDMRoadLinks`, GTFS shapes are not
+pre-cut at incidental arcpy junctions, and — critically — topologically
+re-noding multiple near-duplicate GTFS shape traces of the same physical
+track (or even a single shape alone, which can be non-`simple` from GPS
+noise) was tested and shatters a route into hundreds of spurious fragments
+with no corresponding station. Splitting each route's own canonical shape
+independently sidesteps this entirely: routes that share physical trackage
+(e.g. TRAX Blue/Red downtown) simply produce their own separate, near-
+duplicate overlapping pieces — the same pattern already used for a two-way
+street digitized as two directional rows.
+
+Unlike road split points, no `resolve_snap_coords`-style exact-vertex
+lookup is needed either: each station's `snapped_x_round`/`snapped_y_round`
+was produced in D3 by projecting the station directly onto its mode's
+canonical route shape(s), so it already lies on the line up to the same
+sub-centimetre rounding noise the road pipeline tolerates — `split_
+candidate_links`'s own M-value projection (`line.project(pt)`) re-snaps it
+onto the line before cutting, no separate resolution step required, and
+works correctly even on a non-simple line since it cuts by arc-length
+position, not topology.
+
+```{python}
+gdf_rail_dissolved = gpd.read_file(PATHS["in_rail_shapes_dissolved"]).to_crs(CRS_UTM)
+print(f"Canonical rail route shapes: {len(gdf_rail_dissolved):,}")
+print(gdf_rail_dissolved["mode"].value_counts().to_string())
+```
+
+```{python}
+gdf_rail_stations = gdf_nodes_snapped[
+    gdf_nodes_snapped["snapped"].fillna(False) & (gdf_nodes_snapped["snap_rule"] == "FixedTransit_Rail")
+]
+rail_snap_points = [
+    Point(row["snapped_x_round"], row["snapped_y_round"])
+    for _, row in gdf_rail_stations.iterrows()
+]
+print(f"Rail station split points: {len(rail_snap_points):,}")
+```
+
+`mode` is carried straight through the split via `id_cols` — a rail piece
+always maps 1:1 back to a single canonical route shape (no dissolve pass
+merges shapes across the split), so no midpoint-join reattachment is
+needed for it.
+
+```{python}
+gdf_rail_pieces_split = split_candidate_links(
+    gdf_rail_dissolved, rail_snap_points, id_cols=("mode",),
+)
+print(f"Rail pieces after split: {len(gdf_rail_pieces_split):,}")
+```
+
+```{python}
+rail_pieces_geom = gdf_rail_pieces_split.geometry.tolist()
+rail_start_coords = np.array([p.coords[0] for p in rail_pieces_geom])
+rail_end_coords   = np.array([p.coords[-1] for p in rail_pieces_geom])
+
+gdf_rail_pieces = gpd.GeoDataFrame(
+    {
+        "piece_id": np.arange(len(rail_pieces_geom)) + gdf_pieces["piece_id"].max() + 1,
+        "x_start":  np.round(rail_start_coords[:, 0], 2),
+        "y_start":  np.round(rail_start_coords[:, 1], 2),
+        "x_end":    np.round(rail_end_coords[:, 0], 2),
+        "y_end":    np.round(rail_end_coords[:, 1], 2),
+        "length_m": np.array([p.length for p in rail_pieces_geom]),
+        "mode":     gdf_rail_pieces_split["mode"].to_numpy(),
+        "geometry": rail_pieces_geom,
+    },
+    crs=CRS_UTM,
+)
+print(f"Rail pieces built: {len(gdf_rail_pieces):,}")
+print(gdf_rail_pieces["mode"].value_counts().to_string())
+```
+
+---
+
+## Part G — Combine and Export Pieces
+
+Road pieces (Part D) and rail pieces (Part F) share the same downstream
+match against model links in `03_transfer_attributes.qmd` — both are
+matched purely by `(A, B)` snapped-node coordinate pairs, regardless of
+`FT_2027` code or mode — so they are written to a single `link_pieces.gpkg`.
+`TRANSFER_COLS` (road lineage) are absent on rail pieces and `mode` is
+absent on road pieces; `pd.concat` fills the gaps with null, which is
+correct — a rail piece has no `DOT_RTNAME`/`VERT_LEVEL` and a road piece has
+no rail `mode`.
+
+```{python}
+gdf_pieces_combined = gpd.GeoDataFrame(
+    pd.concat([gdf_pieces, gdf_rail_pieces], ignore_index=True),
+    geometry="geometry",
+    crs=CRS_UTM,
+)
+
+PATHS["out_link_pieces"].parent.mkdir(parents=True, exist_ok=True)
+gdf_pieces_combined.to_file(PATHS["out_link_pieces"], driver="GPKG")
+print(
+    f"Exported {len(gdf_pieces_combined):,} pieces "
+    f"({len(gdf_pieces):,} roadway + {len(gdf_rail_pieces):,} rail) → {PATHS['out_link_pieces']}"
+)
+```
+
+---
+
 ## Summary
 
 ```{python}
@@ -483,11 +594,13 @@ print(f"Input:  {len(gdf_centerlines):,} candidate components")
 print(f"        {n_road_snapped:,} snapped road nodes ({n_resolved:,} coordinate-resolved)")
 print(f"        {len(gdf_cc_snapped):,} CC attachment nodes ({len(cc_points_exact):,} used as split points)")
 print(f"        {len(gdf_ext_snapped):,} external station nodes ({len(ext_points_exact):,} used as split points)")
-print(f"Output: {len(gdf_pieces):,} pieces → {PATHS['out_link_pieces'].name}")
+print(f"        {len(gdf_rail_dissolved):,} canonical rail route shapes ({len(rail_snap_points):,} station split points)")
+print(f"Output: {len(gdf_pieces_combined):,} pieces → {PATHS['out_link_pieces'].name}")
+print(f"        ({len(gdf_pieces):,} roadway + {len(gdf_rail_pieces):,} rail)")
 print(f"        {len(gdf_centroid_connectors):,} centroid connector links → {PATHS['out_centroid_connectors'].name}")
 ```
 
 ```{python}
 #| eval: false
-gdf_pieces.explore(column="length_m", cmap="viridis", tooltip=["piece_id", "length_m"])
+gdf_pieces_combined.explore(column="length_m", cmap="viridis", tooltip=["piece_id", "length_m"])
 ```

@@ -55,25 +55,28 @@ CRS_UTM = "EPSG:26912"  # NAD83 UTM Zone 12N — Utah (metric)
 ### Model Links
 
 Filtered the same way `01_node_classification.qmd` filters when it computes
-`NeighborCount`/`is_topo_passthrough`: `LN_2027 > 0 AND FT_2027 NOT IN
-(1, 37, 38, 39)`. Centroid connectors (FT=1) and non-physical HOV/Managed-
-Access links (FT=37,38,39) are excluded outright; everything else must
-additionally have at least one lane by 2027 to count as part of today's (or
-2027's) connectivity graph — a link coded zero-lane in 2027 doesn't yet
-exist as a driveable connection, even if a physical centerline sits near
-its geometry. This match matters beyond just filtering consistently: if this
-notebook's dissolve graph could see an edge that `01` didn't count, a node
-`01` classified pass-through (`NeighborCount==2`) could turn out to have a
-3rd, LN=0 neighbor here — and `dissolve_pseudonodes`'s walk, trusting the
-`NeighborCount==2` guarantee, would silently take the wrong edge through it.
-`LN_2027`/`FT_2027` themselves are reported unchanged on matched output —
-this only affects whether a chain counts as connected, not what gets
-displayed.
+`NeighborCount`/`is_topo_passthrough`: `(LN_2027 > 0 OR FT_2027 IN (70, 80))
+AND FT_2027 NOT IN (1, 37, 38, 39)`. Centroid connectors (FT=1) and
+non-physical HOV/Managed-Access links (FT=37,38,39) are excluded outright;
+everything else must additionally have at least one lane by 2027 to count
+as part of today's (or 2027's) connectivity graph — a link coded zero-lane
+in 2027 doesn't yet exist as a driveable connection, even if a physical
+centerline sits near its geometry. Fixed transit (FT 70/80) is the one
+exception to the lane-count rule: rail links carry `LN_2027==0` by
+definition (no vehicle lanes), so requiring `LN_2027>0` would silently drop
+every rail model link before Part A ever sees it. This match matters beyond
+just filtering consistently: if this notebook's dissolve graph could see an
+edge that `01` didn't count (or vice versa), a node `01` classified
+pass-through (`NeighborCount==2`) could turn out to have a 3rd neighbor
+here — and `dissolve_pseudonodes`'s walk, trusting the `NeighborCount==2`
+guarantee, would silently take the wrong edge through it. `LN_2027`/`FT_2027`
+themselves are reported unchanged on matched output — this only affects
+whether a chain counts as connected, not what gets displayed.
 
 ```{python}
 gdf_links = gpd.read_file(
     PATHS["in_network_links"],
-    where="LN_2027 > 0 AND FT_2027 NOT IN (1, 37, 38, 39)",
+    where="(LN_2027 > 0 OR FT_2027 IN (70, 80)) AND FT_2027 NOT IN (1, 37, 38, 39)",
 ).to_crs(CRS_UTM)
 
 for col in ("DIRECTION",):
@@ -115,21 +118,21 @@ physical piece across a model chain boundary the physical network was never
 actually cut at. See `_plan/freeway-endpoint-pool-diagnosis.md` and the
 node-30208 (Antelope Island Causeway) example that first surfaced this.
 
-`FixedTransit_Rail`-snapped nodes are excluded from `snapped_node_ids` — they
-attach to GTFS rail infrastructure, not road centerlines, so they were never
-road-piece split points in Stage 2 either (`02_create_link.qmd` applies the
-same exclusion).
+`FixedTransit_Rail`-snapped nodes are **included** in `snapped_node_ids` —
+since `02_create_link.qmd` Part F now splits the dissolved GTFS rail shapes
+at exactly these station coordinates, they are legitimate physical split
+points for rail pieces, and must be in the `(A,B)` coordinate-join lookup
+below for a rail model-link chain to ever match a rail piece. Nothing about
+the match logic itself is rail-aware — it's the same generic coordinate
+join used for road pieces.
 
 ```{python}
 gdf_nodes_snapped = gpd.read_file(PATHS["in_node_snapped"], layer="nodes_snapped").to_crs(CRS_UTM)
 
-snapped_mask = (
-    gdf_nodes_snapped["snapped"].fillna(False).astype(bool)
-    & (gdf_nodes_snapped["snap_rule"] != "FixedTransit_Rail")
-)
+snapped_mask = gdf_nodes_snapped["snapped"].fillna(False).astype(bool)
 snapped_node_ids = set(gdf_nodes_snapped.loc[snapped_mask, "N"].astype(int))
 n_snapped = len(snapped_node_ids)
-print(f"Nodes: {len(gdf_nodes_snapped):,} total | {n_snapped:,} snapped (road, non-rail) ({n_snapped/len(gdf_nodes_snapped):.1%})")
+print(f"Nodes: {len(gdf_nodes_snapped):,} total | {n_snapped:,} snapped (road + rail) ({n_snapped/len(gdf_nodes_snapped):.1%})")
 
 # Snap coordinate lookup: N → (x_round, y_round)
 node_coord_lookup: dict[int, tuple[float, float]] = {
@@ -581,7 +584,7 @@ print(f"Saved to: {out_path}")
 ```{python}
 print("=== Stage 3 Summary ===")
 print()
-print(f"Input:  {len(gdf_links):,} model links (FT_2027 not in 1,37,38,39,50,70,80,90)")
+print(f"Input:  {len(gdf_links):,} model links (LN_2027>0 or FT_2027 in 70/80; FT_2027 not in 1,37,38,39)")
 print(f"        {len(pass_through_ids):,} pass-through (unsnapped) node ids absorbed into chains")
 print(f"        {len(gdf_dissolved):,} dissolved chains")
 print(f"        {len(gdf_pieces):,} physical link pieces (link_pieces.gpkg)")

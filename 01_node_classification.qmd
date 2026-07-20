@@ -57,6 +57,7 @@ PATHS = {
     "in_gtfs": Path("_data/raw/uta_gtfs.zip"),
     "out_node_classified": Path("_data/processed/nodes_classified.gpkg"),
     "out_node_snapped": Path("_data/processed/nodes_snapped.gpkg"),
+    "out_rail_shapes_dissolved": Path("_data/processed/rail_shapes_dissolved.gpkg"),
     "out_debug": Path("_data/processed/debug_snapping.gpkg"),
 }
 
@@ -96,13 +97,16 @@ gdf_centerlines.head(1000).explore()
 # Active 2027 links, excluding HOV / Managed Lane / Managed Lane Access (FT 37-39).
 # These are filtered at load time so they never inflate LinkCount, contribute to
 # the direction cascade, or generate spurious "surface" node classifications.
+# Fixed transit (FT 70/80) is carried through even at LN_2027==0 -- rail links
+# have no vehicle lane count by definition, so requiring LN_2027>0 would silently
+# drop every rail link (and starve the FixedTransit link-based checks below).
 gdf_links = gpd.read_file(
     PATHS["in_network_links"],
-    where="LN_2027 > 0 AND FT_2027 NOT IN (1, 37, 38, 39)",
+    where="(LN_2027 > 0 OR FT_2027 IN (70, 80)) AND FT_2027 NOT IN (1, 37, 38, 39)",
 ).to_crs(CRS_UTM)
 gdf_nodes = gpd.read_file(PATHS["in_network_nodes"]).to_crs(CRS_UTM)
 
-print(f"Links: {len(gdf_links):,} (LN_2027 > 0, FT not in 1/37/38/39)")
+print(f"Links: {len(gdf_links):,} (LN_2027 > 0 or FT in 70/80, FT not in 1/37/38/39)")
 print(f"Nodes: {len(gdf_nodes):,}")
 ```
 
@@ -124,19 +128,106 @@ gdf_stops  = gk.get_stops(feed,  as_gdf=True).to_crs(PROJ_UTM12N)
 gdf_shapes = gk.get_shapes(feed, as_gdf=True).to_crs(PROJ_UTM12N)
 gdf_routes = gk.get_routes(feed, as_gdf=True).to_crs(PROJ_UTM12N)
 
-RAIL_ROUTE_TYPES = {0, 2}   # 0 = Light Rail (TRAX), 2 = Commuter Rail (FrontRunner)
+RAIL_ROUTE_TYPES = {0, 2}   # 0 = Light Rail (TRAX/S-Line), 2 = Commuter Rail (FrontRunner)
+RAIL_MODE_MAP = {0: "light_rail", 2: "commuter_rail"}
 
 rail_route_ids = feed.routes.loc[feed.routes["route_type"].isin(RAIL_ROUTE_TYPES), "route_id"]
 rail_trip_ids  = feed.trips.loc[feed.trips["route_id"].isin(rail_route_ids), "trip_id"]
-rail_stop_ids  = feed.stop_times.loc[feed.stop_times["trip_id"].isin(rail_trip_ids), "stop_id"].unique()
 
-gdf_rail_stops = gdf_stops[gdf_stops["stop_id"].isin(rail_stop_ids)].copy()
+# stop_id -> mode. Every rail stop_id is served by exactly one route_type in
+# this feed (verified directly: 0 stops serve more than one), but two
+# same-named stations (Murray Central, Salt Lake Central) DO share a
+# stop_name across modes -- distinct physical platforms that happen to carry
+# the same station name. That's why the D3 grouping below keys on
+# (stop_name, mode), not stop_name alone.
+rail_stop_times = feed.stop_times[feed.stop_times["trip_id"].isin(rail_trip_ids)].merge(
+    feed.trips[["trip_id", "route_id"]], on="trip_id",
+).merge(
+    feed.routes[["route_id", "route_type"]], on="route_id",
+)
+stop_mode_lookup = (
+    rail_stop_times.drop_duplicates("stop_id")
+    .set_index("stop_id")["route_type"]
+    .map(RAIL_MODE_MAP)
+)
+
+gdf_rail_stops = gdf_stops[gdf_stops["stop_id"].isin(stop_mode_lookup.index)].copy()
+gdf_rail_stops["mode"] = gdf_rail_stops["stop_id"].map(stop_mode_lookup)
 print(f"Rail stops: {len(gdf_rail_stops):,} of {len(gdf_stops):,} total stops")
+print(gdf_rail_stops["mode"].value_counts().to_string())
 ```
 
 ```{python}
 #| eval: false
 gdf_rail_stops.explore()
+```
+
+### GTFS Rail Shapes
+
+Physical track geometry, one canonical shape per route (not per `shape_id`).
+A GTFS route typically publishes several `shape_id` variants — one per
+direction plus express/short-turn patterns — that all retrace the *same*
+physical track independently, each with its own slightly different GPS
+digitization. Naively dissolving every variant together (`unary_union` +
+`linemerge`, the same approach that works cleanly for `CandidateTDMRoadLinks`
+in `02_create_link.qmd`) was tested directly against this feed and fails
+badly here: GEOS nodes the output at every point where two near-duplicate
+traces diverge by even a few centimetres, and — worse — a single shape can
+be non-`simple` on its own (self-crossing GPS noise), which explodes it into
+fragments all by itself. Confirmed directly: dissolving FrontRunner's 7 raw
+shape variants together produced 297 chains (mean length 528 m) instead of
+one clean ~130 km corridor; even its single longest shape alone is
+non-simple and explodes into 5 pieces under `unary_union`.
+
+Forward and backward service run the *same* physical track, so a single
+direction's shape is a complete representation of a route's alignment —
+there is no need to reconcile multiple variants at all. For each route, we
+keep only its longest shape (the fullest end-to-end trace) and use it
+as-is, self-intersections and all: `split_candidate_links` in
+`02_create_link.qmd` cuts by M-value projection, which works correctly
+on a non-simple line, so the self-crossing noise is harmless as long as we
+never ask GEOS to topologically re-node it. Different routes that
+genuinely share physical trackage (e.g. TRAX Blue/Red through downtown)
+end up as separate, near-duplicate overlapping pieces after splitting —
+by design, the same pattern already used everywhere else in this pipeline
+for a two-way street digitized as two directional rows.
+
+```{python}
+trip_shape_route = (
+    feed.trips.loc[feed.trips["trip_id"].isin(rail_trip_ids), ["route_id", "shape_id"]]
+    .dropna(subset=["shape_id"])
+    .merge(feed.routes[["route_id", "route_type"]], on="route_id")
+    .drop_duplicates("shape_id")
+)
+trip_shape_route["mode"] = trip_shape_route["route_type"].map(RAIL_MODE_MAP)
+
+gdf_shapes_utm = gdf_shapes.to_crs(CRS_UTM)
+gdf_shapes_utm["length_m"] = gdf_shapes_utm.geometry.length
+shape_lengths = trip_shape_route.merge(gdf_shapes_utm[["shape_id", "length_m"]], on="shape_id")
+
+canonical_idx = shape_lengths.groupby("route_id")["length_m"].idxmax()
+gdf_rail_shapes = shape_lengths.loc[canonical_idx, ["route_id", "shape_id", "mode", "length_m"]].merge(
+    gdf_shapes_utm[["shape_id", "geometry"]], on="shape_id",
+)
+gdf_rail_shapes = gpd.GeoDataFrame(gdf_rail_shapes, geometry="geometry", crs=CRS_UTM)
+
+print(f"Canonical rail route shapes: {len(gdf_rail_shapes):,} (1 per route, longest of each route's variants)")
+print(gdf_rail_shapes[["route_id", "shape_id", "mode", "length_m"]].to_string(index=False))
+```
+
+```{python}
+#| eval: false
+gdf_rail_shapes.explore(column="mode")
+```
+
+```{python}
+gdf_rail_dissolved = gdf_rail_shapes  # kept under this name: downstream (D3, Part F) treats it as
+                                       # "the" candidate rail geometry pool, same role dissolved
+                                       # road chains play for Stage 2 splitting -- no GEOS dissolve
+                                       # is actually applied here, see note above.
+PATHS["out_rail_shapes_dissolved"].parent.mkdir(parents=True, exist_ok=True)
+gdf_rail_dissolved.to_file(PATHS["out_rail_shapes_dissolved"], driver="GPKG")
+print(f"Exported {len(gdf_rail_dissolved):,} canonical rail route shapes → {PATHS['out_rail_shapes_dissolved']}")
 ```
 
 ---
@@ -206,8 +297,15 @@ CC_LINK_MASK = gdf_links[FT_COL] == 1
 # 4. HOV and Managed Lanes (FT = 37, 38, 39)
 MANAGED_LINK_MASK = gdf_links[FT_COL].isin({37, 38, 39})
 
-# 5. Remaining Links get assigned as Surface Links
-SURFACE_LINK_MASK = ~(FWY_LINK_MASK | RAMP_LINK_MASK | CC_LINK_MASK | MANAGED_LINK_MASK)
+# 5. Fixed Transit (FT = 70, 80) — loaded (at LN_2027==0) for Stage 3's
+# connectivity graph, but excluded from all three road classes; transit
+# geometry is handled separately in the FixedTransit snapping pass below.
+TRANSIT_LINK_MASK = gdf_links[FT_COL].isin({70, 80})
+
+# 6. Remaining Links get assigned as Surface Links
+SURFACE_LINK_MASK = ~(
+    FWY_LINK_MASK | RAMP_LINK_MASK | CC_LINK_MASK | MANAGED_LINK_MASK | TRANSIT_LINK_MASK
+)
 
 # FW_CODES: FT codes used for the freeway-priority direction cascade.
 # FT=2+DIRECTION=1 is classified as freeway but excluded here because its
@@ -404,7 +502,12 @@ no_pseudo = ~gdf_nodes["is_pseudo"]
 is_fwy_node     = gdf_nodes["Freeway"]      & no_pseudo
 is_ramp_node    = gdf_nodes["Ramp"]         & no_pseudo
 is_surface_node = gdf_nodes["Surface"]      & no_pseudo
-is_transit_node = gdf_nodes["FixedTransit"] & no_pseudo
+# No no_pseudo gate here: is_pseudo means "uniform FT/LN across neighbors",
+# a road-specific physical-endpoint test. A rail station is identified by
+# GTFS proximity in D3, not by topology, so a station sitting on an
+# otherwise-uniform two-neighbor stretch of track must still be a transit
+# candidate — gating on no_pseudo would silently shrink D3's candidate pool.
+is_transit_node = gdf_nodes["FixedTransit"]
 
 # Full combinatorics of the three link classes → 7 node types.
 # Transit is evaluated first — station nodes get "transit" regardless of any
@@ -1166,14 +1269,25 @@ m_surf
 ### D3 — Transit Snapping
 
 FixedTransit nodes snap to Light Rail (TRAX) and Commuter Rail (FrontRunner)
-stops. Bus stops are excluded. Twin platforms merged to station centroid.
+physical track, not raw GTFS stop points. Bus stops are excluded. Twin
+platforms are merged to a station centroid, then that centroid is projected
+onto the nearest point of its own mode's dissolved shape (perpendicular
+projection, not nearest vertex or stop point) using the same
+`snap_cc_nodes` nearest-line engine already used for CC/external attachment
+nodes — GTFS stop coordinates are still several to tens of metres offset
+from the actual track alignment, and this removes that offset before the
+model node ever snaps to anything.
 
 ```{python}
-# Merge co-located platforms (same stop_name) to a single centroid.
+# Merge co-located platforms (same stop_name + mode) to a single centroid.
+# Keying on mode too (not stop_name alone) matters at Murray Central and Salt
+# Lake Central, where TRAX and FrontRunner share a station name but are
+# physically distinct platforms — merging across modes there would produce a
+# bogus cross-mode centroid.
 # geometry column is plain shapely objects after the lambda — no inherited CRS.
 # gdf_rail_stops is already in CRS_UTM (reprojected at import), so set directly.
 rail_stops_merged = (
-    gdf_rail_stops.groupby("stop_name")
+    gdf_rail_stops.groupby(["stop_name", "mode"])
     .apply(
         lambda g: pd.Series(
             {
@@ -1192,6 +1306,30 @@ gdf_rail_stops_grouped = gpd.GeoDataFrame(
 )
 
 print(f"Grouped rail stops: {len(gdf_rail_stops_grouped):,}")
+print(gdf_rail_stops_grouped["mode"].value_counts().to_string())
+```
+
+```{python}
+# Project each grouped station centroid onto the nearest point of its OWN
+# mode's dissolved shape. Searching only within the matching mode means a
+# station near a cross-mode interchange (e.g. Salt Lake Central) can never
+# accidentally project onto the wrong system's track.
+projected_parts = []
+for mode, stations in gdf_rail_stops_grouped.groupby("mode"):
+    shapes_mode = gdf_rail_dissolved[gdf_rail_dissolved["mode"] == mode]
+    projected_parts.append(snap_cc_nodes(stations, shapes_mode, max_snap_dist_m=200.0))
+
+gdf_rail_stops_projected = gpd.GeoDataFrame(
+    pd.concat(projected_parts, ignore_index=True), crs=CRS_UTM,
+)
+gdf_rail_stops_projected["geometry"] = gpd.points_from_xy(
+    gdf_rail_stops_projected["x_snap"], gdf_rail_stops_projected["y_snap"],
+)
+
+n_resolved = gdf_rail_stops_projected["snap_resolved"].sum()
+print(f"Stations projected onto track: {n_resolved:,} / {len(gdf_rail_stops_projected):,}")
+dist = gdf_rail_stops_projected.loc[gdf_rail_stops_projected["snap_resolved"], "snap_dist_m"]
+print(f"Stop-to-track offset (m): median={dist.median():.1f} | max={dist.max():.1f}")
 ```
 
 ```{python}
@@ -1200,7 +1338,7 @@ print(f"Transit nodes eligible: {transit_mask.sum():,}")
 
 gdf_nodes_snapped = snap_transit(
     gdf_nodes_snapped,
-    gdf_rail_stops_grouped,
+    gdf_rail_stops_projected[gdf_rail_stops_projected["snap_resolved"]],
     node_mask=transit_mask,
     max_distance_m=200,
     label="FixedTransit_Rail",
@@ -1484,9 +1622,24 @@ where this applies: resolved, and not already snapped/handled elsewhere. A
 node already at a real junction already has `is_topo_passthrough = False` and
 needs no change.
 
+Rail station nodes just snapped in D3 have the exact same failure mode —
+a mid-line station (e.g. an intermediate TRAX stop with no other junction)
+sees only its two rail neighbors and looks like an ordinary pass-through
+point, but it's now a genuine split point for the rail pieces built in
+`02_create_link.qmd`'s Part F — so it's folded into the same patch below.
+
 ```{python}
-attach_ids = set(gdf_cc_snapped.loc[gdf_cc_snapped["use_as_split"], "N"]) | \
-             set(gdf_ext_snapped.loc[gdf_ext_snapped["use_as_split"], "N"])
+rail_snapped_ids = set(
+    gdf_nodes_snapped.loc[
+        gdf_nodes_snapped["snapped"].fillna(False) & (gdf_nodes_snapped["snap_rule"] == "FixedTransit_Rail"),
+        "N",
+    ]
+)
+attach_ids = (
+    set(gdf_cc_snapped.loc[gdf_cc_snapped["use_as_split"], "N"])
+    | set(gdf_ext_snapped.loc[gdf_ext_snapped["use_as_split"], "N"])
+    | rail_snapped_ids
+)
 
 was_mid_link_passthrough = gdf_nodes["N"].isin(attach_ids) & gdf_nodes["is_topo_passthrough"]
 n_patched = int(was_mid_link_passthrough.sum())
@@ -1494,7 +1647,7 @@ gdf_nodes.loc[was_mid_link_passthrough, "is_topo_passthrough"] = False
 
 gdf_nodes.to_crs(CRS_UTM).to_file(PATHS["out_node_classified"], driver="GPKG")
 print(
-    f"Patched is_topo_passthrough=False for {n_patched:,} mid-link CC/external "
+    f"Patched is_topo_passthrough=False for {n_patched:,} mid-link CC/external/rail "
     f"attachment node(s) (of {len(attach_ids):,} new split points total — the "
     f"rest already sat at a real junction and needed no change)."
 )
