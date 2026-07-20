@@ -208,16 +208,16 @@ __marimo__/
 
 # --- Data Folder Rules ---
 
-# 1. Ignore everything inside processed/, raw/, and output/
+# 1. Ignore everything inside processed/ and raw/ (regenerable pipeline caches).
+# output/ is NOT ignored -- it holds the final drop-in replacement shapefiles,
+# which are tracked in git.
 _data/processed/*
 _data/raw/*
-_data/output/*
 
 # 2. But DO NOT ignore the .gitkeep files
-# This ensures the folders 'processed', 'raw', and 'output' exist on GitHub
+# This ensures the folders 'processed' and 'raw' exist on GitHub
 !_data/processed/.gitkeep
 !_data/raw/.gitkeep
-!_data/output/.gitkeep
 
 # 3. Explicitly ensure the .qgz file is tracked
 # (Since we didn't ignore _data/*, this is technically tracked anyway,
