@@ -44,6 +44,16 @@ Stage 3 — Public API
     direct coordinate join (piece endpoint coordinate -> node id -> chain
     A/B), not a graph search -- see 03_transfer_attributes.qmd Part B/C. No
     piece-graph traversal is needed anywhere in this pipeline.
+
+Centroid Connectors — Public API
+---------------------------------
+    build_centroid_connector_links(gdf_cc_links, gdf_nodes, gdf_nodes_snapped,
+                                    gdf_cc_snapped, gdf_ext_snapped)
+        Rebuild each FT_2027==1 model link as a straight line between its two
+        nodes' resolved coordinates (main network snap -> CC/external
+        nearest-point snap -> raw model coordinate). No dissolve, split, or
+        chain matching involved -- every row already maps 1:1 to its source
+        model link.
 """
 
 from __future__ import annotations
@@ -438,4 +448,115 @@ def dissolve_pseudonodes(
         )
 
     return result
+
+
+# =============================================================================
+# Centroid connector helpers
+# =============================================================================
+
+
+def build_centroid_connector_links(
+    gdf_cc_links: gpd.GeoDataFrame,
+    gdf_nodes: gpd.GeoDataFrame,
+    gdf_nodes_snapped: gpd.GeoDataFrame,
+    gdf_cc_snapped: gpd.GeoDataFrame,
+    gdf_ext_snapped: gpd.GeoDataFrame,
+) -> gpd.GeoDataFrame:
+    """
+    Rebuild centroid connector link geometry as a straight line between each
+    link's two resolved node coordinates.
+
+    Every FT_2027 == 1 model link is already a straight two-vertex tether
+    between a zone-side node (TAZ centroid, external station, or transit
+    station -- never snapped anywhere, so its model coordinate is fixed and
+    must not move) and a network-side attachment node. Rather than branching
+    on node-ID ranges to tell the two apart, both endpoints of every link are
+    resolved independently through the same coordinate lookup: a true
+    centroid node never appears in any snapped-node table and so always
+    falls through to its raw coordinate unchanged; a network-side node
+    resolves to wherever it was actually snapped.
+
+    Resolution cascade per node N (first match wins, highest priority last so
+    it can overwrite a lower tier):
+      1. `gdf_nodes_snapped` where `snapped == True` -- the main greedy
+         road-network snap (also covers rail-station nodes snapped via
+         `FixedTransit_Rail`).
+      2. `gdf_cc_snapped` where `snap_resolved == True` -- nearest-point CC
+         attachment snap (01_node_classification.qmd).
+      3. `gdf_ext_snapped` where `snap_resolved == True` -- nearest-point
+         external-station snap.
+      4. Raw `gdf_nodes` coordinate -- true centroid nodes always land here;
+         an unresolved network-side node (beyond either snap's distance cap)
+         also falls back here rather than fabricating a position.
+
+    Parameters
+    ----------
+    gdf_cc_links : GeoDataFrame
+        FT_2027 == 1 model links (A, B, + all other model attribute
+        columns). Only A and B are read; every other column rides through
+        unchanged onto the output.
+    gdf_nodes : GeoDataFrame
+        Full raw node table (N, geometry) -- source of the always-available
+        fallback coordinate.
+    gdf_nodes_snapped : GeoDataFrame
+        `nodes_snapped` layer from 01_node_classification.qmd. Must have N,
+        snapped, snapped_x_round, snapped_y_round.
+    gdf_cc_snapped, gdf_ext_snapped : GeoDataFrame
+        `cc_nodes_snapped` / `ext_nodes_snapped` layers. Must have N,
+        snap_resolved, x_snap, y_snap.
+
+    Returns
+    -------
+    GeoDataFrame
+        Copy of gdf_cc_links with geometry replaced by the resolved straight
+        line, plus:
+        - A_resolution, B_resolution : str -- which tier resolved each
+          endpoint ("network_snapped", "cc_snapped", "ext_snapped", "raw").
+        - trueshape_method : "centroid_connector" (constant).
+    """
+    coord_lookup: dict[int, tuple[float, float]] = {}
+    tier_lookup: dict[int, str] = {}
+
+    def _apply_tier(node_ids, xs, ys, tier: str) -> None:
+        for n, x, y in zip(node_ids, xs, ys):
+            coord_lookup[int(n)] = (float(x), float(y))
+            tier_lookup[int(n)] = tier
+
+    # Tier 4 (lowest priority -- applied first so higher tiers overwrite it).
+    raw_xy = shapely.get_coordinates(gdf_nodes.geometry.values)
+    _apply_tier(gdf_nodes["N"], raw_xy[:, 0], raw_xy[:, 1], "raw")
+
+    # Tier 3.
+    ext_resolved = gdf_ext_snapped[gdf_ext_snapped["snap_resolved"]]
+    _apply_tier(ext_resolved["N"], ext_resolved["x_snap"], ext_resolved["y_snap"], "ext_snapped")
+
+    # Tier 2.
+    cc_resolved = gdf_cc_snapped[gdf_cc_snapped["snap_resolved"]]
+    _apply_tier(cc_resolved["N"], cc_resolved["x_snap"], cc_resolved["y_snap"], "cc_snapped")
+
+    # Tier 1 (highest priority).
+    main_snapped = gdf_nodes_snapped[gdf_nodes_snapped["snapped"].fillna(False).astype(bool)]
+    _apply_tier(main_snapped["N"], main_snapped["snapped_x_round"], main_snapped["snapped_y_round"], "network_snapped")
+
+    a_ids = gdf_cc_links["A"].astype(int).to_numpy()
+    b_ids = gdf_cc_links["B"].astype(int).to_numpy()
+
+    missing = (set(a_ids) | set(b_ids)) - coord_lookup.keys()
+    if missing:
+        raise ValueError(
+            f"build_centroid_connector_links: {len(missing)} node id(s) referenced by "
+            f"gdf_cc_links have no coordinate in gdf_nodes (sample: {sorted(missing)[:5]})."
+        )
+
+    geoms = [
+        LineString([coord_lookup[a], coord_lookup[b]])
+        for a, b in zip(a_ids, b_ids)
+    ]
+
+    result = gdf_cc_links.copy()
+    result["geometry"] = geoms
+    result["A_resolution"] = [tier_lookup[n] for n in a_ids]
+    result["B_resolution"] = [tier_lookup[n] for n in b_ids]
+    result["trueshape_method"] = "centroid_connector"
+    return gpd.GeoDataFrame(result, geometry="geometry", crs=gdf_cc_links.crs)
 

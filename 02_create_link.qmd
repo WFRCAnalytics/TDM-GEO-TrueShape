@@ -25,7 +25,7 @@ import pandas as pd
 from shapely.geometry import Point
 
 sys.path.insert(0, str(Path.cwd()))
-from _src.link_utils import resolve_snap_coords, split_candidate_links
+from _src.link_utils import resolve_snap_coords, split_candidate_links, build_centroid_connector_links
 from _src.centerline_utils import (
     dissolve_and_singlepart,
     restitch_route_through_junctions,
@@ -40,7 +40,10 @@ from _src.centerline_utils import (
 PATHS = {
     "in_centerlines":  Path("_data/processed/CandidateTDMRoadLinks.gpkg"),
     "in_node_snapped": Path("_data/processed/nodes_snapped.gpkg"),
+    "in_network_links": Path("_data/raw/WFv1000_MasterNet - Link.gpkg"),
+    "in_network_nodes": Path("_data/raw/WFv1000_MasterNet - Node.gpkg"),
     "out_link_pieces": Path("_data/processed/link_pieces.gpkg"),
+    "out_centroid_connectors": Path("_data/processed/centroid_connectors.gpkg"),
 }
 
 # Lineage/display attributes reattached onto final pieces via midpoint join
@@ -428,6 +431,44 @@ print(f"Exported {len(gdf_pieces):,} pieces → {PATHS['out_link_pieces']}")
 
 ---
 
+## Part E — Centroid Connector Links
+
+`FT_2027 == 1` model links are TAZ-centroid, external-station, and transit-
+station connectors, not physical roadway -- no centerline underlies them, so
+none of Parts A-D's redissolve/split/match machinery applies. Each is
+already a straight two-vertex tether in the raw model; the only change here
+is rebuilding that tether from each node's *resolved* position instead of
+its raw one, using the same node-coordinate cascade already computed above
+(main network snap -> CC/external nearest-point snap -> raw model
+coordinate as the final fallback). A true TAZ centroid never appears in any
+snapped-node table, so it always keeps its original, fixed coordinate; the
+network-side node moves to wherever it was actually snapped.
+
+```{python}
+gdf_network_nodes = gpd.read_file(PATHS["in_network_nodes"]).to_crs(CRS_UTM)
+gdf_cc_links_raw = gpd.read_file(PATHS["in_network_links"], where="FT_2027 = 1").to_crs(CRS_UTM)
+print(f"Centroid connector links (FT_2027 = 1): {len(gdf_cc_links_raw):,}")
+```
+
+```{python}
+gdf_centroid_connectors = build_centroid_connector_links(
+    gdf_cc_links_raw, gdf_network_nodes, gdf_nodes_snapped, gdf_cc_snapped, gdf_ext_snapped,
+)
+
+print("A-side resolution tier:")
+print(gdf_centroid_connectors["A_resolution"].value_counts().to_string())
+print("\nB-side resolution tier:")
+print(gdf_centroid_connectors["B_resolution"].value_counts().to_string())
+```
+
+```{python}
+PATHS["out_centroid_connectors"].parent.mkdir(parents=True, exist_ok=True)
+gdf_centroid_connectors.to_file(PATHS["out_centroid_connectors"], driver="GPKG")
+print(f"Exported {len(gdf_centroid_connectors):,} centroid connector links → {PATHS['out_centroid_connectors']}")
+```
+
+---
+
 ## Summary
 
 ```{python}
@@ -443,6 +484,7 @@ print(f"        {n_road_snapped:,} snapped road nodes ({n_resolved:,} coordinate
 print(f"        {len(gdf_cc_snapped):,} CC attachment nodes ({len(cc_points_exact):,} used as split points)")
 print(f"        {len(gdf_ext_snapped):,} external station nodes ({len(ext_points_exact):,} used as split points)")
 print(f"Output: {len(gdf_pieces):,} pieces → {PATHS['out_link_pieces'].name}")
+print(f"        {len(gdf_centroid_connectors):,} centroid connector links → {PATHS['out_centroid_connectors'].name}")
 ```
 
 ```{python}

@@ -40,6 +40,7 @@ PATHS = {
     "in_node_snapped":     Path("_data/processed/nodes_snapped.gpkg"),
     "in_node_classified":  Path("_data/processed/nodes_classified.gpkg"),
     "in_link_pieces":      Path("_data/processed/link_pieces.gpkg"),
+    "in_centroid_connectors": Path("_data/processed/centroid_connectors.gpkg"),
     "out_links_trueshape": Path("_data/processed/links_trueshape.gpkg"),
 }
 
@@ -495,35 +496,72 @@ print(f"Matched pieces:   {len(matched_piece_ids):,} / {len(gdf_pieces):,}")
 print(f"Unmatched pieces: {len(gdf_unmatched):,} / {len(gdf_pieces):,}")
 ```
 
+Centroid connector links (`02_create_link.qmd` Part E) are not physical-link
+pieces at all — no dissolve, no chain match, no `endpoint_status` applies to
+them; they arrive already fully attributed from their source model link.
+They're aligned to the same output schema and folded in here, exactly like
+`gdf_unmatched` above skips Part C's resolution: `ONEWAY` is renamed to
+`ONEWAY_tdm` (this is the model's own attribute, the TDM side of the
+existing `ONEWAY_tdm`/`ONEWAY_ugrc` split — there is no UGRC centerline
+under a centroid connector, so `ONEWAY_ugrc` and every other lineage column
+stay blank). `n_constituents`/`constituent_ab_pairs` are filled with their
+actual (trivially known, not guessed) values rather than left blank.
+
 ```{python}
-gdf_trueshape = pd.concat([gdf_matched_final, gdf_unmatched], ignore_index=True)
+gdf_centroid_connectors = gpd.read_file(PATHS["in_centroid_connectors"]).to_crs(CRS_UTM)
+gdf_centroid_connectors = gdf_centroid_connectors.rename(columns={"ONEWAY": "ONEWAY_tdm"})
+gdf_centroid_connectors["length_m"] = gdf_centroid_connectors.geometry.length
+gdf_centroid_connectors["piece_direction"] = "forward"
+gdf_centroid_connectors["n_constituents"] = 1
+gdf_centroid_connectors["constituent_ab_pairs"] = [
+    json.dumps([[int(a), int(b)]])
+    for a, b in zip(gdf_centroid_connectors["A"], gdf_centroid_connectors["B"])
+]
+
+print(f"Centroid connector links: {len(gdf_centroid_connectors):,}")
+```
+
+```{python}
+gdf_trueshape = pd.concat(
+    [gdf_matched_final, gdf_unmatched, gdf_centroid_connectors], ignore_index=True
+)
 gdf_trueshape = gpd.GeoDataFrame(gdf_trueshape, geometry="geometry", crs=CRS_UTM)
 for col in ("A", "B", "n_constituents"):
     gdf_trueshape[col] = gdf_trueshape[col].astype("Int64")
 
 print(f"gdf_trueshape: {len(gdf_trueshape):,} rows")
-print(f"  = {len(gdf_matched_final):,} matched + {len(gdf_unmatched):,} unmatched")
+print(
+    f"  = {len(gdf_matched_final):,} matched + {len(gdf_unmatched):,} unmatched "
+    f"+ {len(gdf_centroid_connectors):,} centroid connectors"
+)
 print(f"  vs. {len(gdf_pieces):,} pieces + {len(gdf_matched_final) - len(matched_piece_ids):,} dual-direction extras")
 print(f"Null geometries: {gdf_trueshape.geometry.isna().sum()}")
-assert len(gdf_trueshape) == len(gdf_pieces) + (len(gdf_matched_final) - len(matched_piece_ids))
+assert len(gdf_trueshape) == (
+    len(gdf_pieces)
+    + (len(gdf_matched_final) - len(matched_piece_ids))
+    + len(gdf_centroid_connectors)
+)
 assert gdf_trueshape.geometry.isna().sum() == 0
 ```
 
 Combine `trueshape_method` and `endpoint_status` into a single QA field for
 map symbology. `trueshape_method == "matched"` is always a strict subset of
 `endpoint_status == "both_snapped"` (Part B's merge only ever runs against
-the both-snapped subset of pieces), so the two collapse into five
-non-overlapping categories with no ambiguous case:
+the both-snapped subset of pieces), and `trueshape_method ==
+"centroid_connector"` rows have no `endpoint_status` at all (that column
+only describes physical-piece endpoint matching), so checking
+`trueshape_method` first keeps all six resulting categories non-overlapping:
 
 ```{python}
 gdf_trueshape["qa_status"] = np.select(
     [
+        gdf_trueshape["trueshape_method"] == "centroid_connector",
         gdf_trueshape["trueshape_method"] == "matched",
         gdf_trueshape["endpoint_status"] == "both_snapped",
         gdf_trueshape["endpoint_status"] == "a_only",
         gdf_trueshape["endpoint_status"] == "b_only",
     ],
-    ["matched", "endpoints_only", "a_only", "b_only"],
+    ["centroid_connector", "matched", "endpoints_only", "a_only", "b_only"],
     default="neither",
 )
 print(gdf_trueshape["qa_status"].value_counts().to_string())
@@ -547,6 +585,7 @@ print(f"Input:  {len(gdf_links):,} model links (FT_2027 not in 1,37,38,39,50,70,
 print(f"        {len(pass_through_ids):,} pass-through (unsnapped) node ids absorbed into chains")
 print(f"        {len(gdf_dissolved):,} dissolved chains")
 print(f"        {len(gdf_pieces):,} physical link pieces (link_pieces.gpkg)")
+print(f"        {len(gdf_centroid_connectors):,} centroid connector links (centroid_connectors.gpkg)")
 print(f"Output: {len(gdf_trueshape):,} rows → {out_path.name}")
 print()
 print("Method breakdown:")
