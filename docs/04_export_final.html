@@ -372,10 +372,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#raw-nodes-and-snap-results" id="toc-raw-nodes-and-snap-results" class="nav-link" data-scroll-target="#raw-nodes-and-snap-results">Raw Nodes and Snap Results</a></li>
   <li><a href="#true-shape-links-and-centroid-connectors" id="toc-true-shape-links-and-centroid-connectors" class="nav-link" data-scroll-target="#true-shape-links-and-centroid-connectors">True-Shape Links and Centroid Connectors</a></li>
   </ul></li>
-  <li><a href="#part-a-resolve-final-node-coordinates" id="toc-part-a-resolve-final-node-coordinates" class="nav-link" data-scroll-target="#part-a-resolve-final-node-coordinates"><span class="header-section-number">3</span> Part A — Resolve Final Node Coordinates</a></li>
+  <li><a href="#part-a-resolve-node-coordinates" id="toc-part-a-resolve-node-coordinates" class="nav-link" data-scroll-target="#part-a-resolve-node-coordinates"><span class="header-section-number">3</span> Part A — Resolve Node Coordinates</a></li>
   <li><a href="#part-b-build-final-link-table" id="toc-part-b-build-final-link-table" class="nav-link" data-scroll-target="#part-b-build-final-link-table"><span class="header-section-number">4</span> Part B — Build Final Link Table</a></li>
-  <li><a href="#part-c-write-shapefiles" id="toc-part-c-write-shapefiles" class="nav-link" data-scroll-target="#part-c-write-shapefiles"><span class="header-section-number">5</span> Part C — Write Shapefiles</a></li>
-  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">6</span> Summary</a></li>
+  <li><a href="#part-c-filter-nodes-to-the-final-network" id="toc-part-c-filter-nodes-to-the-final-network" class="nav-link" data-scroll-target="#part-c-filter-nodes-to-the-final-network"><span class="header-section-number">5</span> Part C — Filter Nodes to the Final Network</a></li>
+  <li><a href="#part-d-write-shapefiles" id="toc-part-d-write-shapefiles" class="nav-link" data-scroll-target="#part-d-write-shapefiles"><span class="header-section-number">6</span> Part D — Write Shapefiles</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">7</span> Summary</a></li>
   </ul>
 </nav>
     </div>
@@ -391,7 +392,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="imports" class="level3">
 <h3 class="anchored" data-anchor-id="imports">Imports</h3>
-<div id="7ac94dc6" class="cell" data-execution_count="1">
+<div id="4c002d0c" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -409,7 +410,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="configuration" class="level3">
 <h3 class="anchored" data-anchor-id="configuration">Configuration</h3>
-<div id="02dbe459" class="cell" data-execution_count="2">
+<div id="61f47d77" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -441,7 +442,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="2" class="anchored" data-anchor-id="load-data"><span class="header-section-number">2</span> Load Data</h2>
 <section id="raw-nodes-and-snap-results" class="level3">
 <h3 class="anchored" data-anchor-id="raw-nodes-and-snap-results">Raw Nodes and Snap Results</h3>
-<div id="8ba9487c" class="cell" data-execution_count="3">
+<div id="c98bd8ff" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>gdf_network_nodes <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_network_nodes"</span>]).to_crs(CRS_UTM)</span>
@@ -458,7 +459,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="true-shape-links-and-centroid-connectors" class="level3">
 <h3 class="anchored" data-anchor-id="true-shape-links-and-centroid-connectors">True-Shape Links and Centroid Connectors</h3>
-<div id="12a0f361" class="cell" data-execution_count="4">
+<div id="e9a6fed1" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gdf_links_trueshape <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_links_trueshape"</span>]).to_crs(CRS_UTM)</span>
@@ -484,10 +485,11 @@ Centroid connector links: 18,406</code></pre>
 <hr>
 </section>
 </section>
-<section id="part-a-resolve-final-node-coordinates" class="level2" data-number="3">
-<h2 data-number="3" class="anchored" data-anchor-id="part-a-resolve-final-node-coordinates"><span class="header-section-number">3</span> Part A — Resolve Final Node Coordinates</h2>
+<section id="part-a-resolve-node-coordinates" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="part-a-resolve-node-coordinates"><span class="header-section-number">3</span> Part A — Resolve Node Coordinates</h2>
 <p>Every node keeps its full raw attribute record; only X/Y/geometry are replaced, resolved through the same priority cascade <code>build_centroid_connector_links</code> already applies (raw model coordinate as the base fallback, overwritten by CC/external-station nearest-point snaps, overwritten in turn by the main greedy network snap). Listing sources lowest-priority first, highest last, means a future improved snapping pass or a brand-new node class is handled by adding one more entry to <code>snap_sources</code> — no other code changes.</p>
-<div id="3baa375c" class="cell" data-execution_count="5">
+<p>Coordinates are resolved for every raw node here, but not every raw node survives into the final export — see Part C, which keeps only the nodes actually referenced by the final link table.</p>
+<div id="03b5b035" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>snap_sources <span class="op">=</span> [</span>
@@ -510,86 +512,66 @@ Centroid connector links: 18,406</code></pre>
 <span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>coord_lookup, tier_lookup <span class="op">=</span> resolve_node_coordinates(gdf_network_nodes, snap_sources)</span>
 <span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>tier_counts <span class="op">=</span> pd.Series(tier_lookup).value_counts()</span>
-<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Node coordinate resolution tier:"</span>)</span>
-<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tier_counts.to_string())</span>
-<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(coord_lookup) <span class="op">==</span> <span class="bu">len</span>(gdf_network_nodes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Node coordinate resolution tier (all raw nodes, pre-filter):"</span>)</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(pd.Series(tier_lookup).value_counts().to_string())</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(coord_lookup) <span class="op">==</span> <span class="bu">len</span>(gdf_network_nodes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Node coordinate resolution tier:
+<pre><code>Node coordinate resolution tier (all raw nodes, pre-filter):
 raw                13829
 cc_snapped          4578
 network_snapped     3546</code></pre>
 </div>
 </div>
-<div id="0476437f" class="cell" data-execution_count="6">
+<div id="ae638c0d" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>node_ids <span class="op">=</span> gdf_network_nodes[<span class="st">"N"</span>].astype(<span class="bu">int</span>).to_numpy()</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>xs <span class="op">=</span> [coord_lookup[n][<span class="dv">0</span>] <span class="cf">for</span> n <span class="kw">in</span> node_ids]</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>ys <span class="op">=</span> [coord_lookup[n][<span class="dv">1</span>] <span class="cf">for</span> n <span class="kw">in</span> node_ids]</span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final <span class="op">=</span> gdf_network_nodes.copy()</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final[<span class="st">"X"</span>] <span class="op">=</span> xs</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final[<span class="st">"Y"</span>] <span class="op">=</span> ys</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final[<span class="st">"geometry"</span>] <span class="op">=</span> gpd.points_from_xy(xs, ys, crs<span class="op">=</span>CRS_UTM)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved <span class="op">=</span> gdf_network_nodes.copy()</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved[<span class="st">"X"</span>] <span class="op">=</span> xs</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved[<span class="st">"Y"</span>] <span class="op">=</span> ys</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved[<span class="st">"geometry"</span>] <span class="op">=</span> gpd.points_from_xy(xs, ys, crs<span class="op">=</span>CRS_UTM)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
-</div>
-<div id="71186d9a" class="cell" data-execution_count="7">
-<details class="code-fold">
-<summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_node_shp"</span>]) <span class="im">as</span> src:</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    node_schema_props <span class="op">=</span> <span class="bu">list</span>(src.schema[<span class="st">"properties"</span>].keys())</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final <span class="op">=</span> conform_to_reference_schema(</span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_final, node_schema_props, rename_map<span class="op">=</span>NODE_RENAME_MAP,</span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_nodes_final: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> rows, </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final.columns)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">list</span>(gdf_nodes_final.columns) <span class="op">==</span> [<span class="op">*</span>node_schema_props, <span class="st">"geometry"</span>]</span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(gdf_nodes_final) <span class="op">==</span> <span class="bu">len</span>(gdf_network_nodes)</span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_nodes_final.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
-<div class="cell-output cell-output-stdout">
-<pre><code>gdf_nodes_final: 21,953 rows, 49 columns</code></pre>
-</div>
 </div>
 <hr>
 </section>
 <section id="part-b-build-final-link-table" class="level2" data-number="4">
 <h2 data-number="4" class="anchored" data-anchor-id="part-b-build-final-link-table"><span class="header-section-number">4</span> Part B — Build Final Link Table</h2>
 <p>Only fully model-attributed rows go into the replacement file — the <code>qa_status == "matched"</code> roadway pieces and the centroid connectors. The <code>qa_status</code> in {“endpoints_only”, “a_only”, “b_only”, “neither”} rows in <code>links_trueshape.gpkg</code> are real UGRC geometry with no model link behind them at all (no valid A/B), so they cannot populate a schema that requires model node ids and model attributes — they stay out of this replacement file (they remain available in <code>links_trueshape.gpkg</code> for QA/inspection).</p>
-<div id="26e01f9b" class="cell" data-execution_count="8">
+<div id="5071a783" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>gdf_matched <span class="op">=</span> gdf_links_trueshape[gdf_links_trueshape[<span class="st">"qa_status"</span>] <span class="op">==</span> <span class="st">"matched"</span>].copy()</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Matched roadway pieces: </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>gdf_matched <span class="op">=</span> gdf_links_trueshape[gdf_links_trueshape[<span class="st">"qa_status"</span>] <span class="op">==</span> <span class="st">"matched"</span>].copy()</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Matched roadway pieces: </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched)<span class="sc">:,}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>Matched roadway pieces: 15,880</code></pre>
 </div>
 </div>
-<div id="1173e813" class="cell" data-execution_count="9">
+<div id="fb05bf71" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_link_shp"</span>]) <span class="im">as</span> src:</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    link_schema_props <span class="op">=</span> <span class="bu">list</span>(src.schema[<span class="st">"properties"</span>].keys())</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>gdf_matched_final <span class="op">=</span> conform_to_reference_schema(</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    gdf_matched, link_schema_props, rename_map<span class="op">=</span>LINK_RENAME_MAP,</span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>gdf_cc_final <span class="op">=</span> conform_to_reference_schema(</span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    gdf_centroid_connectors, link_schema_props, rename_map<span class="op">=</span>LINK_RENAME_MAP,</span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>gdf_links_final <span class="op">=</span> pd.concat([gdf_matched_final, gdf_cc_final], ignore_index<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>gdf_links_final <span class="op">=</span> gpd.GeoDataFrame(gdf_links_final, geometry<span class="op">=</span><span class="st">"geometry"</span>, crs<span class="op">=</span>CRS_UTM)</span>
-<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_links_final: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> rows, </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final.columns)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
-<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  = </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_final)<span class="sc">:,}</span><span class="ss"> matched roadway + </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_final)<span class="sc">:,}</span><span class="ss"> centroid connectors"</span>)</span>
-<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">list</span>(gdf_links_final.columns) <span class="op">==</span> [<span class="op">*</span>link_schema_props, <span class="st">"geometry"</span>]</span>
-<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(gdf_links_final) <span class="op">==</span> <span class="bu">len</span>(gdf_matched_final) <span class="op">+</span> <span class="bu">len</span>(gdf_cc_final)</span>
-<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_links_final.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_link_shp"</span>]) <span class="im">as</span> src:</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    link_schema_props <span class="op">=</span> <span class="bu">list</span>(src.schema[<span class="st">"properties"</span>].keys())</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>gdf_matched_final <span class="op">=</span> conform_to_reference_schema(</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    gdf_matched, link_schema_props, rename_map<span class="op">=</span>LINK_RENAME_MAP,</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>gdf_cc_final <span class="op">=</span> conform_to_reference_schema(</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    gdf_centroid_connectors, link_schema_props, rename_map<span class="op">=</span>LINK_RENAME_MAP,</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>gdf_links_final <span class="op">=</span> pd.concat([gdf_matched_final, gdf_cc_final], ignore_index<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>gdf_links_final <span class="op">=</span> gpd.GeoDataFrame(gdf_links_final, geometry<span class="op">=</span><span class="st">"geometry"</span>, crs<span class="op">=</span>CRS_UTM)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_links_final: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> rows, </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final.columns)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  = </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_final)<span class="sc">:,}</span><span class="ss"> matched roadway + </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_final)<span class="sc">:,}</span><span class="ss"> centroid connectors"</span>)</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">list</span>(gdf_links_final.columns) <span class="op">==</span> [<span class="op">*</span>link_schema_props, <span class="st">"geometry"</span>]</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(gdf_links_final) <span class="op">==</span> <span class="bu">len</span>(gdf_matched_final) <span class="op">+</span> <span class="bu">len</span>(gdf_cc_final)</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_links_final.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>gdf_links_final: 34,286 rows, 181 columns
@@ -598,45 +580,94 @@ network_snapped     3546</code></pre>
 </div>
 <hr>
 </section>
-<section id="part-c-write-shapefiles" class="level2" data-number="5">
-<h2 data-number="5" class="anchored" data-anchor-id="part-c-write-shapefiles"><span class="header-section-number">5</span> Part C — Write Shapefiles</h2>
-<div id="13aa0e6c" class="cell" data-execution_count="10">
+<section id="part-c-filter-nodes-to-the-final-network" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="part-c-filter-nodes-to-the-final-network"><span class="header-section-number">5</span> Part C — Filter Nodes to the Final Network</h2>
+<p>A node belongs in the replacement file only if the final link table actually references it as an endpoint — the same referential-integrity invariant the raw MasterNet itself holds (21,923 / 21,953 raw nodes are referenced by at least one raw link). Pass-through/pseudonodes absorbed by Stage 3’s chain dissolve, and nodes touching only excluded link classes (HOV/managed-access, unmatched leftover geometry), are no longer an endpoint of anything in <code>gdf_links_final</code> and must not appear here — this filter is a pure referential check against the final links, not a hand-typed node-class list, so it stays correct as snapping/matching coverage improves and more nodes become genuinely used.</p>
+<div id="48e535a8" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_nodes_final, PATHS[<span class="st">"out_node"</span>], PATHS[<span class="st">"schema_node_shp"</span>])</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> nodes → </span><span class="sc">{</span>PATHS[<span class="st">'out_node'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_links_final, PATHS[<span class="st">"out_link"</span>], PATHS[<span class="st">"schema_link_shp"</span>])</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> links → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>used_node_ids <span class="op">=</span> <span class="bu">set</span>(gdf_links_final[<span class="st">"A"</span>]) <span class="op">|</span> <span class="bu">set</span>(gdf_links_final[<span class="st">"B"</span>])</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Nodes referenced by final links: </span><span class="sc">{</span><span class="bu">len</span>(used_node_ids)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>gdf_nodes_used <span class="op">=</span> gdf_nodes_resolved[gdf_nodes_resolved[<span class="st">"N"</span>].isin(used_node_ids)].copy()</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>dropped_tier_counts <span class="op">=</span> (</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    pd.Series(tier_lookup)</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    .loc[<span class="kw">lambda</span> s: <span class="op">~</span>s.index.isin(used_node_ids)]</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    .value_counts()</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Unused nodes dropped: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_resolved) <span class="op">-</span> <span class="bu">len</span>(gdf_nodes_used)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Resolution tier of dropped nodes:"</span>)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(dropped_tier_counts.to_string())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Saved 21,953 nodes → _data\output\WFv1000_MasterNet_20260430_Node.shp
+<pre><code>Nodes referenced by final links: 12,745
+
+Unused nodes dropped: 9,208
+Resolution tier of dropped nodes:
+raw                9044
+network_snapped     164</code></pre>
+</div>
+</div>
+<div id="7944a7a4" class="cell" data-execution_count="10">
+<details class="code-fold">
+<summary>Show the code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_node_shp"</span>]) <span class="im">as</span> src:</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    node_schema_props <span class="op">=</span> <span class="bu">list</span>(src.schema[<span class="st">"properties"</span>].keys())</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final <span class="op">=</span> conform_to_reference_schema(</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_used, node_schema_props, rename_map<span class="op">=</span>NODE_RENAME_MAP,</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_nodes_final: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> rows, </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final.columns)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">list</span>(gdf_nodes_final.columns) <span class="op">==</span> [<span class="op">*</span>node_schema_props, <span class="st">"geometry"</span>]</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(gdf_nodes_final) <span class="op">==</span> <span class="bu">len</span>(used_node_ids)</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_nodes_final.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> used_node_ids <span class="op">&lt;=</span> <span class="bu">set</span>(gdf_nodes_final[<span class="st">"N"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>gdf_nodes_final: 12,745 rows, 49 columns</code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-d-write-shapefiles" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="part-d-write-shapefiles"><span class="header-section-number">6</span> Part D — Write Shapefiles</h2>
+<div id="bd0035b9" class="cell" data-execution_count="11">
+<details class="code-fold">
+<summary>Show the code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_nodes_final, PATHS[<span class="st">"out_node"</span>], PATHS[<span class="st">"schema_node_shp"</span>])</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> nodes → </span><span class="sc">{</span>PATHS[<span class="st">'out_node'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_links_final, PATHS[<span class="st">"out_link"</span>], PATHS[<span class="st">"schema_link_shp"</span>])</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> links → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Saved 12,745 nodes → _data\output\WFv1000_MasterNet_20260430_Node.shp
 Saved 34,286 links → _data\output\WFv1000_MasterNet_20260430_Link.shp</code></pre>
 </div>
 </div>
 <hr>
 </section>
-<section id="summary" class="level2" data-number="6">
-<h2 data-number="6" class="anchored" data-anchor-id="summary"><span class="header-section-number">6</span> Summary</h2>
-<div id="468324cd" class="cell" data-execution_count="11">
+<section id="summary" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="summary"><span class="header-section-number">7</span> Summary</h2>
+<div id="cd9c0228" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Show the code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"=== Final Export Summary ==="</span>)</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> total → </span><span class="sc">{</span>PATHS[<span class="st">'out_node'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tier_counts.to_string())</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Links: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> total → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_final)<span class="sc">:,}</span><span class="ss"> matched roadway (true-shape geometry)"</span>)</span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_final)<span class="sc">:,}</span><span class="ss"> centroid connector (TAZ/external/transit tether)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"=== Final Export Summary ==="</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> total → </span><span class="sc">{</span>PATHS[<span class="st">'out_node'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  (</span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_resolved) <span class="op">-</span> <span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> unused raw nodes dropped)"</span>)</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Links: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> total → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_final)<span class="sc">:,}</span><span class="ss"> matched roadway (true-shape geometry)"</span>)</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_final)<span class="sc">:,}</span><span class="ss"> centroid connector (TAZ/external/transit tether)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>=== Final Export Summary ===
 
-Nodes: 21,953 total → WFv1000_MasterNet_20260430_Node.shp
-raw                13829
-cc_snapped          4578
-network_snapped     3546
+Nodes: 12,745 total → WFv1000_MasterNet_20260430_Node.shp
+  (9,208 unused raw nodes dropped)
 
 Links: 34,286 total → WFv1000_MasterNet_20260430_Link.shp
   15,880 matched roadway (true-shape geometry)
@@ -1114,215 +1145,250 @@ Links: 34,286 total → WFv1000_MasterNet_20260430_Link.shp
     }
   });
   </script><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> Export Final True-Shape Network</span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> Reassemble the full node/link tables as drop-in replacements for the raw WFv1000 MasterNet shapefiles</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="an">description:</span><span class="co"> Every raw model node keeps its full attribute record, with only its coordinate resolved through the same tiered snap cascade used for centroid connectors (main network snap -&gt; CC/external nearest-point snap -&gt; raw model coordinate fallback), so unsnapped or future node classes fall through safely without code changes. The final link table concatenates the model-attributed true-shape roadway pieces from 03_transfer_attributes.qmd with the centroid connector links from 02_create_link.qmd, dropping every lineage/QA-only column. Both outputs are written as ESRI Shapefiles using the field schema (names, order, DBF widths/precision) copied directly from the original MasterNet shapefiles, so they can be swapped in for the originals as-is.</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="an">author:</span></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co"> - name: Pukar Bhandari</span></span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="co">   email: pukar.bhandari@wfrc.utah.gov</span></span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="co">   affiliation:</span></span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a><span class="co">     - name: Wasatch Front Regional Council</span></span>
-<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a><span class="co">       url: "https://wfrc.utah.gov/"</span></span>
-<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a><span class="an">date:</span><span class="co"> "2026-07-20"</span></span>
-<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
-<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a><span class="fu">## Setup</span></span>
-<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a><span class="fu">### Imports</span></span>
-<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
-<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
-<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> fiona</span>
-<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> geopandas <span class="im">as</span> gpd</span>
-<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a>sys.path.insert(<span class="dv">0</span>, <span class="bu">str</span>(Path.cwd()))</span>
-<span id="cb20-29"><a href="#cb20-29" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.node_utils <span class="im">import</span> resolve_node_coordinates</span>
-<span id="cb20-30"><a href="#cb20-30" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.export_utils <span class="im">import</span> conform_to_reference_schema, write_matching_shapefile</span>
-<span id="cb20-31"><a href="#cb20-31" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-32"><a href="#cb20-32" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-33"><a href="#cb20-33" aria-hidden="true" tabindex="-1"></a><span class="fu">### Configuration</span></span>
-<span id="cb20-34"><a href="#cb20-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-37"><a href="#cb20-37" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-38"><a href="#cb20-38" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
-<span id="cb20-39"><a href="#cb20-39" aria-hidden="true" tabindex="-1"></a>PATHS <span class="op">=</span> {</span>
-<span id="cb20-40"><a href="#cb20-40" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_network_nodes"</span>:       Path(<span class="st">"_data/raw/WFv1000_MasterNet - Node.gpkg"</span>),</span>
-<span id="cb20-41"><a href="#cb20-41" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_node_snapped"</span>:        Path(<span class="st">"_data/processed/nodes_snapped.gpkg"</span>),</span>
-<span id="cb20-42"><a href="#cb20-42" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_links_trueshape"</span>:     Path(<span class="st">"_data/processed/links_trueshape.gpkg"</span>),</span>
-<span id="cb20-43"><a href="#cb20-43" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_centroid_connectors"</span>: Path(<span class="st">"_data/processed/centroid_connectors.gpkg"</span>),</span>
-<span id="cb20-44"><a href="#cb20-44" aria-hidden="true" tabindex="-1"></a>    <span class="st">"schema_node_shp"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
-<span id="cb20-45"><a href="#cb20-45" aria-hidden="true" tabindex="-1"></a>    <span class="st">"schema_link_shp"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
-<span id="cb20-46"><a href="#cb20-46" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_node"</span>: Path(<span class="st">"_data/output/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
-<span id="cb20-47"><a href="#cb20-47" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link"</span>: Path(<span class="st">"_data/output/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
-<span id="cb20-48"><a href="#cb20-48" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb20-49"><a href="#cb20-49" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-50"><a href="#cb20-50" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
-<span id="cb20-51"><a href="#cb20-51" aria-hidden="true" tabindex="-1"></a>CRS_UTM <span class="op">=</span> <span class="st">"EPSG:26912"</span>  <span class="co"># NAD83 UTM Zone 12N — Utah (metric)</span></span>
-<span id="cb20-52"><a href="#cb20-52" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-53"><a href="#cb20-53" aria-hidden="true" tabindex="-1"></a><span class="co"># The ArcGIS-REST-sourced raw layers rename the shapefile's EXTERNAL field to</span></span>
-<span id="cb20-54"><a href="#cb20-54" aria-hidden="true" tabindex="-1"></a><span class="co"># EXTERNAL_ (to dodge a reserved-word collision). Reverse it on export so the</span></span>
-<span id="cb20-55"><a href="#cb20-55" aria-hidden="true" tabindex="-1"></a><span class="co"># output schema is a byte-faithful match for the original .shp.</span></span>
-<span id="cb20-56"><a href="#cb20-56" aria-hidden="true" tabindex="-1"></a>NODE_RENAME_MAP <span class="op">=</span> {<span class="st">"EXTERNAL_"</span>: <span class="st">"EXTERNAL"</span>}</span>
-<span id="cb20-57"><a href="#cb20-57" aria-hidden="true" tabindex="-1"></a>LINK_RENAME_MAP <span class="op">=</span> {<span class="st">"EXTERNAL_"</span>: <span class="st">"EXTERNAL"</span>, <span class="st">"ONEWAY_tdm"</span>: <span class="st">"ONEWAY"</span>}</span>
-<span id="cb20-58"><a href="#cb20-58" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-59"><a href="#cb20-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-60"><a href="#cb20-60" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb20-61"><a href="#cb20-61" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-62"><a href="#cb20-62" aria-hidden="true" tabindex="-1"></a><span class="fu">## Load Data</span></span>
-<span id="cb20-63"><a href="#cb20-63" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-64"><a href="#cb20-64" aria-hidden="true" tabindex="-1"></a><span class="fu">### Raw Nodes and Snap Results</span></span>
-<span id="cb20-65"><a href="#cb20-65" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-68"><a href="#cb20-68" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-69"><a href="#cb20-69" aria-hidden="true" tabindex="-1"></a>gdf_network_nodes <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_network_nodes"</span>]).to_crs(CRS_UTM)</span>
-<span id="cb20-70"><a href="#cb20-70" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped  <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
-<span id="cb20-71"><a href="#cb20-71" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped     <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"cc_nodes_snapped"</span>).to_crs(CRS_UTM)</span>
-<span id="cb20-72"><a href="#cb20-72" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped    <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"ext_nodes_snapped"</span>).to_crs(CRS_UTM)</span>
-<span id="cb20-73"><a href="#cb20-73" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-74"><a href="#cb20-74" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Raw nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_network_nodes)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb20-75"><a href="#cb20-75" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-76"><a href="#cb20-76" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-77"><a href="#cb20-77" aria-hidden="true" tabindex="-1"></a><span class="fu">### True-Shape Links and Centroid Connectors</span></span>
-<span id="cb20-78"><a href="#cb20-78" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-81"><a href="#cb20-81" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-82"><a href="#cb20-82" aria-hidden="true" tabindex="-1"></a>gdf_links_trueshape <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_links_trueshape"</span>]).to_crs(CRS_UTM)</span>
-<span id="cb20-83"><a href="#cb20-83" aria-hidden="true" tabindex="-1"></a>gdf_centroid_connectors <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_centroid_connectors"</span>]).to_crs(CRS_UTM)</span>
-<span id="cb20-84"><a href="#cb20-84" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-85"><a href="#cb20-85" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"links_trueshape rows: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_trueshape)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb20-86"><a href="#cb20-86" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gdf_links_trueshape[<span class="st">"qa_status"</span>].value_counts().to_string())</span>
-<span id="cb20-87"><a href="#cb20-87" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Centroid connector links: </span><span class="sc">{</span><span class="bu">len</span>(gdf_centroid_connectors)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb20-88"><a href="#cb20-88" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-89"><a href="#cb20-89" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-90"><a href="#cb20-90" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb20-91"><a href="#cb20-91" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-92"><a href="#cb20-92" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part A — Resolve Final Node Coordinates</span></span>
-<span id="cb20-93"><a href="#cb20-93" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-94"><a href="#cb20-94" aria-hidden="true" tabindex="-1"></a>Every node keeps its full raw attribute record; only X/Y/geometry are</span>
-<span id="cb20-95"><a href="#cb20-95" aria-hidden="true" tabindex="-1"></a>replaced, resolved through the same priority cascade <span class="in">`build_centroid_connector_links`</span></span>
-<span id="cb20-96"><a href="#cb20-96" aria-hidden="true" tabindex="-1"></a>already applies (raw model coordinate as the base fallback, overwritten by</span>
-<span id="cb20-97"><a href="#cb20-97" aria-hidden="true" tabindex="-1"></a>CC/external-station nearest-point snaps, overwritten in turn by the main</span>
-<span id="cb20-98"><a href="#cb20-98" aria-hidden="true" tabindex="-1"></a>greedy network snap). Listing sources lowest-priority first, highest last,</span>
-<span id="cb20-99"><a href="#cb20-99" aria-hidden="true" tabindex="-1"></a>means a future improved snapping pass or a brand-new node class is handled</span>
-<span id="cb20-100"><a href="#cb20-100" aria-hidden="true" tabindex="-1"></a>by adding one more entry to <span class="in">`snap_sources`</span> — no other code changes.</span>
-<span id="cb20-101"><a href="#cb20-101" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-104"><a href="#cb20-104" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-105"><a href="#cb20-105" aria-hidden="true" tabindex="-1"></a>snap_sources <span class="op">=</span> [</span>
-<span id="cb20-106"><a href="#cb20-106" aria-hidden="true" tabindex="-1"></a>    (</span>
-<span id="cb20-107"><a href="#cb20-107" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ext_snapped"</span>,</span>
-<span id="cb20-108"><a href="#cb20-108" aria-hidden="true" tabindex="-1"></a>        gdf_ext_snapped[gdf_ext_snapped[<span class="st">"snap_resolved"</span>]],</span>
-<span id="cb20-109"><a href="#cb20-109" aria-hidden="true" tabindex="-1"></a>        <span class="st">"N"</span>, <span class="st">"x_snap"</span>, <span class="st">"y_snap"</span>,</span>
-<span id="cb20-110"><a href="#cb20-110" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb20-111"><a href="#cb20-111" aria-hidden="true" tabindex="-1"></a>    (</span>
-<span id="cb20-112"><a href="#cb20-112" aria-hidden="true" tabindex="-1"></a>        <span class="st">"cc_snapped"</span>,</span>
-<span id="cb20-113"><a href="#cb20-113" aria-hidden="true" tabindex="-1"></a>        gdf_cc_snapped[gdf_cc_snapped[<span class="st">"snap_resolved"</span>]],</span>
-<span id="cb20-114"><a href="#cb20-114" aria-hidden="true" tabindex="-1"></a>        <span class="st">"N"</span>, <span class="st">"x_snap"</span>, <span class="st">"y_snap"</span>,</span>
-<span id="cb20-115"><a href="#cb20-115" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb20-116"><a href="#cb20-116" aria-hidden="true" tabindex="-1"></a>    (</span>
-<span id="cb20-117"><a href="#cb20-117" aria-hidden="true" tabindex="-1"></a>        <span class="st">"network_snapped"</span>,</span>
-<span id="cb20-118"><a href="#cb20-118" aria-hidden="true" tabindex="-1"></a>        gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>).astype(<span class="bu">bool</span>)],</span>
-<span id="cb20-119"><a href="#cb20-119" aria-hidden="true" tabindex="-1"></a>        <span class="st">"N"</span>, <span class="st">"snapped_x_round"</span>, <span class="st">"snapped_y_round"</span>,</span>
-<span id="cb20-120"><a href="#cb20-120" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb20-121"><a href="#cb20-121" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb20-122"><a href="#cb20-122" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-123"><a href="#cb20-123" aria-hidden="true" tabindex="-1"></a>coord_lookup, tier_lookup <span class="op">=</span> resolve_node_coordinates(gdf_network_nodes, snap_sources)</span>
-<span id="cb20-124"><a href="#cb20-124" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-125"><a href="#cb20-125" aria-hidden="true" tabindex="-1"></a>tier_counts <span class="op">=</span> pd.Series(tier_lookup).value_counts()</span>
-<span id="cb20-126"><a href="#cb20-126" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Node coordinate resolution tier:"</span>)</span>
-<span id="cb20-127"><a href="#cb20-127" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tier_counts.to_string())</span>
-<span id="cb20-128"><a href="#cb20-128" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(coord_lookup) <span class="op">==</span> <span class="bu">len</span>(gdf_network_nodes)</span>
-<span id="cb20-129"><a href="#cb20-129" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-130"><a href="#cb20-130" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-133"><a href="#cb20-133" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-134"><a href="#cb20-134" aria-hidden="true" tabindex="-1"></a>node_ids <span class="op">=</span> gdf_network_nodes[<span class="st">"N"</span>].astype(<span class="bu">int</span>).to_numpy()</span>
-<span id="cb20-135"><a href="#cb20-135" aria-hidden="true" tabindex="-1"></a>xs <span class="op">=</span> [coord_lookup[n][<span class="dv">0</span>] <span class="cf">for</span> n <span class="kw">in</span> node_ids]</span>
-<span id="cb20-136"><a href="#cb20-136" aria-hidden="true" tabindex="-1"></a>ys <span class="op">=</span> [coord_lookup[n][<span class="dv">1</span>] <span class="cf">for</span> n <span class="kw">in</span> node_ids]</span>
-<span id="cb20-137"><a href="#cb20-137" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-138"><a href="#cb20-138" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final <span class="op">=</span> gdf_network_nodes.copy()</span>
-<span id="cb20-139"><a href="#cb20-139" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final[<span class="st">"X"</span>] <span class="op">=</span> xs</span>
-<span id="cb20-140"><a href="#cb20-140" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final[<span class="st">"Y"</span>] <span class="op">=</span> ys</span>
-<span id="cb20-141"><a href="#cb20-141" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final[<span class="st">"geometry"</span>] <span class="op">=</span> gpd.points_from_xy(xs, ys, crs<span class="op">=</span>CRS_UTM)</span>
-<span id="cb20-142"><a href="#cb20-142" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-143"><a href="#cb20-143" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-146"><a href="#cb20-146" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-147"><a href="#cb20-147" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_node_shp"</span>]) <span class="im">as</span> src:</span>
-<span id="cb20-148"><a href="#cb20-148" aria-hidden="true" tabindex="-1"></a>    node_schema_props <span class="op">=</span> <span class="bu">list</span>(src.schema[<span class="st">"properties"</span>].keys())</span>
-<span id="cb20-149"><a href="#cb20-149" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-150"><a href="#cb20-150" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final <span class="op">=</span> conform_to_reference_schema(</span>
-<span id="cb20-151"><a href="#cb20-151" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_final, node_schema_props, rename_map<span class="op">=</span>NODE_RENAME_MAP,</span>
-<span id="cb20-152"><a href="#cb20-152" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb20-153"><a href="#cb20-153" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-154"><a href="#cb20-154" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_nodes_final: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> rows, </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final.columns)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
-<span id="cb20-155"><a href="#cb20-155" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">list</span>(gdf_nodes_final.columns) <span class="op">==</span> [<span class="op">*</span>node_schema_props, <span class="st">"geometry"</span>]</span>
-<span id="cb20-156"><a href="#cb20-156" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(gdf_nodes_final) <span class="op">==</span> <span class="bu">len</span>(gdf_network_nodes)</span>
-<span id="cb20-157"><a href="#cb20-157" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_nodes_final.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span>
-<span id="cb20-158"><a href="#cb20-158" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-159"><a href="#cb20-159" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-160"><a href="#cb20-160" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb20-161"><a href="#cb20-161" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-162"><a href="#cb20-162" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part B — Build Final Link Table</span></span>
-<span id="cb20-163"><a href="#cb20-163" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-164"><a href="#cb20-164" aria-hidden="true" tabindex="-1"></a>Only fully model-attributed rows go into the replacement file — the</span>
-<span id="cb20-165"><a href="#cb20-165" aria-hidden="true" tabindex="-1"></a><span class="in">`qa_status == "matched"`</span> roadway pieces and the centroid connectors. The</span>
-<span id="cb20-166"><a href="#cb20-166" aria-hidden="true" tabindex="-1"></a><span class="in">`qa_status`</span> in {"endpoints_only", "a_only", "b_only", "neither"} rows in</span>
-<span id="cb20-167"><a href="#cb20-167" aria-hidden="true" tabindex="-1"></a><span class="in">`links_trueshape.gpkg`</span> are real UGRC geometry with no model link behind</span>
-<span id="cb20-168"><a href="#cb20-168" aria-hidden="true" tabindex="-1"></a>them at all (no valid A/B), so they cannot populate a schema that requires</span>
-<span id="cb20-169"><a href="#cb20-169" aria-hidden="true" tabindex="-1"></a>model node ids and model attributes — they stay out of this replacement</span>
-<span id="cb20-170"><a href="#cb20-170" aria-hidden="true" tabindex="-1"></a>file (they remain available in <span class="in">`links_trueshape.gpkg`</span> for QA/inspection).</span>
-<span id="cb20-171"><a href="#cb20-171" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-174"><a href="#cb20-174" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-175"><a href="#cb20-175" aria-hidden="true" tabindex="-1"></a>gdf_matched <span class="op">=</span> gdf_links_trueshape[gdf_links_trueshape[<span class="st">"qa_status"</span>] <span class="op">==</span> <span class="st">"matched"</span>].copy()</span>
-<span id="cb20-176"><a href="#cb20-176" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Matched roadway pieces: </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched)<span class="sc">:,}</span><span class="ss">"</span>)</span>
-<span id="cb20-177"><a href="#cb20-177" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-178"><a href="#cb20-178" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-181"><a href="#cb20-181" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-182"><a href="#cb20-182" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_link_shp"</span>]) <span class="im">as</span> src:</span>
-<span id="cb20-183"><a href="#cb20-183" aria-hidden="true" tabindex="-1"></a>    link_schema_props <span class="op">=</span> <span class="bu">list</span>(src.schema[<span class="st">"properties"</span>].keys())</span>
-<span id="cb20-184"><a href="#cb20-184" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-185"><a href="#cb20-185" aria-hidden="true" tabindex="-1"></a>gdf_matched_final <span class="op">=</span> conform_to_reference_schema(</span>
-<span id="cb20-186"><a href="#cb20-186" aria-hidden="true" tabindex="-1"></a>    gdf_matched, link_schema_props, rename_map<span class="op">=</span>LINK_RENAME_MAP,</span>
-<span id="cb20-187"><a href="#cb20-187" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb20-188"><a href="#cb20-188" aria-hidden="true" tabindex="-1"></a>gdf_cc_final <span class="op">=</span> conform_to_reference_schema(</span>
-<span id="cb20-189"><a href="#cb20-189" aria-hidden="true" tabindex="-1"></a>    gdf_centroid_connectors, link_schema_props, rename_map<span class="op">=</span>LINK_RENAME_MAP,</span>
-<span id="cb20-190"><a href="#cb20-190" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb20-191"><a href="#cb20-191" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-192"><a href="#cb20-192" aria-hidden="true" tabindex="-1"></a>gdf_links_final <span class="op">=</span> pd.concat([gdf_matched_final, gdf_cc_final], ignore_index<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb20-193"><a href="#cb20-193" aria-hidden="true" tabindex="-1"></a>gdf_links_final <span class="op">=</span> gpd.GeoDataFrame(gdf_links_final, geometry<span class="op">=</span><span class="st">"geometry"</span>, crs<span class="op">=</span>CRS_UTM)</span>
-<span id="cb20-194"><a href="#cb20-194" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-195"><a href="#cb20-195" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_links_final: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> rows, </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final.columns)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
-<span id="cb20-196"><a href="#cb20-196" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  = </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_final)<span class="sc">:,}</span><span class="ss"> matched roadway + </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_final)<span class="sc">:,}</span><span class="ss"> centroid connectors"</span>)</span>
-<span id="cb20-197"><a href="#cb20-197" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">list</span>(gdf_links_final.columns) <span class="op">==</span> [<span class="op">*</span>link_schema_props, <span class="st">"geometry"</span>]</span>
-<span id="cb20-198"><a href="#cb20-198" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(gdf_links_final) <span class="op">==</span> <span class="bu">len</span>(gdf_matched_final) <span class="op">+</span> <span class="bu">len</span>(gdf_cc_final)</span>
-<span id="cb20-199"><a href="#cb20-199" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_links_final.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span>
-<span id="cb20-200"><a href="#cb20-200" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-201"><a href="#cb20-201" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-202"><a href="#cb20-202" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb20-203"><a href="#cb20-203" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-204"><a href="#cb20-204" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part C — Write Shapefiles</span></span>
-<span id="cb20-205"><a href="#cb20-205" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-208"><a href="#cb20-208" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-209"><a href="#cb20-209" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_nodes_final, PATHS[<span class="st">"out_node"</span>], PATHS[<span class="st">"schema_node_shp"</span>])</span>
-<span id="cb20-210"><a href="#cb20-210" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> nodes → </span><span class="sc">{</span>PATHS[<span class="st">'out_node'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb20-211"><a href="#cb20-211" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-212"><a href="#cb20-212" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_links_final, PATHS[<span class="st">"out_link"</span>], PATHS[<span class="st">"schema_link_shp"</span>])</span>
-<span id="cb20-213"><a href="#cb20-213" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> links → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb20-214"><a href="#cb20-214" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb20-215"><a href="#cb20-215" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-216"><a href="#cb20-216" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb20-217"><a href="#cb20-217" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-218"><a href="#cb20-218" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
-<span id="cb20-219"><a href="#cb20-219" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-222"><a href="#cb20-222" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb20-223"><a href="#cb20-223" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"=== Final Export Summary ==="</span>)</span>
-<span id="cb20-224"><a href="#cb20-224" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
-<span id="cb20-225"><a href="#cb20-225" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> total → </span><span class="sc">{</span>PATHS[<span class="st">'out_node'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb20-226"><a href="#cb20-226" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tier_counts.to_string())</span>
-<span id="cb20-227"><a href="#cb20-227" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
-<span id="cb20-228"><a href="#cb20-228" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Links: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> total → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb20-229"><a href="#cb20-229" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_final)<span class="sc">:,}</span><span class="ss"> matched roadway (true-shape geometry)"</span>)</span>
-<span id="cb20-230"><a href="#cb20-230" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_final)<span class="sc">:,}</span><span class="ss"> centroid connector (TAZ/external/transit tether)"</span>)</span>
-<span id="cb20-231"><a href="#cb20-231" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> Export Final True-Shape Network</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> Reassemble the full node/link tables as drop-in replacements for the raw WFv1000 MasterNet shapefiles</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="an">description:</span><span class="co"> Every raw model node keeps its full attribute record, with only its coordinate resolved through the same tiered snap cascade used for centroid connectors (main network snap -&gt; CC/external nearest-point snap -&gt; raw model coordinate fallback), so unsnapped or future node classes fall through safely without code changes. The final link table concatenates the model-attributed true-shape roadway pieces from 03_transfer_attributes.qmd with the centroid connector links from 02_create_link.qmd, dropping every lineage/QA-only column. Both outputs are written as ESRI Shapefiles using the field schema (names, order, DBF widths/precision) copied directly from the original MasterNet shapefiles, so they can be swapped in for the originals as-is.</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="an">author:</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="co"> - name: Pukar Bhandari</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="co">   email: pukar.bhandari@wfrc.utah.gov</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="co">   affiliation:</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="co">     - name: Wasatch Front Regional Council</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="co">       url: "https://wfrc.utah.gov/"</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="an">date:</span><span class="co"> "2026-07-20"</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a><span class="fu">## Setup</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a><span class="fu">### Imports</span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> fiona</span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> geopandas <span class="im">as</span> gpd</span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>sys.path.insert(<span class="dv">0</span>, <span class="bu">str</span>(Path.cwd()))</span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.node_utils <span class="im">import</span> resolve_node_coordinates</span>
+<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> _src.export_utils <span class="im">import</span> conform_to_reference_schema, write_matching_shapefile</span>
+<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-33"><a href="#cb22-33" aria-hidden="true" tabindex="-1"></a><span class="fu">### Configuration</span></span>
+<span id="cb22-34"><a href="#cb22-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-37"><a href="#cb22-37" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-38"><a href="#cb22-38" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
+<span id="cb22-39"><a href="#cb22-39" aria-hidden="true" tabindex="-1"></a>PATHS <span class="op">=</span> {</span>
+<span id="cb22-40"><a href="#cb22-40" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_network_nodes"</span>:       Path(<span class="st">"_data/raw/WFv1000_MasterNet - Node.gpkg"</span>),</span>
+<span id="cb22-41"><a href="#cb22-41" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_node_snapped"</span>:        Path(<span class="st">"_data/processed/nodes_snapped.gpkg"</span>),</span>
+<span id="cb22-42"><a href="#cb22-42" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_links_trueshape"</span>:     Path(<span class="st">"_data/processed/links_trueshape.gpkg"</span>),</span>
+<span id="cb22-43"><a href="#cb22-43" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_centroid_connectors"</span>: Path(<span class="st">"_data/processed/centroid_connectors.gpkg"</span>),</span>
+<span id="cb22-44"><a href="#cb22-44" aria-hidden="true" tabindex="-1"></a>    <span class="st">"schema_node_shp"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
+<span id="cb22-45"><a href="#cb22-45" aria-hidden="true" tabindex="-1"></a>    <span class="st">"schema_link_shp"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
+<span id="cb22-46"><a href="#cb22-46" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_node"</span>: Path(<span class="st">"_data/output/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
+<span id="cb22-47"><a href="#cb22-47" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link"</span>: Path(<span class="st">"_data/output/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
+<span id="cb22-48"><a href="#cb22-48" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb22-49"><a href="#cb22-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-50"><a href="#cb22-50" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
+<span id="cb22-51"><a href="#cb22-51" aria-hidden="true" tabindex="-1"></a>CRS_UTM <span class="op">=</span> <span class="st">"EPSG:26912"</span>  <span class="co"># NAD83 UTM Zone 12N — Utah (metric)</span></span>
+<span id="cb22-52"><a href="#cb22-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-53"><a href="#cb22-53" aria-hidden="true" tabindex="-1"></a><span class="co"># The ArcGIS-REST-sourced raw layers rename the shapefile's EXTERNAL field to</span></span>
+<span id="cb22-54"><a href="#cb22-54" aria-hidden="true" tabindex="-1"></a><span class="co"># EXTERNAL_ (to dodge a reserved-word collision). Reverse it on export so the</span></span>
+<span id="cb22-55"><a href="#cb22-55" aria-hidden="true" tabindex="-1"></a><span class="co"># output schema is a byte-faithful match for the original .shp.</span></span>
+<span id="cb22-56"><a href="#cb22-56" aria-hidden="true" tabindex="-1"></a>NODE_RENAME_MAP <span class="op">=</span> {<span class="st">"EXTERNAL_"</span>: <span class="st">"EXTERNAL"</span>}</span>
+<span id="cb22-57"><a href="#cb22-57" aria-hidden="true" tabindex="-1"></a>LINK_RENAME_MAP <span class="op">=</span> {<span class="st">"EXTERNAL_"</span>: <span class="st">"EXTERNAL"</span>, <span class="st">"ONEWAY_tdm"</span>: <span class="st">"ONEWAY"</span>}</span>
+<span id="cb22-58"><a href="#cb22-58" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-59"><a href="#cb22-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-60"><a href="#cb22-60" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb22-61"><a href="#cb22-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-62"><a href="#cb22-62" aria-hidden="true" tabindex="-1"></a><span class="fu">## Load Data</span></span>
+<span id="cb22-63"><a href="#cb22-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-64"><a href="#cb22-64" aria-hidden="true" tabindex="-1"></a><span class="fu">### Raw Nodes and Snap Results</span></span>
+<span id="cb22-65"><a href="#cb22-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-68"><a href="#cb22-68" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-69"><a href="#cb22-69" aria-hidden="true" tabindex="-1"></a>gdf_network_nodes <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_network_nodes"</span>]).to_crs(CRS_UTM)</span>
+<span id="cb22-70"><a href="#cb22-70" aria-hidden="true" tabindex="-1"></a>gdf_nodes_snapped  <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"nodes_snapped"</span>).to_crs(CRS_UTM)</span>
+<span id="cb22-71"><a href="#cb22-71" aria-hidden="true" tabindex="-1"></a>gdf_cc_snapped     <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"cc_nodes_snapped"</span>).to_crs(CRS_UTM)</span>
+<span id="cb22-72"><a href="#cb22-72" aria-hidden="true" tabindex="-1"></a>gdf_ext_snapped    <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_node_snapped"</span>], layer<span class="op">=</span><span class="st">"ext_nodes_snapped"</span>).to_crs(CRS_UTM)</span>
+<span id="cb22-73"><a href="#cb22-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-74"><a href="#cb22-74" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Raw nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_network_nodes)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb22-75"><a href="#cb22-75" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-76"><a href="#cb22-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-77"><a href="#cb22-77" aria-hidden="true" tabindex="-1"></a><span class="fu">### True-Shape Links and Centroid Connectors</span></span>
+<span id="cb22-78"><a href="#cb22-78" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-81"><a href="#cb22-81" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-82"><a href="#cb22-82" aria-hidden="true" tabindex="-1"></a>gdf_links_trueshape <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_links_trueshape"</span>]).to_crs(CRS_UTM)</span>
+<span id="cb22-83"><a href="#cb22-83" aria-hidden="true" tabindex="-1"></a>gdf_centroid_connectors <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_centroid_connectors"</span>]).to_crs(CRS_UTM)</span>
+<span id="cb22-84"><a href="#cb22-84" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-85"><a href="#cb22-85" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"links_trueshape rows: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_trueshape)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb22-86"><a href="#cb22-86" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gdf_links_trueshape[<span class="st">"qa_status"</span>].value_counts().to_string())</span>
+<span id="cb22-87"><a href="#cb22-87" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Centroid connector links: </span><span class="sc">{</span><span class="bu">len</span>(gdf_centroid_connectors)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb22-88"><a href="#cb22-88" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-89"><a href="#cb22-89" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-90"><a href="#cb22-90" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb22-91"><a href="#cb22-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-92"><a href="#cb22-92" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part A — Resolve Node Coordinates</span></span>
+<span id="cb22-93"><a href="#cb22-93" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-94"><a href="#cb22-94" aria-hidden="true" tabindex="-1"></a>Every node keeps its full raw attribute record; only X/Y/geometry are</span>
+<span id="cb22-95"><a href="#cb22-95" aria-hidden="true" tabindex="-1"></a>replaced, resolved through the same priority cascade <span class="in">`build_centroid_connector_links`</span></span>
+<span id="cb22-96"><a href="#cb22-96" aria-hidden="true" tabindex="-1"></a>already applies (raw model coordinate as the base fallback, overwritten by</span>
+<span id="cb22-97"><a href="#cb22-97" aria-hidden="true" tabindex="-1"></a>CC/external-station nearest-point snaps, overwritten in turn by the main</span>
+<span id="cb22-98"><a href="#cb22-98" aria-hidden="true" tabindex="-1"></a>greedy network snap). Listing sources lowest-priority first, highest last,</span>
+<span id="cb22-99"><a href="#cb22-99" aria-hidden="true" tabindex="-1"></a>means a future improved snapping pass or a brand-new node class is handled</span>
+<span id="cb22-100"><a href="#cb22-100" aria-hidden="true" tabindex="-1"></a>by adding one more entry to <span class="in">`snap_sources`</span> — no other code changes.</span>
+<span id="cb22-101"><a href="#cb22-101" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-102"><a href="#cb22-102" aria-hidden="true" tabindex="-1"></a>Coordinates are resolved for every raw node here, but not every raw node</span>
+<span id="cb22-103"><a href="#cb22-103" aria-hidden="true" tabindex="-1"></a>survives into the final export — see Part C, which keeps only the nodes</span>
+<span id="cb22-104"><a href="#cb22-104" aria-hidden="true" tabindex="-1"></a>actually referenced by the final link table.</span>
+<span id="cb22-105"><a href="#cb22-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-108"><a href="#cb22-108" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-109"><a href="#cb22-109" aria-hidden="true" tabindex="-1"></a>snap_sources <span class="op">=</span> [</span>
+<span id="cb22-110"><a href="#cb22-110" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb22-111"><a href="#cb22-111" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ext_snapped"</span>,</span>
+<span id="cb22-112"><a href="#cb22-112" aria-hidden="true" tabindex="-1"></a>        gdf_ext_snapped[gdf_ext_snapped[<span class="st">"snap_resolved"</span>]],</span>
+<span id="cb22-113"><a href="#cb22-113" aria-hidden="true" tabindex="-1"></a>        <span class="st">"N"</span>, <span class="st">"x_snap"</span>, <span class="st">"y_snap"</span>,</span>
+<span id="cb22-114"><a href="#cb22-114" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb22-115"><a href="#cb22-115" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb22-116"><a href="#cb22-116" aria-hidden="true" tabindex="-1"></a>        <span class="st">"cc_snapped"</span>,</span>
+<span id="cb22-117"><a href="#cb22-117" aria-hidden="true" tabindex="-1"></a>        gdf_cc_snapped[gdf_cc_snapped[<span class="st">"snap_resolved"</span>]],</span>
+<span id="cb22-118"><a href="#cb22-118" aria-hidden="true" tabindex="-1"></a>        <span class="st">"N"</span>, <span class="st">"x_snap"</span>, <span class="st">"y_snap"</span>,</span>
+<span id="cb22-119"><a href="#cb22-119" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb22-120"><a href="#cb22-120" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb22-121"><a href="#cb22-121" aria-hidden="true" tabindex="-1"></a>        <span class="st">"network_snapped"</span>,</span>
+<span id="cb22-122"><a href="#cb22-122" aria-hidden="true" tabindex="-1"></a>        gdf_nodes_snapped[gdf_nodes_snapped[<span class="st">"snapped"</span>].fillna(<span class="va">False</span>).astype(<span class="bu">bool</span>)],</span>
+<span id="cb22-123"><a href="#cb22-123" aria-hidden="true" tabindex="-1"></a>        <span class="st">"N"</span>, <span class="st">"snapped_x_round"</span>, <span class="st">"snapped_y_round"</span>,</span>
+<span id="cb22-124"><a href="#cb22-124" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb22-125"><a href="#cb22-125" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb22-126"><a href="#cb22-126" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-127"><a href="#cb22-127" aria-hidden="true" tabindex="-1"></a>coord_lookup, tier_lookup <span class="op">=</span> resolve_node_coordinates(gdf_network_nodes, snap_sources)</span>
+<span id="cb22-128"><a href="#cb22-128" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-129"><a href="#cb22-129" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Node coordinate resolution tier (all raw nodes, pre-filter):"</span>)</span>
+<span id="cb22-130"><a href="#cb22-130" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(pd.Series(tier_lookup).value_counts().to_string())</span>
+<span id="cb22-131"><a href="#cb22-131" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(coord_lookup) <span class="op">==</span> <span class="bu">len</span>(gdf_network_nodes)</span>
+<span id="cb22-132"><a href="#cb22-132" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-133"><a href="#cb22-133" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-136"><a href="#cb22-136" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-137"><a href="#cb22-137" aria-hidden="true" tabindex="-1"></a>node_ids <span class="op">=</span> gdf_network_nodes[<span class="st">"N"</span>].astype(<span class="bu">int</span>).to_numpy()</span>
+<span id="cb22-138"><a href="#cb22-138" aria-hidden="true" tabindex="-1"></a>xs <span class="op">=</span> [coord_lookup[n][<span class="dv">0</span>] <span class="cf">for</span> n <span class="kw">in</span> node_ids]</span>
+<span id="cb22-139"><a href="#cb22-139" aria-hidden="true" tabindex="-1"></a>ys <span class="op">=</span> [coord_lookup[n][<span class="dv">1</span>] <span class="cf">for</span> n <span class="kw">in</span> node_ids]</span>
+<span id="cb22-140"><a href="#cb22-140" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-141"><a href="#cb22-141" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved <span class="op">=</span> gdf_network_nodes.copy()</span>
+<span id="cb22-142"><a href="#cb22-142" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved[<span class="st">"X"</span>] <span class="op">=</span> xs</span>
+<span id="cb22-143"><a href="#cb22-143" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved[<span class="st">"Y"</span>] <span class="op">=</span> ys</span>
+<span id="cb22-144"><a href="#cb22-144" aria-hidden="true" tabindex="-1"></a>gdf_nodes_resolved[<span class="st">"geometry"</span>] <span class="op">=</span> gpd.points_from_xy(xs, ys, crs<span class="op">=</span>CRS_UTM)</span>
+<span id="cb22-145"><a href="#cb22-145" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-146"><a href="#cb22-146" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-147"><a href="#cb22-147" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb22-148"><a href="#cb22-148" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-149"><a href="#cb22-149" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part B — Build Final Link Table</span></span>
+<span id="cb22-150"><a href="#cb22-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-151"><a href="#cb22-151" aria-hidden="true" tabindex="-1"></a>Only fully model-attributed rows go into the replacement file — the</span>
+<span id="cb22-152"><a href="#cb22-152" aria-hidden="true" tabindex="-1"></a><span class="in">`qa_status == "matched"`</span> roadway pieces and the centroid connectors. The</span>
+<span id="cb22-153"><a href="#cb22-153" aria-hidden="true" tabindex="-1"></a><span class="in">`qa_status`</span> in {"endpoints_only", "a_only", "b_only", "neither"} rows in</span>
+<span id="cb22-154"><a href="#cb22-154" aria-hidden="true" tabindex="-1"></a><span class="in">`links_trueshape.gpkg`</span> are real UGRC geometry with no model link behind</span>
+<span id="cb22-155"><a href="#cb22-155" aria-hidden="true" tabindex="-1"></a>them at all (no valid A/B), so they cannot populate a schema that requires</span>
+<span id="cb22-156"><a href="#cb22-156" aria-hidden="true" tabindex="-1"></a>model node ids and model attributes — they stay out of this replacement</span>
+<span id="cb22-157"><a href="#cb22-157" aria-hidden="true" tabindex="-1"></a>file (they remain available in <span class="in">`links_trueshape.gpkg`</span> for QA/inspection).</span>
+<span id="cb22-158"><a href="#cb22-158" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-161"><a href="#cb22-161" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-162"><a href="#cb22-162" aria-hidden="true" tabindex="-1"></a>gdf_matched <span class="op">=</span> gdf_links_trueshape[gdf_links_trueshape[<span class="st">"qa_status"</span>] <span class="op">==</span> <span class="st">"matched"</span>].copy()</span>
+<span id="cb22-163"><a href="#cb22-163" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Matched roadway pieces: </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb22-164"><a href="#cb22-164" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-165"><a href="#cb22-165" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-168"><a href="#cb22-168" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-169"><a href="#cb22-169" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_link_shp"</span>]) <span class="im">as</span> src:</span>
+<span id="cb22-170"><a href="#cb22-170" aria-hidden="true" tabindex="-1"></a>    link_schema_props <span class="op">=</span> <span class="bu">list</span>(src.schema[<span class="st">"properties"</span>].keys())</span>
+<span id="cb22-171"><a href="#cb22-171" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-172"><a href="#cb22-172" aria-hidden="true" tabindex="-1"></a>gdf_matched_final <span class="op">=</span> conform_to_reference_schema(</span>
+<span id="cb22-173"><a href="#cb22-173" aria-hidden="true" tabindex="-1"></a>    gdf_matched, link_schema_props, rename_map<span class="op">=</span>LINK_RENAME_MAP,</span>
+<span id="cb22-174"><a href="#cb22-174" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-175"><a href="#cb22-175" aria-hidden="true" tabindex="-1"></a>gdf_cc_final <span class="op">=</span> conform_to_reference_schema(</span>
+<span id="cb22-176"><a href="#cb22-176" aria-hidden="true" tabindex="-1"></a>    gdf_centroid_connectors, link_schema_props, rename_map<span class="op">=</span>LINK_RENAME_MAP,</span>
+<span id="cb22-177"><a href="#cb22-177" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-178"><a href="#cb22-178" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-179"><a href="#cb22-179" aria-hidden="true" tabindex="-1"></a>gdf_links_final <span class="op">=</span> pd.concat([gdf_matched_final, gdf_cc_final], ignore_index<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb22-180"><a href="#cb22-180" aria-hidden="true" tabindex="-1"></a>gdf_links_final <span class="op">=</span> gpd.GeoDataFrame(gdf_links_final, geometry<span class="op">=</span><span class="st">"geometry"</span>, crs<span class="op">=</span>CRS_UTM)</span>
+<span id="cb22-181"><a href="#cb22-181" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-182"><a href="#cb22-182" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_links_final: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> rows, </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final.columns)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
+<span id="cb22-183"><a href="#cb22-183" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  = </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_final)<span class="sc">:,}</span><span class="ss"> matched roadway + </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_final)<span class="sc">:,}</span><span class="ss"> centroid connectors"</span>)</span>
+<span id="cb22-184"><a href="#cb22-184" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">list</span>(gdf_links_final.columns) <span class="op">==</span> [<span class="op">*</span>link_schema_props, <span class="st">"geometry"</span>]</span>
+<span id="cb22-185"><a href="#cb22-185" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(gdf_links_final) <span class="op">==</span> <span class="bu">len</span>(gdf_matched_final) <span class="op">+</span> <span class="bu">len</span>(gdf_cc_final)</span>
+<span id="cb22-186"><a href="#cb22-186" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_links_final.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span>
+<span id="cb22-187"><a href="#cb22-187" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-188"><a href="#cb22-188" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-189"><a href="#cb22-189" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb22-190"><a href="#cb22-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-191"><a href="#cb22-191" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part C — Filter Nodes to the Final Network</span></span>
+<span id="cb22-192"><a href="#cb22-192" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-193"><a href="#cb22-193" aria-hidden="true" tabindex="-1"></a>A node belongs in the replacement file only if the final link table</span>
+<span id="cb22-194"><a href="#cb22-194" aria-hidden="true" tabindex="-1"></a>actually references it as an endpoint — the same referential-integrity</span>
+<span id="cb22-195"><a href="#cb22-195" aria-hidden="true" tabindex="-1"></a>invariant the raw MasterNet itself holds (21,923 / 21,953 raw nodes are</span>
+<span id="cb22-196"><a href="#cb22-196" aria-hidden="true" tabindex="-1"></a>referenced by at least one raw link). Pass-through/pseudonodes absorbed by</span>
+<span id="cb22-197"><a href="#cb22-197" aria-hidden="true" tabindex="-1"></a>Stage 3's chain dissolve, and nodes touching only excluded link classes</span>
+<span id="cb22-198"><a href="#cb22-198" aria-hidden="true" tabindex="-1"></a>(HOV/managed-access, unmatched leftover geometry), are no longer an</span>
+<span id="cb22-199"><a href="#cb22-199" aria-hidden="true" tabindex="-1"></a>endpoint of anything in <span class="in">`gdf_links_final`</span> and must not appear here — this</span>
+<span id="cb22-200"><a href="#cb22-200" aria-hidden="true" tabindex="-1"></a>filter is a pure referential check against the final links, not a</span>
+<span id="cb22-201"><a href="#cb22-201" aria-hidden="true" tabindex="-1"></a>hand-typed node-class list, so it stays correct as snapping/matching</span>
+<span id="cb22-202"><a href="#cb22-202" aria-hidden="true" tabindex="-1"></a>coverage improves and more nodes become genuinely used.</span>
+<span id="cb22-203"><a href="#cb22-203" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-206"><a href="#cb22-206" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-207"><a href="#cb22-207" aria-hidden="true" tabindex="-1"></a>used_node_ids <span class="op">=</span> <span class="bu">set</span>(gdf_links_final[<span class="st">"A"</span>]) <span class="op">|</span> <span class="bu">set</span>(gdf_links_final[<span class="st">"B"</span>])</span>
+<span id="cb22-208"><a href="#cb22-208" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Nodes referenced by final links: </span><span class="sc">{</span><span class="bu">len</span>(used_node_ids)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb22-209"><a href="#cb22-209" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-210"><a href="#cb22-210" aria-hidden="true" tabindex="-1"></a>gdf_nodes_used <span class="op">=</span> gdf_nodes_resolved[gdf_nodes_resolved[<span class="st">"N"</span>].isin(used_node_ids)].copy()</span>
+<span id="cb22-211"><a href="#cb22-211" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-212"><a href="#cb22-212" aria-hidden="true" tabindex="-1"></a>dropped_tier_counts <span class="op">=</span> (</span>
+<span id="cb22-213"><a href="#cb22-213" aria-hidden="true" tabindex="-1"></a>    pd.Series(tier_lookup)</span>
+<span id="cb22-214"><a href="#cb22-214" aria-hidden="true" tabindex="-1"></a>    .loc[<span class="kw">lambda</span> s: <span class="op">~</span>s.index.isin(used_node_ids)]</span>
+<span id="cb22-215"><a href="#cb22-215" aria-hidden="true" tabindex="-1"></a>    .value_counts()</span>
+<span id="cb22-216"><a href="#cb22-216" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-217"><a href="#cb22-217" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Unused nodes dropped: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_resolved) <span class="op">-</span> <span class="bu">len</span>(gdf_nodes_used)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb22-218"><a href="#cb22-218" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Resolution tier of dropped nodes:"</span>)</span>
+<span id="cb22-219"><a href="#cb22-219" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(dropped_tier_counts.to_string())</span>
+<span id="cb22-220"><a href="#cb22-220" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-221"><a href="#cb22-221" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-224"><a href="#cb22-224" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-225"><a href="#cb22-225" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_node_shp"</span>]) <span class="im">as</span> src:</span>
+<span id="cb22-226"><a href="#cb22-226" aria-hidden="true" tabindex="-1"></a>    node_schema_props <span class="op">=</span> <span class="bu">list</span>(src.schema[<span class="st">"properties"</span>].keys())</span>
+<span id="cb22-227"><a href="#cb22-227" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-228"><a href="#cb22-228" aria-hidden="true" tabindex="-1"></a>gdf_nodes_final <span class="op">=</span> conform_to_reference_schema(</span>
+<span id="cb22-229"><a href="#cb22-229" aria-hidden="true" tabindex="-1"></a>    gdf_nodes_used, node_schema_props, rename_map<span class="op">=</span>NODE_RENAME_MAP,</span>
+<span id="cb22-230"><a href="#cb22-230" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-231"><a href="#cb22-231" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-232"><a href="#cb22-232" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"gdf_nodes_final: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> rows, </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final.columns)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
+<span id="cb22-233"><a href="#cb22-233" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">list</span>(gdf_nodes_final.columns) <span class="op">==</span> [<span class="op">*</span>node_schema_props, <span class="st">"geometry"</span>]</span>
+<span id="cb22-234"><a href="#cb22-234" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(gdf_nodes_final) <span class="op">==</span> <span class="bu">len</span>(used_node_ids)</span>
+<span id="cb22-235"><a href="#cb22-235" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gdf_nodes_final.geometry.isna().<span class="bu">sum</span>() <span class="op">==</span> <span class="dv">0</span></span>
+<span id="cb22-236"><a href="#cb22-236" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> used_node_ids <span class="op">&lt;=</span> <span class="bu">set</span>(gdf_nodes_final[<span class="st">"N"</span>])</span>
+<span id="cb22-237"><a href="#cb22-237" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-238"><a href="#cb22-238" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-239"><a href="#cb22-239" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb22-240"><a href="#cb22-240" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-241"><a href="#cb22-241" aria-hidden="true" tabindex="-1"></a><span class="fu">## Part D — Write Shapefiles</span></span>
+<span id="cb22-242"><a href="#cb22-242" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-245"><a href="#cb22-245" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-246"><a href="#cb22-246" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_nodes_final, PATHS[<span class="st">"out_node"</span>], PATHS[<span class="st">"schema_node_shp"</span>])</span>
+<span id="cb22-247"><a href="#cb22-247" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> nodes → </span><span class="sc">{</span>PATHS[<span class="st">'out_node'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb22-248"><a href="#cb22-248" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-249"><a href="#cb22-249" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_links_final, PATHS[<span class="st">"out_link"</span>], PATHS[<span class="st">"schema_link_shp"</span>])</span>
+<span id="cb22-250"><a href="#cb22-250" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> links → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb22-251"><a href="#cb22-251" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb22-252"><a href="#cb22-252" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-253"><a href="#cb22-253" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb22-254"><a href="#cb22-254" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-255"><a href="#cb22-255" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb22-256"><a href="#cb22-256" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-259"><a href="#cb22-259" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb22-260"><a href="#cb22-260" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"=== Final Export Summary ==="</span>)</span>
+<span id="cb22-261"><a href="#cb22-261" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb22-262"><a href="#cb22-262" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Nodes: </span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> total → </span><span class="sc">{</span>PATHS[<span class="st">'out_node'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb22-263"><a href="#cb22-263" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  (</span><span class="sc">{</span><span class="bu">len</span>(gdf_nodes_resolved) <span class="op">-</span> <span class="bu">len</span>(gdf_nodes_final)<span class="sc">:,}</span><span class="ss"> unused raw nodes dropped)"</span>)</span>
+<span id="cb22-264"><a href="#cb22-264" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb22-265"><a href="#cb22-265" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Links: </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> total → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">.</span>name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb22-266"><a href="#cb22-266" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(gdf_matched_final)<span class="sc">:,}</span><span class="ss"> matched roadway (true-shape geometry)"</span>)</span>
+<span id="cb22-267"><a href="#cb22-267" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(gdf_cc_final)<span class="sc">:,}</span><span class="ss"> centroid connector (TAZ/external/transit tether)"</span>)</span>
+<span id="cb22-268"><a href="#cb22-268" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->

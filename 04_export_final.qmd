@@ -81,7 +81,7 @@ print(f"\nCentroid connector links: {len(gdf_centroid_connectors):,}")
 
 ---
 
-## Part A — Resolve Final Node Coordinates
+## Part A — Resolve Node Coordinates
 
 Every node keeps its full raw attribute record; only X/Y/geometry are
 replaced, resolved through the same priority cascade `build_centroid_connector_links`
@@ -90,6 +90,10 @@ CC/external-station nearest-point snaps, overwritten in turn by the main
 greedy network snap). Listing sources lowest-priority first, highest last,
 means a future improved snapping pass or a brand-new node class is handled
 by adding one more entry to `snap_sources` — no other code changes.
+
+Coordinates are resolved for every raw node here, but not every raw node
+survives into the final export — see Part C, which keeps only the nodes
+actually referenced by the final link table.
 
 ```{python}
 snap_sources = [
@@ -112,9 +116,8 @@ snap_sources = [
 
 coord_lookup, tier_lookup = resolve_node_coordinates(gdf_network_nodes, snap_sources)
 
-tier_counts = pd.Series(tier_lookup).value_counts()
-print("Node coordinate resolution tier:")
-print(tier_counts.to_string())
+print("Node coordinate resolution tier (all raw nodes, pre-filter):")
+print(pd.Series(tier_lookup).value_counts().to_string())
 assert len(coord_lookup) == len(gdf_network_nodes)
 ```
 
@@ -123,24 +126,10 @@ node_ids = gdf_network_nodes["N"].astype(int).to_numpy()
 xs = [coord_lookup[n][0] for n in node_ids]
 ys = [coord_lookup[n][1] for n in node_ids]
 
-gdf_nodes_final = gdf_network_nodes.copy()
-gdf_nodes_final["X"] = xs
-gdf_nodes_final["Y"] = ys
-gdf_nodes_final["geometry"] = gpd.points_from_xy(xs, ys, crs=CRS_UTM)
-```
-
-```{python}
-with fiona.open(PATHS["schema_node_shp"]) as src:
-    node_schema_props = list(src.schema["properties"].keys())
-
-gdf_nodes_final = conform_to_reference_schema(
-    gdf_nodes_final, node_schema_props, rename_map=NODE_RENAME_MAP,
-)
-
-print(f"gdf_nodes_final: {len(gdf_nodes_final):,} rows, {len(gdf_nodes_final.columns)} columns")
-assert list(gdf_nodes_final.columns) == [*node_schema_props, "geometry"]
-assert len(gdf_nodes_final) == len(gdf_network_nodes)
-assert gdf_nodes_final.geometry.isna().sum() == 0
+gdf_nodes_resolved = gdf_network_nodes.copy()
+gdf_nodes_resolved["X"] = xs
+gdf_nodes_resolved["Y"] = ys
+gdf_nodes_resolved["geometry"] = gpd.points_from_xy(xs, ys, crs=CRS_UTM)
 ```
 
 ---
@@ -183,7 +172,53 @@ assert gdf_links_final.geometry.isna().sum() == 0
 
 ---
 
-## Part C — Write Shapefiles
+## Part C — Filter Nodes to the Final Network
+
+A node belongs in the replacement file only if the final link table
+actually references it as an endpoint — the same referential-integrity
+invariant the raw MasterNet itself holds (21,923 / 21,953 raw nodes are
+referenced by at least one raw link). Pass-through/pseudonodes absorbed by
+Stage 3's chain dissolve, and nodes touching only excluded link classes
+(HOV/managed-access, unmatched leftover geometry), are no longer an
+endpoint of anything in `gdf_links_final` and must not appear here — this
+filter is a pure referential check against the final links, not a
+hand-typed node-class list, so it stays correct as snapping/matching
+coverage improves and more nodes become genuinely used.
+
+```{python}
+used_node_ids = set(gdf_links_final["A"]) | set(gdf_links_final["B"])
+print(f"Nodes referenced by final links: {len(used_node_ids):,}")
+
+gdf_nodes_used = gdf_nodes_resolved[gdf_nodes_resolved["N"].isin(used_node_ids)].copy()
+
+dropped_tier_counts = (
+    pd.Series(tier_lookup)
+    .loc[lambda s: ~s.index.isin(used_node_ids)]
+    .value_counts()
+)
+print(f"\nUnused nodes dropped: {len(gdf_nodes_resolved) - len(gdf_nodes_used):,}")
+print("Resolution tier of dropped nodes:")
+print(dropped_tier_counts.to_string())
+```
+
+```{python}
+with fiona.open(PATHS["schema_node_shp"]) as src:
+    node_schema_props = list(src.schema["properties"].keys())
+
+gdf_nodes_final = conform_to_reference_schema(
+    gdf_nodes_used, node_schema_props, rename_map=NODE_RENAME_MAP,
+)
+
+print(f"gdf_nodes_final: {len(gdf_nodes_final):,} rows, {len(gdf_nodes_final.columns)} columns")
+assert list(gdf_nodes_final.columns) == [*node_schema_props, "geometry"]
+assert len(gdf_nodes_final) == len(used_node_ids)
+assert gdf_nodes_final.geometry.isna().sum() == 0
+assert used_node_ids <= set(gdf_nodes_final["N"])
+```
+
+---
+
+## Part D — Write Shapefiles
 
 ```{python}
 write_matching_shapefile(gdf_nodes_final, PATHS["out_node"], PATHS["schema_node_shp"])
@@ -201,7 +236,7 @@ print(f"Saved {len(gdf_links_final):,} links → {PATHS['out_link']}")
 print("=== Final Export Summary ===")
 print()
 print(f"Nodes: {len(gdf_nodes_final):,} total → {PATHS['out_node'].name}")
-print(tier_counts.to_string())
+print(f"  ({len(gdf_nodes_resolved) - len(gdf_nodes_final):,} unused raw nodes dropped)")
 print()
 print(f"Links: {len(gdf_links_final):,} total → {PATHS['out_link'].name}")
 print(f"  {len(gdf_matched_final):,} matched roadway (true-shape geometry)")
