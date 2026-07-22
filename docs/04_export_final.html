@@ -392,7 +392,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="imports" class="level3">
 <h3 class="anchored" data-anchor-id="imports">Imports</h3>
-<div id="a5a5094e" class="cell" data-execution_count="1">
+<div id="926831d9" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -410,7 +410,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="configuration" class="level3">
 <h3 class="anchored" data-anchor-id="configuration">Configuration</h3>
-<div id="3dea1848" class="cell" data-execution_count="2">
+<div id="f809fc58" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Filepaths ──────────────────────────────────────────────────────────────</span></span>
@@ -421,8 +421,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_centroid_connectors"</span>: Path(<span class="st">"_data/processed/centroid_connectors.gpkg"</span>),</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"schema_node_shp"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"schema_link_shp"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_node"</span>: Path(<span class="st">"output/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link"</span>: Path(<span class="st">"output/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_node"</span>: Path(<span class="st">"_output/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link"</span>: Path(<span class="st">"_output/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>
@@ -442,7 +442,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="2" class="anchored" data-anchor-id="load-data"><span class="header-section-number">2</span> Load Data</h2>
 <section id="raw-nodes-and-snap-results" class="level3">
 <h3 class="anchored" data-anchor-id="raw-nodes-and-snap-results">Raw Nodes and Snap Results</h3>
-<div id="4714c3a9" class="cell" data-execution_count="3">
+<div id="aebf944c" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>gdf_network_nodes <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_network_nodes"</span>]).to_crs(CRS_UTM)</span>
@@ -459,7 +459,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="true-shape-links-and-centroid-connectors" class="level3">
 <h3 class="anchored" data-anchor-id="true-shape-links-and-centroid-connectors">True-Shape Links and Centroid Connectors</h3>
-<div id="b1c7c8ed" class="cell" data-execution_count="4">
+<div id="e5a2da9b" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gdf_links_trueshape <span class="op">=</span> gpd.read_file(PATHS[<span class="st">"in_links_trueshape"</span>]).to_crs(CRS_UTM)</span>
@@ -489,7 +489,7 @@ Centroid connector links: 18,406</code></pre>
 <h2 data-number="3" class="anchored" data-anchor-id="part-a-resolve-node-coordinates"><span class="header-section-number">3</span> Part A — Resolve Node Coordinates</h2>
 <p>Every node keeps its full raw attribute record; only X/Y/geometry are replaced, resolved through the same priority cascade <code>build_centroid_connector_links</code> already applies (raw model coordinate as the base fallback, overwritten by CC/external-station nearest-point snaps, overwritten in turn by the main greedy network snap). Listing sources lowest-priority first, highest last, means a future improved snapping pass or a brand-new node class is handled by adding one more entry to <code>snap_sources</code> — no other code changes.</p>
 <p>Coordinates are resolved for every raw node here, but not every raw node survives into the final export — see Part C, which keeps only the nodes actually referenced by the final link table.</p>
-<div id="658bcf21" class="cell" data-execution_count="5">
+<div id="a807d56f" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>snap_sources <span class="op">=</span> [</span>
@@ -523,7 +523,7 @@ cc_snapped          4574
 network_snapped     3556</code></pre>
 </div>
 </div>
-<div id="d6ab6735" class="cell" data-execution_count="6">
+<div id="9005013e" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>node_ids <span class="op">=</span> gdf_network_nodes[<span class="st">"N"</span>].astype(<span class="bu">int</span>).to_numpy()</span>
@@ -541,7 +541,7 @@ network_snapped     3556</code></pre>
 <section id="part-b-build-final-link-table" class="level2" data-number="4">
 <h2 data-number="4" class="anchored" data-anchor-id="part-b-build-final-link-table"><span class="header-section-number">4</span> Part B — Build Final Link Table</h2>
 <p>Only fully model-attributed rows go into the replacement file — the <code>qa_status == "matched"</code> roadway pieces and the centroid connectors. The <code>qa_status</code> in {“endpoints_only”, “a_only”, “b_only”, “neither”} rows in <code>links_trueshape.gpkg</code> are real UGRC geometry with no model link behind them at all (no valid A/B), so they cannot populate a schema that requires model node ids and model attributes — they stay out of this replacement file (they remain available in <code>links_trueshape.gpkg</code> for QA/inspection).</p>
-<div id="c8380b7c" class="cell" data-execution_count="7">
+<div id="40329df9" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>gdf_matched <span class="op">=</span> gdf_links_trueshape[gdf_links_trueshape[<span class="st">"qa_status"</span>] <span class="op">==</span> <span class="st">"matched"</span>].copy()</span>
@@ -551,7 +551,7 @@ network_snapped     3556</code></pre>
 <pre><code>Matched roadway pieces: 16,030</code></pre>
 </div>
 </div>
-<div id="cd2ae401" class="cell" data-execution_count="8">
+<div id="2e560b8a" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_link_shp"</span>]) <span class="im">as</span> src:</span>
@@ -583,7 +583,7 @@ network_snapped     3556</code></pre>
 <section id="part-c-filter-nodes-to-the-final-network" class="level2" data-number="5">
 <h2 data-number="5" class="anchored" data-anchor-id="part-c-filter-nodes-to-the-final-network"><span class="header-section-number">5</span> Part C — Filter Nodes to the Final Network</h2>
 <p>A node belongs in the replacement file only if the final link table actually references it as an endpoint — the same referential-integrity invariant the raw MasterNet itself holds (21,923 / 21,953 raw nodes are referenced by at least one raw link). Pass-through/pseudonodes absorbed by Stage 3’s chain dissolve, and nodes touching only excluded link classes (HOV/managed-access, unmatched leftover geometry), are no longer an endpoint of anything in <code>gdf_links_final</code> and must not appear here — this filter is a pure referential check against the final links, not a hand-typed node-class list, so it stays correct as snapping/matching coverage improves and more nodes become genuinely used.</p>
-<div id="bf84e487" class="cell" data-execution_count="9">
+<div id="d54d7bd7" class="cell" data-execution_count="9">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>used_node_ids <span class="op">=</span> <span class="bu">set</span>(gdf_links_final[<span class="st">"A"</span>]) <span class="op">|</span> <span class="bu">set</span>(gdf_links_final[<span class="st">"B"</span>])</span>
@@ -609,7 +609,7 @@ raw                9036
 network_snapped     155</code></pre>
 </div>
 </div>
-<div id="b8fba955" class="cell" data-execution_count="10">
+<div id="b90c798c" class="cell" data-execution_count="10">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> fiona.<span class="bu">open</span>(PATHS[<span class="st">"schema_node_shp"</span>]) <span class="im">as</span> src:</span>
@@ -633,7 +633,7 @@ network_snapped     155</code></pre>
 </section>
 <section id="part-d-write-shapefiles" class="level2" data-number="6">
 <h2 data-number="6" class="anchored" data-anchor-id="part-d-write-shapefiles"><span class="header-section-number">6</span> Part D — Write Shapefiles</h2>
-<div id="2ee91324" class="cell" data-execution_count="11">
+<div id="45a38dbc" class="cell" data-execution_count="11">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>write_matching_shapefile(gdf_nodes_final, PATHS[<span class="st">"out_node"</span>], PATHS[<span class="st">"schema_node_shp"</span>])</span>
@@ -643,15 +643,15 @@ network_snapped     155</code></pre>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Saved </span><span class="sc">{</span><span class="bu">len</span>(gdf_links_final)<span class="sc">:,}</span><span class="ss"> links → </span><span class="sc">{</span>PATHS[<span class="st">'out_link'</span>]<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Saved 12,762 nodes → output\WFv1000_MasterNet_20260430_Node.shp
-Saved 34,436 links → output\WFv1000_MasterNet_20260430_Link.shp</code></pre>
+<pre><code>Saved 12,762 nodes → _output\WFv1000_MasterNet_20260430_Node.shp
+Saved 34,436 links → _output\WFv1000_MasterNet_20260430_Link.shp</code></pre>
 </div>
 </div>
 <hr>
 </section>
 <section id="summary" class="level2" data-number="7">
 <h2 data-number="7" class="anchored" data-anchor-id="summary"><span class="header-section-number">7</span> Summary</h2>
-<div id="1d206e6e" class="cell" data-execution_count="12">
+<div id="47ed466c" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"=== Final Export Summary ==="</span>)</span>
@@ -1186,8 +1186,8 @@ Links: 34,436 total → WFv1000_MasterNet_20260430_Link.shp
 <span id="cb22-43"><a href="#cb22-43" aria-hidden="true" tabindex="-1"></a>    <span class="st">"in_centroid_connectors"</span>: Path(<span class="st">"_data/processed/centroid_connectors.gpkg"</span>),</span>
 <span id="cb22-44"><a href="#cb22-44" aria-hidden="true" tabindex="-1"></a>    <span class="st">"schema_node_shp"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
 <span id="cb22-45"><a href="#cb22-45" aria-hidden="true" tabindex="-1"></a>    <span class="st">"schema_link_shp"</span>: Path(<span class="st">"_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
-<span id="cb22-46"><a href="#cb22-46" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_node"</span>: Path(<span class="st">"output/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
-<span id="cb22-47"><a href="#cb22-47" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link"</span>: Path(<span class="st">"output/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
+<span id="cb22-46"><a href="#cb22-46" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_node"</span>: Path(<span class="st">"_output/WFv1000_MasterNet_20260430_Node.shp"</span>),</span>
+<span id="cb22-47"><a href="#cb22-47" aria-hidden="true" tabindex="-1"></a>    <span class="st">"out_link"</span>: Path(<span class="st">"_output/WFv1000_MasterNet_20260430_Link.shp"</span>),</span>
 <span id="cb22-48"><a href="#cb22-48" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb22-49"><a href="#cb22-49" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb22-50"><a href="#cb22-50" aria-hidden="true" tabindex="-1"></a><span class="co"># ── CRS ───────────────────────────────────────────────────────────────────</span></span>

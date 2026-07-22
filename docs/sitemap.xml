@@ -1,23 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://wfrcanalytics.github.io/TDM-NET-TrueShape/02_create_link.html</loc>
-    <lastmod>2026-07-20T20:27:51.624Z</lastmod>
-  </url>
-  <url>
-    <loc>https://wfrcanalytics.github.io/TDM-NET-TrueShape/01_node_classification.html</loc>
-    <lastmod>2026-07-20T21:11:53.221Z</lastmod>
+    <loc>https://wfrcanalytics.github.io/TDM-NET-TrueShape/index.html</loc>
+    <lastmod>2026-03-15T02:37:49.820Z</lastmod>
   </url>
   <url>
     <loc>https://wfrcanalytics.github.io/TDM-NET-TrueShape/03_transfer_attributes.html</loc>
     <lastmod>2026-07-20T21:12:30.769Z</lastmod>
   </url>
   <url>
+    <loc>https://wfrcanalytics.github.io/TDM-NET-TrueShape/01_node_classification.html</loc>
+    <lastmod>2026-07-20T21:11:53.221Z</lastmod>
+  </url>
+  <url>
     <loc>https://wfrcanalytics.github.io/TDM-NET-TrueShape/00_data_preparation.html</loc>
     <lastmod>2026-07-14T01:17:59.487Z</lastmod>
   </url>
   <url>
+    <loc>https://wfrcanalytics.github.io/TDM-NET-TrueShape/02_create_link.html</loc>
+    <lastmod>2026-07-20T20:27:51.624Z</lastmod>
+  </url>
+  <url>
     <loc>https://wfrcanalytics.github.io/TDM-NET-TrueShape/04_export_final.html</loc>
-    <lastmod>2026-07-20T06:39:34.203Z</lastmod>
+    <lastmod>2026-07-22T20:07:31.563Z</lastmod>
   </url>
 </urlset>

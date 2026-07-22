@@ -209,8 +209,8 @@ __marimo__/
 # --- Data Folder Rules ---
 
 # 1. Ignore everything inside processed/ and raw/ (regenerable pipeline caches).
-# output/ is NOT ignored -- it holds the final drop-in replacement shapefiles,
-# which are tracked in git.
+# _output/ is NOT ignored -- it holds the final drop-in replacement shapefiles
+# (plus diagnostic images), all tracked in git.
 _data/processed/*
 _data/raw/*
 

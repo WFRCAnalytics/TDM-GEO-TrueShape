@@ -39,8 +39,8 @@ PATHS = {
     "in_centroid_connectors": Path("_data/processed/centroid_connectors.gpkg"),
     "schema_node_shp": Path("_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Node.shp"),
     "schema_link_shp": Path("_data/raw/WFv1000_MasterNet_20260430/WFv1000_MasterNet_20260430_Link.shp"),
-    "out_node": Path("output/WFv1000_MasterNet_20260430_Node.shp"),
-    "out_link": Path("output/WFv1000_MasterNet_20260430_Link.shp"),
+    "out_node": Path("_output/WFv1000_MasterNet_20260430_Node.shp"),
+    "out_link": Path("_output/WFv1000_MasterNet_20260430_Link.shp"),
 }
 
 # ── CRS ───────────────────────────────────────────────────────────────────
